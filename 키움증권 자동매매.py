@@ -1,25 +1,18 @@
 """
-Kiwoom Pro Algo-Trader v3.1
+Kiwoom Pro Algo-Trader v3.0
 키움증권 OpenAPI+ 기반 자동매매 프로그램
 
 변동성 돌파 전략 + 이동평균 필터 + 트레일링 스톱
 MACD, 볼린저밴드, ATR, 스토캐스틱RSI, DMI/ADX 지표 지원
 진입 점수 시스템, 다단계 익절, 일괄 매수/매도 기능
 
-v3.1 신규 기능:
-- Toast 알림 시스템
-- 일괄 매도 기능 (2중 확인)
-- 설정 초기화 버튼
-- HiDPI 지원
-- 로그 폴더 열기 기능 개선
-
-v3.0 기능:
+v3.0 신규 기능:
 - MACD 골든크로스 필터
 - 볼린저 밴드 필터
 - ATR 동적 손절
 - 스토캐스틱 RSI / DMI-ADX 추세 지표
 - 진입 점수 시스템 (가중치 기반)
-- 보조지표 필터
+- 일괄 매수/매도 (2중 확인)
 - 다단계 익절 기능
 - 거래 내역 탭 및 CSV 내보내기
 - 프리셋 관리자 (사용자 정의 저장/삭제)
@@ -41,188 +34,13 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import QColor, QBrush, QFont, QIcon, QPalette, QTextCursor
 
 
+from config import Config
+from strategy_manager import StrategyManager
+
 # ============================================================================
-# 설정 클래스
+# 설정 클래스 (Moved to config.py)
 # ============================================================================
-class Config:
-    """프로그램 설정 상수"""
-    # 화면 번호
-    SCREEN_DEPOSIT = "1002"
-    SCREEN_DAILY = "1001"
-    SCREEN_REAL = "2000"
-    SCREEN_ORDER = "0101"
-    
-    # 기본값
-    DEFAULT_CODES = "005930,000660,042700,005380"
-    DEFAULT_BETTING_RATIO = 10.0
-    DEFAULT_K_VALUE = 0.5
-    DEFAULT_TS_START = 3.0
-    DEFAULT_TS_STOP = 1.5
-    DEFAULT_LOSS_CUT = 2.0
-    
-    # RSI 설정
-    DEFAULT_RSI_PERIOD = 14
-    DEFAULT_RSI_UPPER = 70
-    DEFAULT_RSI_LOWER = 30
-    DEFAULT_USE_RSI = True
-    
-    # MACD 설정 (v3.0 신규)
-    DEFAULT_MACD_FAST = 12
-    DEFAULT_MACD_SLOW = 26
-    DEFAULT_MACD_SIGNAL = 9
-    DEFAULT_USE_MACD = True
-    
-    # 볼린저 밴드 설정 (v3.0 신규)
-    DEFAULT_BB_PERIOD = 20
-    DEFAULT_BB_STD = 2.0
-    DEFAULT_USE_BB = False
-    
-    # ATR 설정 (v3.0 신규)
-    DEFAULT_ATR_PERIOD = 14
-    DEFAULT_ATR_MULTIPLIER = 2.0
-    DEFAULT_USE_ATR = False
-    
-    # 스토캐스틱 RSI 설정 (v3.0 신규)
-    DEFAULT_STOCH_RSI_PERIOD = 14
-    DEFAULT_STOCH_K_PERIOD = 3
-    DEFAULT_STOCH_D_PERIOD = 3
-    DEFAULT_USE_STOCH_RSI = False
-    
-    # DMI/ADX 설정 (v3.0 신규)
-    DEFAULT_DMI_PERIOD = 14
-    DEFAULT_ADX_THRESHOLD = 25
-    DEFAULT_USE_DMI = False
-    
-    # 거래량 설정
-    DEFAULT_VOLUME_MULTIPLIER = 1.5
-    DEFAULT_VOLUME_PERIOD = 20
-    DEFAULT_USE_VOLUME = True
-    
-    # 리스크 관리
-    DEFAULT_MAX_DAILY_LOSS = 3.0
-    DEFAULT_MAX_HOLDINGS = 5
-    DEFAULT_USE_RISK_MGMT = True
-    
-    # 진입 점수 시스템 (v3.0 신규)
-    ENTRY_SCORE_THRESHOLD = 60
-    USE_ENTRY_SCORING = False
-    ENTRY_WEIGHTS = {
-        'target_break': 20,
-        'ma_filter': 15,
-        'rsi_optimal': 20,
-        'macd_golden': 20,
-        'volume_confirm': 15,
-        'bb_position': 10,
-    }
-    
-    # 다단계 익절 설정 (v3.0 신규)
-    PARTIAL_TAKE_PROFIT = [
-        {'rate': 3.0, 'sell_ratio': 30},
-        {'rate': 5.0, 'sell_ratio': 30},
-        {'rate': 8.0, 'sell_ratio': 20},
-    ]
-    DEFAULT_USE_PARTIAL_PROFIT = False
-    
-    # 파일 경로
-    SETTINGS_FILE = "kiwoom_settings.json"
-    PRESETS_FILE = "kiwoom_presets.json"
-    TRADE_HISTORY_FILE = "kiwoom_trade_history.json"
-    LOG_DIR = "logs"
-    
-    # 시간 설정
-    MARKET_CLOSE_HOUR = 15
-    MARKET_CLOSE_MINUTE = 19
-    NO_ENTRY_HOUR = 15
-    
-    # API 재시도 설정 (v3.0 신규)
-    API_MAX_RETRIES = 3
-    API_RETRY_DELAY = 1
-    
-    # 메모리 관리 (v3.0 신규)
-    MAX_LOG_LINES = 500
-    
-    # 기본 프리셋 정의 (v3.0 신규)
-    DEFAULT_PRESETS = {
-        "aggressive": {
-            "name": "🔥 공격적",
-            "description": "높은 수익을 추구하지만 리스크도 높음",
-            "k": 0.6, "ts_start": 2.0, "ts_stop": 1.0, "loss": 3.0,
-            "betting": 15.0, "rsi_upper": 75, "max_holdings": 7
-        },
-        "normal": {
-            "name": "⚖️ 표준",
-            "description": "균형 잡힌 수익과 리스크 관리",
-            "k": 0.5, "ts_start": 3.0, "ts_stop": 1.5, "loss": 2.0,
-            "betting": 10.0, "rsi_upper": 70, "max_holdings": 5
-        },
-        "conservative": {
-            "name": "🛡️ 보수적",
-            "description": "안정적인 수익, 낮은 리스크",
-            "k": 0.4, "ts_start": 4.0, "ts_stop": 2.0, "loss": 1.5,
-            "betting": 5.0, "rsi_upper": 65, "max_holdings": 3
-        }
-    }
-    
-    # 툴팁 설명 (v3.0 신규)
-    TOOLTIPS = {
-        "codes": "감시할 종목 코드를 콤마(,)로 구분하여 입력합니다.\n예: 005930,000660,042700",
-        "betting": "총 예수금 대비 종목당 투자 비율입니다.\n권장: 5% ~ 20%",
-        "k_value": "변동성 돌파 전략의 K 계수\n목표가 = 시가 + (전일 변동폭 × K값)\n권장: 0.3 ~ 0.5",
-        "ts_start": "트레일링 스톱 발동 수익률\n권장: 3% ~ 10%",
-        "ts_stop": "고점 대비 하락 허용폭\n권장: 1% ~ 3%",
-        "loss_cut": "절대 손절 기준\n권장: 2% ~ 5%",
-        "rsi": "과매수 판단 기준 RSI\n권장: 65 ~ 75",
-        "max_holdings": "동시 보유 가능 최대 종목 수\n권장: 3 ~ 7개"
-    }
-    
-    # 도움말 콘텐츠 (v3.0 신규)
-    HELP_CONTENT = {
-        "quick_start": """
-## 🚀 빠른 시작 가이드
-
-### 1단계: 로그인
-키움증권 OpenAPI+ 로그인 창에서 로그인합니다.
-
-### 2단계: 종목 선택
-감시할 종목 코드를 콤마로 구분하여 입력합니다.
-예: 005930,000660,042700
-
-### 3단계: 전략 선택
-- 초보자: **보수적** 프리셋 권장
-- 경험자: **표준** 프리셋으로 시작
-- 고급: 직접 파라미터 조정
-
-### 4단계: 매매 시작
-"🚀 전략 분석 및 매매 시작" 버튼을 클릭합니다.
-        """,
-        "strategy": """
-## 📈 전략 설명
-
-### 변동성 돌파 전략
-래리 윌리엄스(Larry Williams)가 개발한 단기 트레이딩 전략입니다.
-
-**핵심 원리:**
-- 전일 고가 - 전일 저가 = 변동폭
-- 목표가 = 당일 시가 + (변동폭 × K값)
-- 현재가가 목표가를 돌파하면 매수
-
-### 트레일링 스톱
-- 목표 수익률 도달 시 고점 추적 시작
-- 고점 대비 설정 하락폭 발생 시 매도
-        """,
-        "faq": """
-## ❓ 자주 묻는 질문
-
-**Q: 15시 이후에도 매수가 되나요?**
-A: 아니요, 15시 이후에는 신규 매수가 중지됩니다.
-
-**Q: 손실이 발생하면 어떻게 되나요?**
-A: 설정된 손절률에 따라 자동으로 매도됩니다.
-
-**Q: 프로그램 종료 시 보유 종목은?**
-A: 자동 청산되지 않습니다. 수동 청산이 필요합니다.
-        """
-    }
+# Config class removed. Using imported Config.
 
 
 # ============================================================================
@@ -454,76 +272,6 @@ QToolTip {
 
 
 # ============================================================================
-# Toast 알림 위젯 (v3.1 신규)
-# ============================================================================
-class ToastWidget(QLabel):
-    """비침습적 Toast 알림 위젯"""
-    
-    COLORS = {
-        'success': '#28a745',
-        'info': '#17a2b8',
-        'warning': '#ffc107',
-        'error': '#dc3545'
-    }
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAlignment(Qt.AlignCenter)
-        self.setWordWrap(True)
-        self.setMinimumWidth(300)
-        self.setMaximumWidth(400)
-        
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.fade_out)
-        
-        self.opacity_effect = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self.opacity_effect)
-        self.opacity_effect.setOpacity(1.0)
-        
-        self.fade_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_animation.setDuration(300)
-        self.fade_animation.finished.connect(self.hide)
-    
-    def show_toast(self, message, toast_type='info', duration=3000):
-        """Toast 메시지 표시"""
-        color = self.COLORS.get(toast_type, self.COLORS['info'])
-        
-        self.setStyleSheet(f"""
-            QLabel {{
-                background-color: {color};
-                color: white;
-                padding: 15px 20px;
-                border-radius: 8px;
-                font-size: 13px;
-                font-weight: bold;
-            }}
-        """)
-        
-        self.setText(message)
-        self.adjustSize()
-        
-        # 부모 창 기준 위치 결정
-        if self.parent():
-            parent_geo = self.parent().geometry()
-            x = parent_geo.right() - self.width() - 20
-            y = parent_geo.bottom() - self.height() - 60
-            self.move(x, y)
-        
-        self.opacity_effect.setOpacity(1.0)
-        self.show()
-        self.timer.start(duration)
-    
-    def fade_out(self):
-        """페이드 아웃 효과"""
-        self.timer.stop()
-        self.fade_animation.setStartValue(1.0)
-        self.fade_animation.setEndValue(0.0)
-        self.fade_animation.start()
-
-
-# ============================================================================
 # 프리셋 관리 다이얼로그 (v3.0 신규)
 # ============================================================================
 class PresetManagerDialog(QDialog):
@@ -714,6 +462,28 @@ class HelpDialog(QDialog):
 
 
 # ============================================================================
+# 텔레그램 알림 클래스 (v3.1 신규)
+# ============================================================================
+class TelegramNotifier:
+    """텔레그램 메시지 발송 클래스"""
+    def __init__(self, bot_token, chat_id):
+        self.bot_token = bot_token
+        self.chat_id = chat_id
+        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+
+    def send_message(self, text):
+        """메시지 전송 (동기식 - 별도 스레드에서 호출 권장)"""
+        if not self.bot_token or not self.chat_id:
+            return
+            
+        try:
+            import requests
+            data = {'chat_id': self.chat_id, 'text': text, 'parse_mode': 'Markdown'}
+            requests.post(self.base_url, data=data, timeout=5)
+        except Exception as e:
+            print(f"Telegram Error: {e}")
+
+# ============================================================================
 # 시스템 설정 다이얼로그 (v3.0 신규)
 # ============================================================================
 class SettingsDialog(QDialog):
@@ -750,6 +520,25 @@ class SettingsDialog(QDialog):
         self.chk_sound_enabled = QCheckBox("거래 체결 시 소리 재생")
         self.chk_sound_enabled.setChecked(self.settings.get('sound_enabled', False))
         notify_layout.addWidget(self.chk_sound_enabled)
+        
+        # 텔레그램 설정
+        notify_layout.addSpacing(10)
+        notify_layout.addWidget(QLabel("📱 텔레그램 봇 토큰:"))
+        self.input_bot_token = QLineEdit()
+        self.input_bot_token.setPlaceholderText("Bot Token 입력")
+        self.input_bot_token.setText(self.settings.get('telegram_token', ''))
+        notify_layout.addWidget(self.input_bot_token)
+        
+        notify_layout.addWidget(QLabel("🆔 텔레그램 챗 ID:"))
+        self.input_chat_id = QLineEdit()
+        self.input_chat_id.setPlaceholderText("Chat ID 입력")
+        self.input_chat_id.setText(self.settings.get('telegram_chat_id', ''))
+        notify_layout.addWidget(self.input_chat_id)
+        
+        self.chk_use_telegram = QCheckBox("텔레그램 알림 사용")
+        self.chk_use_telegram.setChecked(self.settings.get('use_telegram', False))
+        notify_layout.addWidget(self.chk_use_telegram)
+        
         group_notify.setLayout(notify_layout)
         layout.addWidget(group_notify)
         
@@ -769,7 +558,10 @@ class SettingsDialog(QDialog):
         return {
             'run_at_startup': self.chk_run_at_startup.isChecked(),
             'auto_connect': self.chk_auto_connect.isChecked(),
-            'sound_enabled': self.chk_sound_enabled.isChecked()
+            'sound_enabled': self.chk_sound_enabled.isChecked(),
+            'telegram_token': self.input_bot_token.text().strip(),
+            'telegram_chat_id': self.input_chat_id.text().strip(),
+            'use_telegram': self.chk_use_telegram.isChecked()
         }
 
 
@@ -798,9 +590,16 @@ class KiwoomProTrader(QMainWindow):
         self.system_settings = {
             'run_at_startup': False,
             'auto_connect': False,
-            'sound_enabled': False
+            'sound_enabled': False,
+            'use_telegram': False,
+            'telegram_token': '',
+            'telegram_chat_id': ''
         }
         self.price_history = {}  # 종목별 가격 이력
+        self.telegram = None  # 텔레그램 봇 인스턴스
+        
+        # 전략 매니저 초기화
+        self.strategy = StrategyManager(self)
         
         # 로깅 설정
         self.setup_logging()
@@ -826,10 +625,7 @@ class KiwoomProTrader(QMainWindow):
         # 설정 불러오기
         self.load_settings()
         
-        # Toast 알림 위젯 초기화 (v3.1 신규)
-        self.toast = ToastWidget(self)
-        
-        self.logger.info("프로그램 초기화 완료 (v3.1)")
+        self.logger.info("프로그램 초기화 완료 (v3.0)")
 
     def setup_logging(self):
         """로깅 시스템 설정"""
@@ -858,7 +654,7 @@ class KiwoomProTrader(QMainWindow):
 
     def init_ui(self):
         """UI 초기화"""
-        self.setWindowTitle("Kiwoom Pro Algo-Trader v3.1 [고급 매매 알고리즘]")
+        self.setWindowTitle("Kiwoom Pro Algo-Trader v3.0 [고급 매매 알고리즘]")
         self.setGeometry(100, 100, 1300, 950)
         self.setMinimumSize(1100, 800)
         self.setStyleSheet(DARK_STYLESHEET)
@@ -921,16 +717,6 @@ class KiwoomProTrader(QMainWindow):
         layout_dash.addSpacing(20)
         layout_dash.addWidget(self.lbl_total_profit)
         layout_dash.addStretch(1)
-        
-        # 일괄 매도 버튼 (v3.1 신규)
-        self.btn_batch_sell = QPushButton("📤 일괄 매도")
-        self.btn_batch_sell.setStyleSheet("background-color: #dc3545;")
-        self.btn_batch_sell.clicked.connect(self.execute_batch_sell)
-        self.btn_batch_sell.setToolTip("보유 중인 모든 종목을 시장가로 매도합니다")
-        self.btn_batch_sell.setEnabled(False)
-        layout_dash.addWidget(self.btn_batch_sell)
-        layout_dash.addSpacing(10)
-        
         layout_dash.addWidget(self.lbl_connection)
         
         group_dash.setLayout(layout_dash)
@@ -1024,10 +810,6 @@ class KiwoomProTrader(QMainWindow):
         self.btn_save = QPushButton("💾 설정 저장")
         self.btn_save.clicked.connect(self.save_settings)
         
-        self.btn_reset = QPushButton("🔄 초기화")
-        self.btn_reset.clicked.connect(self.reset_to_defaults)
-        self.btn_reset.setToolTip("모든 설정을 기본값으로 초기화합니다")
-        
         self.btn_start = QPushButton("🚀 전략 분석 및 매매 시작")
         self.btn_start.setObjectName("startBtn")
         self.btn_start.setMinimumSize(250, 50)
@@ -1041,7 +823,6 @@ class KiwoomProTrader(QMainWindow):
         self.btn_stop.setEnabled(False)
         
         btn_layout.addWidget(self.btn_save)
-        btn_layout.addWidget(self.btn_reset)
         btn_layout.addStretch(1)
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_stop)
@@ -1464,7 +1245,7 @@ class KiwoomProTrader(QMainWindow):
         self.statusbar.addWidget(self.status_realtime)
         
         # 오른쪽 영역
-        self.statusbar.addPermanentWidget(QLabel("Kiwoom Pro Algo-Trader v3.1"))
+        self.statusbar.addPermanentWidget(QLabel("Kiwoom Pro Algo-Trader v2.0"))
 
     def setup_kiwoom_api(self):
         """키움 API 설정"""
@@ -1577,6 +1358,13 @@ class KiwoomProTrader(QMainWindow):
                 self.chk_use_atr.setChecked(settings.get("use_atr", False))
                 self.spin_atr_mult.setValue(settings.get("atr_mult", 2.0))
                 
+                # 텔레그램 설정 로드
+                self.system_settings['use_telegram'] = settings.get('use_telegram', False)
+                self.system_settings['telegram_token'] = settings.get('telegram_token', '')
+                self.system_settings['telegram_chat_id'] = settings.get('telegram_chat_id', '')
+                if self.system_settings['use_telegram'] and self.system_settings['telegram_token']:
+                    self.telegram = TelegramNotifier(self.system_settings['telegram_token'], self.system_settings['telegram_chat_id'])
+                
                 self.log("📂 저장된 설정을 불러왔습니다")
                 self.logger.info("설정 불러오기 완료")
         except Exception as e:
@@ -1613,7 +1401,6 @@ class KiwoomProTrader(QMainWindow):
                 self.combo_acc.addItems([x for x in accs if x])
                 
                 self.btn_start.setEnabled(True)
-                self.btn_batch_sell.setEnabled(True)
                 self.lbl_connection.setText("● 연결됨")
                 self.lbl_connection.setStyleSheet("color: #00b894; font-weight: bold;")
             else:
@@ -1720,7 +1507,7 @@ class KiwoomProTrader(QMainWindow):
         try:
             self.kiwoom.dynamicCall("SetRealRemove(QString, QString)", 
                                    Config.SCREEN_REAL, "ALL")
-        except Exception:
+        except:
             pass
         
         self.btn_start.setEnabled(True)
@@ -2063,89 +1850,6 @@ class KiwoomProTrader(QMainWindow):
             self.log(f"[ERROR] 매도 주문 실패: {e}")
             self.logger.error(f"매도 주문 실패 ({code}): {e}")
 
-    def execute_batch_sell(self):
-        """모든 보유 종목 일괄 매도 (v3.1 신규)"""
-        # 보유 종목 확인
-        holdings = [(code, info) for code, info in self.universe.items() if info.get('qty', 0) > 0]
-        
-        if not holdings:
-            self.toast.show_toast("보유 중인 종목이 없습니다.", "warning")
-            return
-        
-        # 1차 확인
-        names = ", ".join([info['name'] for _, info in holdings])
-        reply1 = QMessageBox.warning(
-            self, "⚠️ 일괄 매도 확인 (1/2)",
-            f"다음 종목을 모두 시장가로 매도합니다:\n\n{names}\n\n계속하시겠습니까?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-        )
-        
-        if reply1 != QMessageBox.Yes:
-            return
-        
-        # 2차 확인
-        reply2 = QMessageBox.critical(
-            self, "🚨 최종 확인 (2/2)",
-            "정말로 모든 보유 종목을 매도하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-        )
-        
-        if reply2 != QMessageBox.Yes:
-            return
-        
-        # 일괄 매도 실행
-        sell_count = 0
-        for code, info in holdings:
-            try:
-                self.execute_sell(code, "일괄매도")
-                sell_count += 1
-            except Exception as e:
-                self.log(f"[ERROR] 일괄 매도 중 오류 ({info['name']}): {e}")
-        
-        self.toast.show_toast(f"✅ {sell_count}개 종목 매도 주문 완료", "success")
-        self.log(f"📤 일괄 매도: {sell_count}개 종목 주문 완료")
-
-    def reset_to_defaults(self):
-        """설정을 기본값으로 초기화 (v3.1 신규)"""
-        reply = QMessageBox.question(
-            self, "설정 초기화",
-            "모든 설정을 기본값으로 초기화하시겠습니까?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-        )
-        
-        if reply != QMessageBox.Yes:
-            return
-        
-        # 기본 설정 적용
-        self.input_codes.setText(Config.DEFAULT_CODES)
-        self.spin_betting.setValue(Config.DEFAULT_BETTING_RATIO)
-        self.spin_k.setValue(Config.DEFAULT_K_VALUE)
-        self.spin_ts_start.setValue(Config.DEFAULT_TS_START)
-        self.spin_ts_stop.setValue(Config.DEFAULT_TS_STOP)
-        self.spin_loss.setValue(Config.DEFAULT_LOSS_CUT)
-        
-        # 고급 설정
-        self.chk_use_rsi.setChecked(Config.DEFAULT_USE_RSI)
-        self.spin_rsi_upper.setValue(Config.DEFAULT_RSI_UPPER)
-        self.spin_rsi_period.setValue(Config.DEFAULT_RSI_PERIOD)
-        self.chk_use_volume.setChecked(Config.DEFAULT_USE_VOLUME)
-        self.spin_volume_mult.setValue(Config.DEFAULT_VOLUME_MULTIPLIER)
-        self.chk_use_risk.setChecked(Config.DEFAULT_USE_RISK_MGMT)
-        self.spin_max_loss.setValue(Config.DEFAULT_MAX_DAILY_LOSS)
-        self.spin_max_holdings.setValue(Config.DEFAULT_MAX_HOLDINGS)
-        
-        # v3.0 설정
-        self.chk_use_macd.setChecked(Config.DEFAULT_USE_MACD)
-        self.chk_use_bb.setChecked(Config.DEFAULT_USE_BB)
-        self.spin_bb_k.setValue(Config.DEFAULT_BB_STD)
-        self.chk_use_dmi.setChecked(Config.DEFAULT_USE_DMI)
-        self.spin_adx.setValue(Config.DEFAULT_ADX_THRESHOLD)
-        self.chk_use_atr.setChecked(Config.DEFAULT_USE_ATR)
-        self.spin_atr_mult.setValue(Config.DEFAULT_ATR_MULTIPLIER)
-        
-        self.toast.show_toast("✅ 설정이 기본값으로 초기화되었습니다.", "success")
-        self.log("🔄 설정이 기본값으로 초기화되었습니다")
-
     # ------------------------------------------------------------------
     # 체결 데이터 처리
     # ------------------------------------------------------------------
@@ -2200,6 +1904,7 @@ class KiwoomProTrader(QMainWindow):
         
         self.log(f"✅ [{name}] 매수 체결: {qty}주 @ {price:,}원")
         self.logger.info(f"매수 체결: {name} {qty}주 @ {price}원")
+        self.send_notification("매수 체결", f"[{name}] {qty}주 매수됨\n가격: {price:,}원")
 
     def _handle_sell_execution(self, code, info, row, price, qty, name):
         """매도 체결 처리"""
@@ -2227,6 +1932,7 @@ class KiwoomProTrader(QMainWindow):
         
         self.log(f"✅ [{name}] 매도 체결: {qty}주 @ {price:,}원 (손익: {profit:+,}원)")
         self.logger.info(f"매도 체결: {name} {qty}주 @ {price}원, 손익: {profit}원")
+        self.send_notification("매도 체결", f"[{name}] {qty}주 매도됨\n가격: {price:,}원\n손익: {profit:+,}원")
 
     # ------------------------------------------------------------------
     # 유틸리티
@@ -2325,7 +2031,7 @@ class KiwoomProTrader(QMainWindow):
         self.tray_icon.activated.connect(self.on_tray_activated)
         self.tray_icon.show()
         
-        self.tray_icon.setToolTip("Kiwoom Pro Algo-Trader v3.1")
+        self.tray_icon.setToolTip("Kiwoom Pro Algo-Trader v3.0")
 
     def on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
@@ -2410,377 +2116,38 @@ class KiwoomProTrader(QMainWindow):
         
         return True
     
+    # ------------------------------------------------------------------
+    # 전략 위임 (Refactored)
+    # ------------------------------------------------------------------
     def calculate_rsi(self, code, period=14):
-        """RSI 계산 (종목별 저장된 가격 데이터 기반)"""
-        if code not in self.universe:
-            return 50  # 기본값
-        
-        info = self.universe[code]
-        prices = info.get('price_history', [])
-        
-        if len(prices) < period + 1:
-            return 50  # 데이터 부족
-        
-        # 가격 변화 계산
-        gains = []
-        losses = []
-        
-        for i in range(1, period + 1):
-            change = prices[-(i)] - prices[-(i+1)]
-            if change > 0:
-                gains.append(change)
-                losses.append(0)
-            else:
-                gains.append(0)
-                losses.append(abs(change))
-        
-        avg_gain = sum(gains) / period
-        avg_loss = sum(losses) / period
-        
-        if avg_loss == 0:
-            return 100
-        
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        return rsi
+        return self.strategy.calculate_rsi(code, period)
     
     def check_rsi_condition(self, code):
-        """RSI 조건 확인"""
-        if not self.chk_use_rsi.isChecked():
-            return True
-        
-        rsi = self.calculate_rsi(code, self.spin_rsi_period.value())
-        upper_limit = self.spin_rsi_upper.value()
-        
-        if rsi >= upper_limit:
-            info = self.universe.get(code, {})
-            self.log(f"[{info.get('name', code)}] RSI {rsi:.1f} >= {upper_limit} (과매수) 진입 보류")
-            return False
-        
-        return True
+        return self.strategy.check_rsi_condition(code)
     
     def check_volume_condition(self, code):
-        """거래량 조건 확인"""
-        if not self.chk_use_volume.isChecked():
-            return True
-        
-        if code not in self.universe:
-            return True
-        
-        info = self.universe[code]
-        current_volume = info.get('current_volume', 0)
-        avg_volume = info.get('avg_volume_5', 0)
-        
-        if avg_volume == 0:
-            return True
-        
-        required_mult = self.spin_volume_mult.value()
-        actual_mult = current_volume / avg_volume
-        
-        if actual_mult < required_mult:
-            return False
-        
-        return True
+        return self.strategy.check_volume_condition(code)
     
-    def send_notification(self, title, message):
-        """시스템 알림 전송"""
-        try:
-            if sys.platform == 'win32' and self.system_settings.get('sound_enabled', False):
-                from ctypes import windll
-                windll.user32.MessageBeep(0x00000040)
-            self.log(f"🔔 [{title}] {message}")
-            self.logger.info(f"알림: {title} - {message}")
-        except Exception as e:
-            self.logger.error(f"알림 전송 실패: {e}")
-
-    # ------------------------------------------------------------------
-    # 메뉴바 (v3.0 신규)
-    # ------------------------------------------------------------------
-    def create_menu_bar(self):
-        """메뉴바 생성"""
-        menubar = self.menuBar()
-        
-        # 파일 메뉴
-        file_menu = menubar.addMenu("파일")
-        file_menu.addAction("⚙️ 시스템 설정", self.show_settings)
-        file_menu.addSeparator()
-        file_menu.addAction("❌ 종료", self.close)
-        
-        # 보기 메뉴
-        view_menu = menubar.addMenu("보기")
-        view_menu.addAction("📜 로그 폴더 열기", self.open_log_folder)
-        
-        # 도움말 메뉴
-        help_menu = menubar.addMenu("도움말")
-        help_menu.addAction("📚 사용 가이드", self.show_help)
-        help_menu.addAction("ℹ️ 정보", lambda: QMessageBox.about(self, "정보", 
-            "Kiwoom Pro Algo-Trader v3.1\n\n키움증권 OpenAPI+ 기반 자동매매 프로그램\n\n변동성 돌파 전략 + 다중 지표 필터"))
-
-    def open_log_folder(self):
-        """로그 폴더 열기 (v3.1 신규)"""
-        try:
-            log_path = Path(Config.LOG_DIR)
-            if not log_path.exists():
-                log_path.mkdir(parents=True, exist_ok=True)
-                self.toast.show_toast("로그 폴더가 생성되었습니다.", "info")
-            os.startfile(log_path)
-        except Exception as e:
-            self.log(f"[ERROR] 로그 폴더 열기 실패: {e}")
-            self.toast.show_toast(f"로그 폴더를 열 수 없습니다: {e}", "error")
-
-    def show_settings(self):
-        """시스템 설정 다이얼로그"""
-        dialog = SettingsDialog(self, self.system_settings)
-        if dialog.exec_() == QDialog.Accepted:
-            new_settings = dialog.get_settings()
-            if new_settings['run_at_startup'] != self.system_settings.get('run_at_startup', False):
-                self.set_startup_registry(new_settings['run_at_startup'])
-            self.system_settings.update(new_settings)
-            self.save_settings()
-            self.log("⚙️ 시스템 설정 저장됨")
-
-    def show_help(self):
-        """도움말 다이얼로그"""
-        dialog = HelpDialog(self)
-        dialog.exec_()
-
-    def set_startup_registry(self, enable):
-        """Windows 시작 프로그램 레지스트리 설정"""
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        app_name = "KiwoomProTrader"
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
-            if enable:
-                exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
-                winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, f'"{exe_path}"')
-                self.log("✅ Windows 시작 시 자동 실행 설정됨")
-            else:
-                try:
-                    winreg.DeleteValue(key, app_name)
-                    self.log("❌ Windows 시작 시 자동 실행 해제됨")
-                except FileNotFoundError:
-                    pass
-            winreg.CloseKey(key)
-        except Exception as e:
-            self.logger.error(f"레지스트리 설정 실패: {e}")
-
-    # ------------------------------------------------------------------
-    # 거래 히스토리 관리 (v3.0 신규)
-    # ------------------------------------------------------------------
-    def load_trade_history(self):
-        """거래 히스토리 불러오기"""
-        try:
-            if os.path.exists(Config.TRADE_HISTORY_FILE):
-                with open(Config.TRADE_HISTORY_FILE, 'r', encoding='utf-8') as f:
-                    self.trade_history = json.load(f)
-        except Exception as e:
-            self.trade_history = []
-            logging.error(f"거래 히스토리 로드 실패: {e}")
-
-    def save_trade_history(self):
-        """거래 히스토리 저장"""
-        try:
-            with open(Config.TRADE_HISTORY_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.trade_history, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            self.logger.error(f"거래 히스토리 저장 실패: {e}")
-
-    def add_trade_record(self, code, trade_type, price, quantity, profit=0, reason=""):
-        """거래 기록 추가"""
-        name = self.universe.get(code, {}).get('name', code)
-        record = {
-            'timestamp': datetime.datetime.now().isoformat(),
-            'code': code,
-            'name': name,
-            'type': trade_type,
-            'price': price,
-            'quantity': quantity,
-            'amount': price * quantity,
-            'profit': profit,
-            'reason': reason
-        }
-        self.trade_history.append(record)
-        self.save_trade_history()
-
-    # ------------------------------------------------------------------
-    # MACD 계산 (v3.0 신규)
-    # ------------------------------------------------------------------
     def calculate_macd(self, prices):
-        """MACD 계산 (단순 구현)"""
-        if len(prices) < Config.DEFAULT_MACD_SLOW + Config.DEFAULT_MACD_SIGNAL:
-            return 0, 0, 0
-        
-        def ema(data, period):
-            multiplier = 2 / (period + 1)
-            result = [data[0]]
-            for i in range(1, len(data)):
-                result.append((data[i] - result[-1]) * multiplier + result[-1])
-            return result
-        
-        ema_fast = ema(prices, Config.DEFAULT_MACD_FAST)
-        ema_slow = ema(prices, Config.DEFAULT_MACD_SLOW)
-        macd = [f - s for f, s in zip(ema_fast, ema_slow)]
-        signal = ema(macd, Config.DEFAULT_MACD_SIGNAL)
-        histogram = macd[-1] - signal[-1]
-        return macd[-1], signal[-1], histogram
-
+        return self.strategy.calculate_macd(prices)
+    
     def check_macd_condition(self, code):
-        """MACD 조건 확인"""
-        if not hasattr(self, 'chk_use_macd') or not self.chk_use_macd.isChecked():
-            return True
-        
-        prices = self.price_history.get(code, [])
-        if len(prices) < 30:
-            return True
-        
-        macd, signal, _ = self.calculate_macd(prices)
-        if macd <= signal:
-            self.log(f"[{self.universe.get(code, {}).get('name', code)}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
-            return False
-        return True
-
-    # ------------------------------------------------------------------
-    # 볼린저 밴드 및 DMI 계산 (v3.0 신규)
-    # ------------------------------------------------------------------
+        return self.strategy.check_macd_condition(code)
+    
     def calculate_bollinger(self, prices, k=2.0, period=20):
-        """볼린저 밴드 계산"""
-        if len(prices) < period:
-            return 0, 0, 0
-        
-        subset = prices[-period:]
-        avg = sum(subset) / period
-        variance = sum((x - avg) ** 2 for x in subset) / period
-        std_dev = variance ** 0.5
-        
-        upper = avg + (std_dev * k)
-        lower = avg - (std_dev * k)
-        return upper, avg, lower
+        return self.strategy.calculate_bollinger(prices, k, period)
 
     def check_bollinger_condition(self, code):
-        """볼린저 밴드 조건 확인"""
-        if not hasattr(self, 'chk_use_bb') or not self.chk_use_bb.isChecked():
-            return True
-        
-        prices = self.universe.get(code, {}).get('price_history', [])
-        current_price = self.universe.get(code, {}).get('current', 0)
-        
-        if len(prices) < 20 or current_price == 0:
-            return True
-            
-        k = self.spin_bb_k.value()
-        _, _, lower = self.calculate_bollinger(prices, k=k)
-        
-        # 밴드 하단보다 현재가가 낮으면(돌파) 매수 간주
-        if current_price > lower:
-            # self.log(f"[{code}] BB 하단 미달")
-            return False
-            
-        return True
-
+        return self.strategy.check_bollinger_condition(code)
+    
     def calculate_atr(self, high_list, low_list, close_list, period=14):
-        """ATR(Average True Range) 계산"""
-        if len(high_list) < period + 1:
-            return 0
-            
-        tr_list = []
-        for i in range(1, len(high_list)):
-            h = high_list[i]
-            l = low_list[i]
-            prev_c = close_list[i-1]
-            tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
-            tr_list.append(tr)
-            
-        if len(tr_list) < period:
-            return 0
-            
-        # Simple SMA for ATR
-        atr = sum(tr_list[-period:]) / period
-        return atr
-
+        return self.strategy.calculate_atr(high_list, low_list, close_list, period)
+    
     def calculate_dmi(self, high_list, low_list, close_list, period=14):
-        """DMI(P-DI, M-DI, ADX) 계산"""
-        if len(high_list) < period + 1:
-            return 0, 0, 0
-            
-        # 1. TR, DM+ , DM- 계산
-        tr_list = []
-        p_dm_list = []
-        m_dm_list = []
-        
-        for i in range(1, len(high_list)):
-            h = high_list[i]
-            l = low_list[i]
-            prev_c = close_list[i-1]
-            
-            # TR = Max(|High-Low|, |High-PrevClose|, |Low-PrevClose|)
-            tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
-            tr_list.append(tr)
-            
-            # DM
-            prev_h = high_list[i-1]
-            prev_l = low_list[i-1]
-            
-            up_move = h - prev_h
-            down_move = prev_l - l
-            
-            if up_move > down_move and up_move > 0:
-                p_dm_list.append(up_move)
-            else:
-                p_dm_list.append(0)
-                
-            if down_move > up_move and down_move > 0:
-                m_dm_list.append(down_move)
-            else:
-                m_dm_list.append(0)
-        
-        # 2. Smooth Values (Wilder's Smoothing usually, but here simple SMA or EMA for simplicity)
-        # Using simple SMA for period
-        if len(tr_list) < period:
-            return 0, 0, 0
-            
-        tr_sum = sum(tr_list[-period:])
-        p_dm_sum = sum(p_dm_list[-period:])
-        m_dm_sum = sum(m_dm_list[-period:])
-        
-        if tr_sum == 0:
-            return 0, 0, 0
-            
-        p_di = (p_dm_sum / tr_sum) * 100
-        m_di = (m_dm_sum / tr_sum) * 100
-        
-        dx = abs(p_di - m_di) / (p_di + m_di) * 100 if (p_di + m_di) > 0 else 0
-        adx = dx # For strict ADX, need smoothing of DX. Here using simple DX for approximation.
-        
-        return p_di, m_di, adx
-
+        return self.strategy.calculate_dmi(high_list, low_list, close_list, period)
+    
     def check_dmi_condition(self, code):
-        """DMI/ADX 조건 확인"""
-        if not hasattr(self, 'chk_use_dmi') or not self.chk_use_dmi.isChecked():
-            return True
-            
-        info = self.universe.get(code, {})
-        high_list = info.get('high_history', [])
-        low_list = info.get('low_history', [])
-        close_list = info.get('price_history', [])
-        
-        if len(high_list) < 20:
-            return True
-            
-        p_di, m_di, adx = self.calculate_dmi(high_list, low_list, close_list)
-        
-        # 조건 1: P-DI > M-DI (상승 추세)
-        if p_di <= m_di:
-            # self.log(f"[{code}] P-DI({p_di:.1f}) <= M-DI({m_di:.1f})")
-            return False
-            
-        # 조건 2: ADX 기준
-        threshold = self.spin_adx.value()
-        if adx < threshold:
-            # self.log(f"[{code}] ADX({adx:.1f}) < {threshold}")
-            return False
-            
-        return True
+        return self.strategy.check_dmi_condition(code)
 
     # ------------------------------------------------------------------
     # 프리셋 관리 (v3.0 개선)
@@ -2843,12 +2210,6 @@ class KiwoomProTrader(QMainWindow):
 # 메인 실행
 # ============================================================================
 if __name__ == "__main__":
-    # HiDPI 지원 (v3.1 신규)
-    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # 크로스 플랫폼 스타일
     
