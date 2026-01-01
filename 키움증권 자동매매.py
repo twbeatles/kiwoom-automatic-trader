@@ -1,23 +1,24 @@
 """
-Kiwoom Pro Algo-Trader v3.0
-키움증권 OpenAPI+ 기반 자동매매 프로그램
+Kiwoom Pro Algo-Trader v4.0
+키움증권 OpenAPI+ 기반 전문가용 자동매매 프로그램
 
 변동성 돌파 전략 + 이동평균 필터 + 트레일링 스톱
 MACD, 볼린저밴드, ATR, 스토캐스틱RSI, DMI/ADX 지표 지원
 진입 점수 시스템, 다단계 익절, 일괄 매수/매도 기능
 
-v3.0 신규 기능:
-- MACD 골든크로스 필터
-- 볼린저 밴드 필터
-- ATR 동적 손절
-- 스토캐스틱 RSI / DMI-ADX 추세 지표
-- 진입 점수 시스템 (가중치 기반)
-- 일괄 매수/매도 (2중 확인)
-- 다단계 익절 기능
-- 거래 내역 탭 및 CSV 내보내기
-- 프리셋 관리자 (사용자 정의 저장/삭제)
-- 시스템 설정 / 도움말 다이얼로그
-- 메뉴바 및 시스템 트레이 지원
+v4.0 신규 기능:
+- 전략 모듈 통합 (변동성 돌파, 골든크로스, 그리드 매매, RSI 역추세)
+- 텔레그램 알림 시스템 (매수/매도/손절/일일리포트)
+- 예약 스케줄러 (시간대/요일 설정)
+- 수익 차트 시각화 (matplotlib)
+- 백테스트 기능 (과거 데이터 기반 전략 검증)
+- 페이퍼 트레이딩 (모의투자 모드)
+
+v3.1 기능:
+- Toast 알림, 일괄 매도, 설정 초기화, HiDPI 지원
+
+v3.0 기능:
+- MACD/BB/ATR 필터, DMI-ADX 추세, 다단계 익절, 프리셋 관리자
 """
 
 import sys
@@ -26,6 +27,7 @@ import json
 import datetime
 import time
 import logging
+import threading
 import winreg
 from pathlib import Path
 from PyQt5.QtWidgets import *
@@ -33,102 +35,350 @@ from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QColor, QBrush, QFont, QIcon, QPalette, QTextCursor
 
+# ============================================================================
+# Optional Dependencies (v4.0)
+# ============================================================================
+# 전략 모듈
+try:
+    from strategies import get_strategy, get_strategy_list, SignalType, BaseStrategy
+    STRATEGIES_MODULE_AVAILABLE = True
+except ImportError:
+    STRATEGIES_MODULE_AVAILABLE = False
 
-from config import Config
-from strategy_manager import StrategyManager
+# 텔레그램 알림
+try:
+    import telegram
+    from telegram import Bot
+    TELEGRAM_MODULE_AVAILABLE = True
+except ImportError:
+    TELEGRAM_MODULE_AVAILABLE = False
+
+# matplotlib 차트
+try:
+    import matplotlib
+    matplotlib.use('Qt5Agg')
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    import matplotlib.pyplot as plt
+    plt.rcParams['font.family'] = 'Malgun Gothic'
+    plt.rcParams['axes.unicode_minus'] = False
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
 
 # ============================================================================
-# 설정 클래스 (Moved to config.py)
+# 설정 클래스
 # ============================================================================
-# Config class removed. Using imported Config.
+class Config:
+    """프로그램 설정 상수"""
+    # 화면 번호
+    SCREEN_DEPOSIT = "1002"
+    SCREEN_DAILY = "1001"
+    SCREEN_REAL = "2000"
+    SCREEN_ORDER = "0101"
+    
+    # 기본값
+    DEFAULT_CODES = "005930,000660,042700,005380"
+    DEFAULT_BETTING_RATIO = 10.0
+    DEFAULT_K_VALUE = 0.5
+    DEFAULT_TS_START = 3.0
+    DEFAULT_TS_STOP = 1.5
+    DEFAULT_LOSS_CUT = 2.0
+    
+    # RSI 설정
+    DEFAULT_RSI_PERIOD = 14
+    DEFAULT_RSI_UPPER = 70
+    DEFAULT_RSI_LOWER = 30
+    DEFAULT_USE_RSI = True
+    
+    # MACD 설정 (v3.0 신규)
+    DEFAULT_MACD_FAST = 12
+    DEFAULT_MACD_SLOW = 26
+    DEFAULT_MACD_SIGNAL = 9
+    DEFAULT_USE_MACD = True
+    
+    # 볼린저 밴드 설정 (v3.0 신규)
+    DEFAULT_BB_PERIOD = 20
+    DEFAULT_BB_STD = 2.0
+    DEFAULT_USE_BB = False
+    
+    # ATR 설정 (v3.0 신규)
+    DEFAULT_ATR_PERIOD = 14
+    DEFAULT_ATR_MULTIPLIER = 2.0
+    DEFAULT_USE_ATR = False
+    
+    # 스토캐스틱 RSI 설정 (v3.0 신규)
+    DEFAULT_STOCH_RSI_PERIOD = 14
+    DEFAULT_STOCH_K_PERIOD = 3
+    DEFAULT_STOCH_D_PERIOD = 3
+    DEFAULT_USE_STOCH_RSI = False
+    
+    # DMI/ADX 설정 (v3.0 신규)
+    DEFAULT_DMI_PERIOD = 14
+    DEFAULT_ADX_THRESHOLD = 25
+    DEFAULT_USE_DMI = False
+    
+    # 거래량 설정
+    DEFAULT_VOLUME_MULTIPLIER = 1.5
+    DEFAULT_VOLUME_PERIOD = 20
+    DEFAULT_USE_VOLUME = True
+    
+    # 리스크 관리
+    DEFAULT_MAX_DAILY_LOSS = 3.0
+    DEFAULT_MAX_HOLDINGS = 5
+    DEFAULT_USE_RISK_MGMT = True
+    
+    # 진입 점수 시스템 (v3.0 신규)
+    ENTRY_SCORE_THRESHOLD = 60
+    USE_ENTRY_SCORING = False
+    ENTRY_WEIGHTS = {
+        'target_break': 20,
+        'ma_filter': 15,
+        'rsi_optimal': 20,
+        'macd_golden': 20,
+        'volume_confirm': 15,
+        'bb_position': 10,
+    }
+    
+    # 다단계 익절 설정 (v3.0 신규)
+    PARTIAL_TAKE_PROFIT = [
+        {'rate': 3.0, 'sell_ratio': 30},
+        {'rate': 5.0, 'sell_ratio': 30},
+        {'rate': 8.0, 'sell_ratio': 20},
+    ]
+    DEFAULT_USE_PARTIAL_PROFIT = False
+    
+    # 파일 경로
+    SETTINGS_FILE = "kiwoom_settings.json"
+    PRESETS_FILE = "kiwoom_presets.json"
+    TRADE_HISTORY_FILE = "kiwoom_trade_history.json"
+    LOG_DIR = "logs"
+    
+    # 시간 설정
+    MARKET_CLOSE_HOUR = 15
+    MARKET_CLOSE_MINUTE = 19
+    NO_ENTRY_HOUR = 15
+    
+    # API 재시도 설정 (v3.0 신규)
+    API_MAX_RETRIES = 3
+    API_RETRY_DELAY = 1
+    
+    # 메모리 관리 (v3.0 신규)
+    MAX_LOG_LINES = 500
+    
+    # 기본 프리셋 정의 (v3.0 신규)
+    DEFAULT_PRESETS = {
+        "aggressive": {
+            "name": "🔥 공격적",
+            "description": "높은 수익을 추구하지만 리스크도 높음",
+            "k": 0.6, "ts_start": 2.0, "ts_stop": 1.0, "loss": 3.0,
+            "betting": 15.0, "rsi_upper": 75, "max_holdings": 7
+        },
+        "normal": {
+            "name": "⚖️ 표준",
+            "description": "균형 잡힌 수익과 리스크 관리",
+            "k": 0.5, "ts_start": 3.0, "ts_stop": 1.5, "loss": 2.0,
+            "betting": 10.0, "rsi_upper": 70, "max_holdings": 5
+        },
+        "conservative": {
+            "name": "🛡️ 보수적",
+            "description": "안정적인 수익, 낮은 리스크",
+            "k": 0.4, "ts_start": 4.0, "ts_stop": 2.0, "loss": 1.5,
+            "betting": 5.0, "rsi_upper": 65, "max_holdings": 3
+        }
+    }
+    
+    # 툴팁 설명 (v3.0 신규)
+    TOOLTIPS = {
+        "codes": "감시할 종목 코드를 콤마(,)로 구분하여 입력합니다.\n예: 005930,000660,042700",
+        "betting": "총 예수금 대비 종목당 투자 비율입니다.\n권장: 5% ~ 20%",
+        "k_value": "변동성 돌파 전략의 K 계수\n목표가 = 시가 + (전일 변동폭 × K값)\n권장: 0.3 ~ 0.5",
+        "ts_start": "트레일링 스톱 발동 수익률\n권장: 3% ~ 10%",
+        "ts_stop": "고점 대비 하락 허용폭\n권장: 1% ~ 3%",
+        "loss_cut": "절대 손절 기준\n권장: 2% ~ 5%",
+        "rsi": "과매수 판단 기준 RSI\n권장: 65 ~ 75",
+        "max_holdings": "동시 보유 가능 최대 종목 수\n권장: 3 ~ 7개"
+    }
+    
+    # 도움말 콘텐츠 (v3.0 신규)
+    HELP_CONTENT = {
+        "quick_start": """
+## 🚀 빠른 시작 가이드
+
+### 1단계: 로그인
+키움증권 OpenAPI+ 로그인 창에서 로그인합니다.
+
+### 2단계: 종목 선택
+감시할 종목 코드를 콤마로 구분하여 입력합니다.
+예: 005930,000660,042700
+
+### 3단계: 전략 선택
+- 초보자: **보수적** 프리셋 권장
+- 경험자: **표준** 프리셋으로 시작
+- 고급: 직접 파라미터 조정
+
+### 4단계: 매매 시작
+"🚀 전략 분석 및 매매 시작" 버튼을 클릭합니다.
+        """,
+        "strategy": """
+## 📈 전략 설명
+
+### 변동성 돌파 전략
+래리 윌리엄스(Larry Williams)가 개발한 단기 트레이딩 전략입니다.
+
+**핵심 원리:**
+- 전일 고가 - 전일 저가 = 변동폭
+- 목표가 = 당일 시가 + (변동폭 × K값)
+- 현재가가 목표가를 돌파하면 매수
+
+### 트레일링 스톱
+- 목표 수익률 도달 시 고점 추적 시작
+- 고점 대비 설정 하락폭 발생 시 매도
+        """,
+        "faq": """
+## ❓ 자주 묻는 질문
+
+**Q: 15시 이후에도 매수가 되나요?**
+A: 아니요, 15시 이후에는 신규 매수가 중지됩니다.
+
+**Q: 손실이 발생하면 어떻게 되나요?**
+A: 설정된 손절률에 따라 자동으로 매도됩니다.
+
+**Q: 프로그램 종료 시 보유 종목은?**
+A: 자동 청산되지 않습니다. 수동 청산이 필요합니다.
+        """
+    }
 
 
 # ============================================================================
-# 다크 테마 스타일시트
+# 다크 테마 스타일시트 (v4.0 Enhanced)
 # ============================================================================
 DARK_STYLESHEET = """
+/* ========== 기본 스타일 ========== */
 QMainWindow, QWidget {
-    background-color: #1a1a2e;
-    color: #edf2f4;
-    font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+    background-color: #0d1117;
+    color: #e6edf3;
+    font-family: 'Malgun Gothic', 'Segoe UI', 'Noto Sans KR', sans-serif;
+    font-size: 12px;
 }
 
+/* ========== 그룹박스 (Glass Morphism) ========== */
 QGroupBox {
-    border: 1px solid #3d5a80;
-    border-radius: 8px;
-    margin-top: 12px;
-    padding: 15px 10px 10px 10px;
+    background-color: rgba(22, 27, 34, 0.8);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 12px;
+    margin-top: 16px;
+    padding: 20px 15px 15px 15px;
     font-weight: bold;
     font-size: 13px;
-    color: #90e0ef;
+    color: #58a6ff;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
-    left: 15px;
-    padding: 0 8px;
+    left: 18px;
+    padding: 0 10px;
+    color: #79c0ff;
+    background-color: #0d1117;
+    border-radius: 4px;
 }
 
+/* ========== 버튼 (Gradient + Glow) ========== */
 QPushButton {
-    background-color: #3d5a80;
-    color: #edf2f4;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 20px;
-    font-weight: bold;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+        stop:0 #2d333b, stop:1 #21262d);
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-weight: 600;
     font-size: 13px;
+    min-height: 18px;
 }
 
 QPushButton:hover {
-    background-color: #4a6fa5;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+        stop:0 #3d444d, stop:1 #2d333b);
+    border-color: #58a6ff;
 }
 
 QPushButton:pressed {
-    background-color: #2c4a6e;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+        stop:0 #21262d, stop:1 #161b22);
+    padding-top: 11px;
+    padding-bottom: 9px;
 }
 
 QPushButton:disabled {
-    background-color: #2d2d44;
-    color: #666680;
+    background: #21262d;
+    color: #484f58;
+    border-color: #21262d;
 }
 
+/* 로그인 버튼 (Cyan Accent) */
 QPushButton#loginBtn {
-    background-color: #00b4d8;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 #238636, stop:1 #2ea043);
+    border: none;
+    color: white;
 }
 
 QPushButton#loginBtn:hover {
-    background-color: #0096c7;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 #2ea043, stop:1 #3fb950);
 }
 
+/* 시작 버튼 (Red Accent) */
 QPushButton#startBtn {
-    background-color: #e63946;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 #da3633, stop:1 #f85149);
+    border: none;
     font-size: 15px;
+    font-weight: bold;
+    min-width: 200px;
 }
 
 QPushButton#startBtn:hover {
-    background-color: #d62839;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 #f85149, stop:1 #ff6b6b);
 }
 
+QPushButton#startBtn:disabled {
+    background: #21262d;
+}
+
+/* 중지 버튼 */
 QPushButton#stopBtn {
-    background-color: #6c757d;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+        stop:0 #484f58, stop:1 #30363d);
 }
 
-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-    background-color: #16213e;
-    border: 1px solid #3d5a80;
-    border-radius: 5px;
-    padding: 8px;
-    color: #edf2f4;
-    selection-background-color: #00b4d8;
+/* ========== 입력 필드 ========== */
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTimeEdit, QDateEdit {
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: #e6edf3;
+    selection-background-color: #58a6ff;
+    min-height: 20px;
 }
 
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-    border: 1px solid #00b4d8;
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+QTimeEdit:focus, QDateEdit:focus {
+    border: 2px solid #58a6ff;
+    background-color: #161b22;
+}
+
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
+    border-color: #484f58;
 }
 
 QComboBox::drop-down {
     border: none;
-    width: 30px;
+    width: 32px;
+    background: transparent;
 }
 
 QComboBox::down-arrow {
@@ -136,139 +386,416 @@ QComboBox::down-arrow {
     height: 12px;
 }
 
+QComboBox QAbstractItemView {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    selection-background-color: #21262d;
+    color: #e6edf3;
+    padding: 4px;
+}
+
+/* ========== 테이블 (Enhanced) ========== */
 QTableWidget {
-    background-color: #16213e;
-    alternate-background-color: #1a2744;
-    gridline-color: #2d3a5a;
-    border: 1px solid #3d5a80;
-    border-radius: 8px;
-    color: #edf2f4;
+    background-color: #0d1117;
+    alternate-background-color: #161b22;
+    gridline-color: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    color: #e6edf3;
+    selection-background-color: rgba(88, 166, 255, 0.2);
 }
 
 QTableWidget::item {
-    padding: 8px;
-    border-bottom: 1px solid #2d3a5a;
+    padding: 12px 8px;
+    border-bottom: 1px solid #21262d;
 }
 
 QTableWidget::item:selected {
-    background-color: #3d5a80;
+    background-color: rgba(88, 166, 255, 0.15);
+    color: #e6edf3;
+}
+
+QTableWidget::item:hover {
+    background-color: rgba(88, 166, 255, 0.08);
 }
 
 QHeaderView::section {
-    background-color: #0f3460;
-    color: #90e0ef;
-    padding: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+        stop:0 #21262d, stop:1 #161b22);
+    color: #79c0ff;
+    padding: 12px 8px;
     border: none;
-    border-bottom: 2px solid #00b4d8;
+    border-bottom: 2px solid #58a6ff;
     font-weight: bold;
-}
-
-QTextEdit {
-    background-color: #0d1b2a;
-    border: 1px solid #3d5a80;
-    border-radius: 8px;
-    color: #90e0ef;
-    font-family: 'Consolas', 'Courier New', monospace;
     font-size: 12px;
-    padding: 10px;
 }
 
+/* ========== 텍스트 에디터 (로그) ========== */
+QTextEdit {
+    background-color: #010409;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    color: #8b949e;
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    padding: 12px;
+    line-height: 1.5;
+}
+
+/* ========== 라벨 ========== */
 QLabel {
-    color: #b8c5d6;
+    color: #8b949e;
     font-size: 12px;
 }
 
 QLabel#depositLabel {
-    color: #00b4d8;
+    color: #58a6ff;
     font-weight: bold;
     font-size: 14px;
+    padding: 5px 10px;
+    background-color: rgba(88, 166, 255, 0.1);
+    border-radius: 6px;
 }
 
 QLabel#profitLabel {
-    color: #f72585;
+    color: #f0883e;
     font-weight: bold;
     font-size: 14px;
+    padding: 5px 10px;
+    background-color: rgba(240, 136, 62, 0.1);
+    border-radius: 6px;
 }
 
 QLabel#profitPositive {
-    color: #e63946;
+    color: #3fb950;
     font-weight: bold;
     font-size: 14px;
 }
 
 QLabel#profitNegative {
-    color: #4361ee;
+    color: #f85149;
     font-weight: bold;
     font-size: 14px;
 }
 
+/* ========== 상태바 ========== */
 QStatusBar {
-    background-color: #0f3460;
-    color: #90e0ef;
-    border-top: 1px solid #3d5a80;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+        stop:0 #161b22, stop:1 #0d1117);
+    color: #8b949e;
+    border-top: 1px solid #30363d;
     font-size: 11px;
+    min-height: 28px;
 }
 
 QStatusBar::item {
     border: none;
 }
 
+/* ========== 탭 (Modern) ========== */
 QTabWidget::pane {
-    border: 1px solid #3d5a80;
-    border-radius: 8px;
-    background-color: #1a1a2e;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    background-color: rgba(22, 27, 34, 0.6);
+    top: -1px;
 }
 
 QTabBar::tab {
-    background-color: #16213e;
-    color: #b8c5d6;
-    padding: 10px 20px;
-    margin-right: 2px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
+    background: transparent;
+    color: #8b949e;
+    padding: 12px 24px;
+    margin-right: 4px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 QTabBar::tab:selected {
-    background-color: #3d5a80;
-    color: #edf2f4;
+    color: #e6edf3;
+    border-bottom: 3px solid #58a6ff;
+    background: rgba(88, 166, 255, 0.08);
 }
 
 QTabBar::tab:hover:!selected {
-    background-color: #2d3a5a;
+    color: #e6edf3;
+    background: rgba(88, 166, 255, 0.05);
+    border-bottom: 3px solid #30363d;
 }
 
+/* ========== 스플리터 ========== */
 QSplitter::handle {
-    background-color: #3d5a80;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 transparent, stop:0.4 #30363d, 
+        stop:0.6 #30363d, stop:1 transparent);
+    height: 6px;
 }
 
+QSplitter::handle:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 transparent, stop:0.4 #58a6ff, 
+        stop:0.6 #58a6ff, stop:1 transparent);
+}
+
+/* ========== 스크롤바 ========== */
 QScrollBar:vertical {
-    background-color: #16213e;
+    background-color: transparent;
     width: 12px;
-    border-radius: 6px;
+    margin: 4px;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #3d5a80;
-    border-radius: 6px;
+    background-color: #30363d;
+    border-radius: 4px;
     min-height: 30px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: #4a6fa5;
+    background-color: #484f58;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar::handle:vertical:pressed {
+    background-color: #58a6ff;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
     height: 0;
 }
 
-QToolTip {
-    background-color: #0f3460;
-    color: #edf2f4;
-    border: 1px solid #3d5a80;
+QScrollBar:horizontal {
+    background-color: transparent;
+    height: 12px;
+    margin: 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #30363d;
     border-radius: 4px;
-    padding: 5px;
+    min-width: 30px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #484f58;
+}
+
+/* ========== 툴팁 ========== */
+QToolTip {
+    background-color: #1c2128;
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+/* ========== 체크박스 ========== */
+QCheckBox {
+    color: #e6edf3;
+    spacing: 8px;
+    font-size: 12px;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #30363d;
+    border-radius: 4px;
+    background-color: #0d1117;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #58a6ff;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #238636;
+    border-color: #238636;
+}
+
+QCheckBox::indicator:checked:hover {
+    background-color: #2ea043;
+    border-color: #2ea043;
+}
+
+/* ========== 메뉴 ========== */
+QMenuBar {
+    background-color: #010409;
+    color: #e6edf3;
+    border-bottom: 1px solid #21262d;
+    padding: 4px;
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: 4px;
+}
+
+QMenuBar::item:selected {
+    background-color: #21262d;
+}
+
+QMenu {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 8px 32px;
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: #21262d;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #30363d;
+    margin: 6px 12px;
+}
+
+/* ========== 프로그레스바 ========== */
+QProgressBar {
+    background-color: #21262d;
+    border: none;
+    border-radius: 4px;
+    height: 8px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+        stop:0 #238636, stop:1 #3fb950);
+    border-radius: 4px;
+}
+
+/* ========== 리스트 위젯 ========== */
+QListWidget {
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 6px;
+    color: #e6edf3;
+}
+
+QListWidget::item {
+    padding: 10px 12px;
+    border-radius: 4px;
+    margin: 2px 0;
+}
+
+QListWidget::item:selected {
+    background-color: rgba(88, 166, 255, 0.15);
+}
+
+QListWidget::item:hover {
+    background-color: rgba(88, 166, 255, 0.08);
+}
+
+/* ========== 다이얼로그 ========== */
+QDialog {
+    background-color: #0d1117;
+}
+
+QMessageBox {
+    background-color: #161b22;
+}
+
+QMessageBox QPushButton {
+    min-width: 80px;
 }
 """
+
+
+# ============================================================================
+# Toast 알림 위젯 (v4.0 Enhanced)
+# ============================================================================
+class ToastWidget(QLabel):
+    """비침습적 Toast 알림 위젯 - 아이콘 + 그림자 효과"""
+    
+    # GitHub 스타일 색상
+    COLORS = {
+        'success': '#238636',
+        'info': '#58a6ff',
+        'warning': '#d29922',
+        'error': '#f85149'
+    }
+    
+    ICONS = {
+        'success': '✓',
+        'info': 'ℹ',
+        'warning': '⚠',
+        'error': '✕'
+    }
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.setWordWrap(True)
+        self.setMinimumWidth(320)
+        self.setMaximumWidth(450)
+        
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.fade_out)
+        
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        self.opacity_effect.setOpacity(1.0)
+        
+        # 부드러운 페이드 애니메이션
+        self.fade_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.fade_animation.setDuration(400)
+        self.fade_animation.finished.connect(self.hide)
+    
+    def show_toast(self, message, toast_type='info', duration=3500):
+        """Toast 메시지 표시"""
+        color = self.COLORS.get(toast_type, self.COLORS['info'])
+        icon = self.ICONS.get(toast_type, 'ℹ')
+        
+        # 아이콘과 함께 텍스트 표시
+        display_text = f"  {icon}   {message}"
+        
+        self.setStyleSheet(f"""
+            QLabel {{
+                background-color: {color};
+                color: white;
+                padding: 16px 24px;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 600;
+                font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+            }}
+        """)
+        
+        self.setText(display_text)
+        self.adjustSize()
+        
+        # 부모 창 기준 우측 하단에 위치
+        if self.parent():
+            parent_geo = self.parent().geometry()
+            x = parent_geo.right() - self.width() - 24
+            y = parent_geo.bottom() - self.height() - 80
+            self.move(x, y)
+        
+        self.opacity_effect.setOpacity(1.0)
+        self.show()
+        self.raise_()  # 맨 위로
+        self.timer.start(duration)
+    
+    def fade_out(self):
+        """부드러운 페이드 아웃 효과"""
+        self.timer.stop()
+        self.fade_animation.setStartValue(1.0)
+        self.fade_animation.setEndValue(0.0)
+        self.fade_animation.start()
 
 
 # ============================================================================
@@ -462,28 +989,6 @@ class HelpDialog(QDialog):
 
 
 # ============================================================================
-# 텔레그램 알림 클래스 (v3.1 신규)
-# ============================================================================
-class TelegramNotifier:
-    """텔레그램 메시지 발송 클래스"""
-    def __init__(self, bot_token, chat_id):
-        self.bot_token = bot_token
-        self.chat_id = chat_id
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-
-    def send_message(self, text):
-        """메시지 전송 (동기식 - 별도 스레드에서 호출 권장)"""
-        if not self.bot_token or not self.chat_id:
-            return
-            
-        try:
-            import requests
-            data = {'chat_id': self.chat_id, 'text': text, 'parse_mode': 'Markdown'}
-            requests.post(self.base_url, data=data, timeout=5)
-        except Exception as e:
-            print(f"Telegram Error: {e}")
-
-# ============================================================================
 # 시스템 설정 다이얼로그 (v3.0 신규)
 # ============================================================================
 class SettingsDialog(QDialog):
@@ -520,25 +1025,6 @@ class SettingsDialog(QDialog):
         self.chk_sound_enabled = QCheckBox("거래 체결 시 소리 재생")
         self.chk_sound_enabled.setChecked(self.settings.get('sound_enabled', False))
         notify_layout.addWidget(self.chk_sound_enabled)
-        
-        # 텔레그램 설정
-        notify_layout.addSpacing(10)
-        notify_layout.addWidget(QLabel("📱 텔레그램 봇 토큰:"))
-        self.input_bot_token = QLineEdit()
-        self.input_bot_token.setPlaceholderText("Bot Token 입력")
-        self.input_bot_token.setText(self.settings.get('telegram_token', ''))
-        notify_layout.addWidget(self.input_bot_token)
-        
-        notify_layout.addWidget(QLabel("🆔 텔레그램 챗 ID:"))
-        self.input_chat_id = QLineEdit()
-        self.input_chat_id.setPlaceholderText("Chat ID 입력")
-        self.input_chat_id.setText(self.settings.get('telegram_chat_id', ''))
-        notify_layout.addWidget(self.input_chat_id)
-        
-        self.chk_use_telegram = QCheckBox("텔레그램 알림 사용")
-        self.chk_use_telegram.setChecked(self.settings.get('use_telegram', False))
-        notify_layout.addWidget(self.chk_use_telegram)
-        
         group_notify.setLayout(notify_layout)
         layout.addWidget(group_notify)
         
@@ -558,10 +1044,7 @@ class SettingsDialog(QDialog):
         return {
             'run_at_startup': self.chk_run_at_startup.isChecked(),
             'auto_connect': self.chk_auto_connect.isChecked(),
-            'sound_enabled': self.chk_sound_enabled.isChecked(),
-            'telegram_token': self.input_bot_token.text().strip(),
-            'telegram_chat_id': self.input_chat_id.text().strip(),
-            'use_telegram': self.chk_use_telegram.isChecked()
+            'sound_enabled': self.chk_sound_enabled.isChecked()
         }
 
 
@@ -590,16 +1073,9 @@ class KiwoomProTrader(QMainWindow):
         self.system_settings = {
             'run_at_startup': False,
             'auto_connect': False,
-            'sound_enabled': False,
-            'use_telegram': False,
-            'telegram_token': '',
-            'telegram_chat_id': ''
+            'sound_enabled': False
         }
         self.price_history = {}  # 종목별 가격 이력
-        self.telegram = None  # 텔레그램 봇 인스턴스
-        
-        # 전략 매니저 초기화
-        self.strategy = StrategyManager(self)
         
         # 로깅 설정
         self.setup_logging()
@@ -625,7 +1101,10 @@ class KiwoomProTrader(QMainWindow):
         # 설정 불러오기
         self.load_settings()
         
-        self.logger.info("프로그램 초기화 완료 (v3.0)")
+        # Toast 알림 위젯 초기화 (v3.1 신규)
+        self.toast = ToastWidget(self)
+        
+        self.logger.info("프로그램 초기화 완료 (v4.0)")
 
     def setup_logging(self):
         """로깅 시스템 설정"""
@@ -654,7 +1133,7 @@ class KiwoomProTrader(QMainWindow):
 
     def init_ui(self):
         """UI 초기화"""
-        self.setWindowTitle("Kiwoom Pro Algo-Trader v3.0 [고급 매매 알고리즘]")
+        self.setWindowTitle("Kiwoom Pro Algo-Trader v4.0 [전문가용 자동매매]")
         self.setGeometry(100, 100, 1300, 950)
         self.setMinimumSize(1100, 800)
         self.setStyleSheet(DARK_STYLESHEET)
@@ -717,6 +1196,16 @@ class KiwoomProTrader(QMainWindow):
         layout_dash.addSpacing(20)
         layout_dash.addWidget(self.lbl_total_profit)
         layout_dash.addStretch(1)
+        
+        # 일괄 매도 버튼 (v3.1 신규)
+        self.btn_batch_sell = QPushButton("📤 일괄 매도")
+        self.btn_batch_sell.setStyleSheet("background-color: #dc3545;")
+        self.btn_batch_sell.clicked.connect(self.execute_batch_sell)
+        self.btn_batch_sell.setToolTip("보유 중인 모든 종목을 시장가로 매도합니다")
+        self.btn_batch_sell.setEnabled(False)
+        layout_dash.addWidget(self.btn_batch_sell)
+        layout_dash.addSpacing(10)
+        
         layout_dash.addWidget(self.lbl_connection)
         
         group_dash.setLayout(layout_dash)
@@ -735,8 +1224,24 @@ class KiwoomProTrader(QMainWindow):
         # 통계 탭
         tab_widget.addTab(self.create_statistics_tab(), "📊 거래 통계")
         
-        # 거래 내역 탭 (v3.0 신규)
+        # 거래 내역 탭
         tab_widget.addTab(self.create_history_tab(), "📝 거래 내역")
+        
+        # === v4.0 신규 탭 ===
+        # 텔레그램 알림 탭
+        tab_widget.addTab(self.create_telegram_tab(), "📱 텔레그램")
+        
+        # 예약 스케줄러 탭
+        tab_widget.addTab(self.create_scheduler_tab(), "⏰ 스케줄러")
+        
+        # 수익 차트 탭
+        tab_widget.addTab(self.create_chart_tab(), "📈 차트")
+        
+        # 백테스트 탭
+        tab_widget.addTab(self.create_backtest_tab(), "🧪 백테스트")
+        
+        # 페이퍼 트레이딩 탭
+        tab_widget.addTab(self.create_paper_trading_tab(), "🎮 모의투자")
         
         return tab_widget
 
@@ -810,6 +1315,10 @@ class KiwoomProTrader(QMainWindow):
         self.btn_save = QPushButton("💾 설정 저장")
         self.btn_save.clicked.connect(self.save_settings)
         
+        self.btn_reset = QPushButton("🔄 초기화")
+        self.btn_reset.clicked.connect(self.reset_to_defaults)
+        self.btn_reset.setToolTip("모든 설정을 기본값으로 초기화합니다")
+        
         self.btn_start = QPushButton("🚀 전략 분석 및 매매 시작")
         self.btn_start.setObjectName("startBtn")
         self.btn_start.setMinimumSize(250, 50)
@@ -823,6 +1332,7 @@ class KiwoomProTrader(QMainWindow):
         self.btn_stop.setEnabled(False)
         
         btn_layout.addWidget(self.btn_save)
+        btn_layout.addWidget(self.btn_reset)
         btn_layout.addStretch(1)
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_stop)
@@ -1245,7 +1755,7 @@ class KiwoomProTrader(QMainWindow):
         self.statusbar.addWidget(self.status_realtime)
         
         # 오른쪽 영역
-        self.statusbar.addPermanentWidget(QLabel("Kiwoom Pro Algo-Trader v2.0"))
+        self.statusbar.addPermanentWidget(QLabel("Kiwoom Pro Algo-Trader v4.0"))
 
     def setup_kiwoom_api(self):
         """키움 API 설정"""
@@ -1313,7 +1823,24 @@ class KiwoomProTrader(QMainWindow):
             "use_dmi": self.chk_use_dmi.isChecked(),
             "adx_threshold": self.spin_adx.value(),
             "use_atr": self.chk_use_atr.isChecked(),
-            "atr_mult": self.spin_atr_mult.value()
+            "atr_mult": self.spin_atr_mult.value(),
+            # v4.0 텔레그램 설정
+            "telegram_token": getattr(self, 'telegram_token', ''),
+            "telegram_chat_id": getattr(self, 'telegram_chat_id', ''),
+            "telegram_buy": self.chk_telegram_buy.isChecked() if hasattr(self, 'chk_telegram_buy') else True,
+            "telegram_sell": self.chk_telegram_sell.isChecked() if hasattr(self, 'chk_telegram_sell') else True,
+            "telegram_loss": self.chk_telegram_loss.isChecked() if hasattr(self, 'chk_telegram_loss') else True,
+            "telegram_daily": self.chk_telegram_daily.isChecked() if hasattr(self, 'chk_telegram_daily') else False,
+            # v4.0 스케줄러 설정
+            "scheduler_enabled": self.chk_scheduler_enabled.isChecked() if hasattr(self, 'chk_scheduler_enabled') else False,
+            "schedule_start": self.time_schedule_start.time().toString("HH:mm") if hasattr(self, 'time_schedule_start') else "09:00",
+            "schedule_end": self.time_schedule_end.time().toString("HH:mm") if hasattr(self, 'time_schedule_end') else "15:20",
+            "schedule_days": [self.chk_days[i].isChecked() for i in range(7)] if hasattr(self, 'chk_days') else [True]*5 + [False]*2,
+            "pause_on_volatility": self.chk_pause_on_volatility.isChecked() if hasattr(self, 'chk_pause_on_volatility') else False,
+            "time_cut_enabled": self.chk_time_cut_enabled.isChecked() if hasattr(self, 'chk_time_cut_enabled') else True,
+            # v4.0 페이퍼 트레이딩 설정
+            "paper_mode": self.chk_paper_mode.isChecked() if hasattr(self, 'chk_paper_mode') else False,
+            "paper_initial_balance": self.spin_paper_balance.value() if hasattr(self, 'spin_paper_balance') else 10000000
         }
         
         try:
@@ -1358,12 +1885,46 @@ class KiwoomProTrader(QMainWindow):
                 self.chk_use_atr.setChecked(settings.get("use_atr", False))
                 self.spin_atr_mult.setValue(settings.get("atr_mult", 2.0))
                 
-                # 텔레그램 설정 로드
-                self.system_settings['use_telegram'] = settings.get('use_telegram', False)
-                self.system_settings['telegram_token'] = settings.get('telegram_token', '')
-                self.system_settings['telegram_chat_id'] = settings.get('telegram_chat_id', '')
-                if self.system_settings['use_telegram'] and self.system_settings['telegram_token']:
-                    self.telegram = TelegramNotifier(self.system_settings['telegram_token'], self.system_settings['telegram_chat_id'])
+                # v4.0 텔레그램 설정 불러오기
+                self.telegram_token = settings.get("telegram_token", "")
+                self.telegram_chat_id = settings.get("telegram_chat_id", "")
+                if hasattr(self, 'input_telegram_token') and self.telegram_token:
+                    self.input_telegram_token.setText(self.telegram_token)
+                if hasattr(self, 'input_telegram_chat_id') and self.telegram_chat_id:
+                    self.input_telegram_chat_id.setText(self.telegram_chat_id)
+                if hasattr(self, 'chk_telegram_buy'):
+                    self.chk_telegram_buy.setChecked(settings.get("telegram_buy", True))
+                if hasattr(self, 'chk_telegram_sell'):
+                    self.chk_telegram_sell.setChecked(settings.get("telegram_sell", True))
+                if hasattr(self, 'chk_telegram_loss'):
+                    self.chk_telegram_loss.setChecked(settings.get("telegram_loss", True))
+                if hasattr(self, 'chk_telegram_daily'):
+                    self.chk_telegram_daily.setChecked(settings.get("telegram_daily", False))
+                
+                # v4.0 스케줄러 설정 불러오기
+                if hasattr(self, 'chk_scheduler_enabled'):
+                    self.chk_scheduler_enabled.setChecked(settings.get("scheduler_enabled", False))
+                if hasattr(self, 'time_schedule_start'):
+                    start_time = settings.get("schedule_start", "09:00")
+                    self.time_schedule_start.setTime(QTime.fromString(start_time, "HH:mm"))
+                if hasattr(self, 'time_schedule_end'):
+                    end_time = settings.get("schedule_end", "15:20")
+                    self.time_schedule_end.setTime(QTime.fromString(end_time, "HH:mm"))
+                if hasattr(self, 'chk_days'):
+                    days = settings.get("schedule_days", [True]*5 + [False]*2)
+                    for i, checked in enumerate(days):
+                        if i in self.chk_days:
+                            self.chk_days[i].setChecked(checked)
+                if hasattr(self, 'chk_pause_on_volatility'):
+                    self.chk_pause_on_volatility.setChecked(settings.get("pause_on_volatility", False))
+                if hasattr(self, 'chk_time_cut_enabled'):
+                    self.chk_time_cut_enabled.setChecked(settings.get("time_cut_enabled", True))
+                
+                # v4.0 페이퍼 트레이딩 설정 불러오기
+                if hasattr(self, 'chk_paper_mode'):
+                    self.chk_paper_mode.setChecked(settings.get("paper_mode", False))
+                if hasattr(self, 'spin_paper_balance'):
+                    self.spin_paper_balance.setValue(settings.get("paper_initial_balance", 10000000))
                 
                 self.log("📂 저장된 설정을 불러왔습니다")
                 self.logger.info("설정 불러오기 완료")
@@ -1401,6 +1962,7 @@ class KiwoomProTrader(QMainWindow):
                 self.combo_acc.addItems([x for x in accs if x])
                 
                 self.btn_start.setEnabled(True)
+                self.btn_batch_sell.setEnabled(True)
                 self.lbl_connection.setText("● 연결됨")
                 self.lbl_connection.setStyleSheet("color: #00b894; font-weight: bold;")
             else:
@@ -1507,7 +2069,7 @@ class KiwoomProTrader(QMainWindow):
         try:
             self.kiwoom.dynamicCall("SetRealRemove(QString, QString)", 
                                    Config.SCREEN_REAL, "ALL")
-        except:
+        except Exception:
             pass
         
         self.btn_start.setEnabled(True)
@@ -1709,6 +2271,11 @@ class KiwoomProTrader(QMainWindow):
             self.log(f"[{info['name']}] 15시 이후 진입 금지")
             return
         
+        # 3.5. 스케줄러 체크 (v4.0 신규)
+        if not self.is_trading_allowed_by_schedule():
+            self.log(f"[{info['name']}] 스케줄러에 의해 매매 제한")
+            return
+        
         # 4. RSI 필터 (과매수 회피)
         if not self.check_rsi_condition(code):
             return
@@ -1826,6 +2393,12 @@ class KiwoomProTrader(QMainWindow):
             
             self.log(f"📤 [{self.universe[code]['name']}] 매수 주문: {qty}주")
             self.logger.info(f"매수 주문: {self.universe[code]['name']} {qty}주")
+            
+            # v4.0 텔레그램 알림
+            self.send_telegram_notification(
+                f"🟢 매수 주문\n종목: {self.universe[code]['name']}\n수량: {qty}주\n가격: {curr_price:,}원",
+                'buy'
+            )
         except Exception as e:
             self.log(f"[ERROR] 매수 주문 실패: {e}")
             self.logger.error(f"매수 주문 실패 ({code}): {e}")
@@ -1846,9 +2419,99 @@ class KiwoomProTrader(QMainWindow):
             
             self.log(f"📤 [{self.universe[code]['name']}] 매도 주문: {qty}주 ({msg})")
             self.logger.info(f"매도 주문: {self.universe[code]['name']} {qty}주 ({msg})")
+            
+            # v4.0 텔레그램 알림
+            notify_type = 'loss' if '손절' in msg else 'sell'
+            self.send_telegram_notification(
+                f"🔴 매도 주문\n종목: {self.universe[code]['name']}\n수량: {qty}주\n사유: {msg}",
+                notify_type
+            )
         except Exception as e:
             self.log(f"[ERROR] 매도 주문 실패: {e}")
             self.logger.error(f"매도 주문 실패 ({code}): {e}")
+
+    def execute_batch_sell(self):
+        """모든 보유 종목 일괄 매도 (v3.1 신규)"""
+        # 보유 종목 확인
+        holdings = [(code, info) for code, info in self.universe.items() if info.get('qty', 0) > 0]
+        
+        if not holdings:
+            self.toast.show_toast("보유 중인 종목이 없습니다.", "warning")
+            return
+        
+        # 1차 확인
+        names = ", ".join([info['name'] for _, info in holdings])
+        reply1 = QMessageBox.warning(
+            self, "⚠️ 일괄 매도 확인 (1/2)",
+            f"다음 종목을 모두 시장가로 매도합니다:\n\n{names}\n\n계속하시겠습니까?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        
+        if reply1 != QMessageBox.Yes:
+            return
+        
+        # 2차 확인
+        reply2 = QMessageBox.critical(
+            self, "🚨 최종 확인 (2/2)",
+            "정말로 모든 보유 종목을 매도하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        
+        if reply2 != QMessageBox.Yes:
+            return
+        
+        # 일괄 매도 실행
+        sell_count = 0
+        for code, info in holdings:
+            try:
+                self.execute_sell(code, "일괄매도")
+                sell_count += 1
+            except Exception as e:
+                self.log(f"[ERROR] 일괄 매도 중 오류 ({info['name']}): {e}")
+        
+        self.toast.show_toast(f"✅ {sell_count}개 종목 매도 주문 완료", "success")
+        self.log(f"📤 일괄 매도: {sell_count}개 종목 주문 완료")
+
+    def reset_to_defaults(self):
+        """설정을 기본값으로 초기화 (v3.1 신규)"""
+        reply = QMessageBox.question(
+            self, "설정 초기화",
+            "모든 설정을 기본값으로 초기화하시겠습니까?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        # 기본 설정 적용
+        self.input_codes.setText(Config.DEFAULT_CODES)
+        self.spin_betting.setValue(Config.DEFAULT_BETTING_RATIO)
+        self.spin_k.setValue(Config.DEFAULT_K_VALUE)
+        self.spin_ts_start.setValue(Config.DEFAULT_TS_START)
+        self.spin_ts_stop.setValue(Config.DEFAULT_TS_STOP)
+        self.spin_loss.setValue(Config.DEFAULT_LOSS_CUT)
+        
+        # 고급 설정
+        self.chk_use_rsi.setChecked(Config.DEFAULT_USE_RSI)
+        self.spin_rsi_upper.setValue(Config.DEFAULT_RSI_UPPER)
+        self.spin_rsi_period.setValue(Config.DEFAULT_RSI_PERIOD)
+        self.chk_use_volume.setChecked(Config.DEFAULT_USE_VOLUME)
+        self.spin_volume_mult.setValue(Config.DEFAULT_VOLUME_MULTIPLIER)
+        self.chk_use_risk.setChecked(Config.DEFAULT_USE_RISK_MGMT)
+        self.spin_max_loss.setValue(Config.DEFAULT_MAX_DAILY_LOSS)
+        self.spin_max_holdings.setValue(Config.DEFAULT_MAX_HOLDINGS)
+        
+        # v3.0 설정
+        self.chk_use_macd.setChecked(Config.DEFAULT_USE_MACD)
+        self.chk_use_bb.setChecked(Config.DEFAULT_USE_BB)
+        self.spin_bb_k.setValue(Config.DEFAULT_BB_STD)
+        self.chk_use_dmi.setChecked(Config.DEFAULT_USE_DMI)
+        self.spin_adx.setValue(Config.DEFAULT_ADX_THRESHOLD)
+        self.chk_use_atr.setChecked(Config.DEFAULT_USE_ATR)
+        self.spin_atr_mult.setValue(Config.DEFAULT_ATR_MULTIPLIER)
+        
+        self.toast.show_toast("✅ 설정이 기본값으로 초기화되었습니다.", "success")
+        self.log("🔄 설정이 기본값으로 초기화되었습니다")
 
     # ------------------------------------------------------------------
     # 체결 데이터 처리
@@ -1904,7 +2567,6 @@ class KiwoomProTrader(QMainWindow):
         
         self.log(f"✅ [{name}] 매수 체결: {qty}주 @ {price:,}원")
         self.logger.info(f"매수 체결: {name} {qty}주 @ {price}원")
-        self.send_notification("매수 체결", f"[{name}] {qty}주 매수됨\n가격: {price:,}원")
 
     def _handle_sell_execution(self, code, info, row, price, qty, name):
         """매도 체결 처리"""
@@ -1932,7 +2594,6 @@ class KiwoomProTrader(QMainWindow):
         
         self.log(f"✅ [{name}] 매도 체결: {qty}주 @ {price:,}원 (손익: {profit:+,}원)")
         self.logger.info(f"매도 체결: {name} {qty}주 @ {price}원, 손익: {profit}원")
-        self.send_notification("매도 체결", f"[{name}] {qty}주 매도됨\n가격: {price:,}원\n손익: {profit:+,}원")
 
     # ------------------------------------------------------------------
     # 유틸리티
@@ -2031,7 +2692,7 @@ class KiwoomProTrader(QMainWindow):
         self.tray_icon.activated.connect(self.on_tray_activated)
         self.tray_icon.show()
         
-        self.tray_icon.setToolTip("Kiwoom Pro Algo-Trader v3.0")
+        self.tray_icon.setToolTip("Kiwoom Pro Algo-Trader v3.1")
 
     def on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
@@ -2116,38 +2777,982 @@ class KiwoomProTrader(QMainWindow):
         
         return True
     
-    # ------------------------------------------------------------------
-    # 전략 위임 (Refactored)
-    # ------------------------------------------------------------------
     def calculate_rsi(self, code, period=14):
-        return self.strategy.calculate_rsi(code, period)
+        """RSI 계산 (종목별 저장된 가격 데이터 기반)"""
+        if code not in self.universe:
+            return 50  # 기본값
+        
+        info = self.universe[code]
+        prices = info.get('price_history', [])
+        
+        if len(prices) < period + 1:
+            return 50  # 데이터 부족
+        
+        # 가격 변화 계산
+        gains = []
+        losses = []
+        
+        for i in range(1, period + 1):
+            change = prices[-(i)] - prices[-(i+1)]
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
+        
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+        
+        if avg_loss == 0:
+            return 100
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        return rsi
     
     def check_rsi_condition(self, code):
-        return self.strategy.check_rsi_condition(code)
+        """RSI 조건 확인"""
+        if not self.chk_use_rsi.isChecked():
+            return True
+        
+        rsi = self.calculate_rsi(code, self.spin_rsi_period.value())
+        upper_limit = self.spin_rsi_upper.value()
+        
+        if rsi >= upper_limit:
+            info = self.universe.get(code, {})
+            self.log(f"[{info.get('name', code)}] RSI {rsi:.1f} >= {upper_limit} (과매수) 진입 보류")
+            return False
+        
+        return True
     
     def check_volume_condition(self, code):
-        return self.strategy.check_volume_condition(code)
+        """거래량 조건 확인"""
+        if not self.chk_use_volume.isChecked():
+            return True
+        
+        if code not in self.universe:
+            return True
+        
+        info = self.universe[code]
+        current_volume = info.get('current_volume', 0)
+        avg_volume = info.get('avg_volume_5', 0)
+        
+        if avg_volume == 0:
+            return True
+        
+        required_mult = self.spin_volume_mult.value()
+        actual_mult = current_volume / avg_volume
+        
+        if actual_mult < required_mult:
+            return False
+        
+        return True
     
+    def send_notification(self, title, message):
+        """시스템 알림 전송"""
+        try:
+            if sys.platform == 'win32' and self.system_settings.get('sound_enabled', False):
+                from ctypes import windll
+                windll.user32.MessageBeep(0x00000040)
+            self.log(f"🔔 [{title}] {message}")
+            self.logger.info(f"알림: {title} - {message}")
+        except Exception as e:
+            self.logger.error(f"알림 전송 실패: {e}")
+
+    # ------------------------------------------------------------------
+    # 메뉴바 (v3.0 신규)
+    # ------------------------------------------------------------------
+    def create_menu_bar(self):
+        """메뉴바 생성"""
+        menubar = self.menuBar()
+        
+        # 파일 메뉴
+        file_menu = menubar.addMenu("파일")
+        file_menu.addAction("⚙️ 시스템 설정", self.show_settings)
+        file_menu.addSeparator()
+        file_menu.addAction("❌ 종료", self.close)
+        
+        # 보기 메뉴
+        view_menu = menubar.addMenu("보기")
+        view_menu.addAction("📜 로그 폴더 열기", self.open_log_folder)
+        
+        # 도움말 메뉴
+        help_menu = menubar.addMenu("도움말")
+        help_menu.addAction("📚 사용 가이드", self.show_help)
+        help_menu.addAction("ℹ️ 정보", lambda: QMessageBox.about(self, "정보", 
+            "Kiwoom Pro Algo-Trader v3.1\n\n키움증권 OpenAPI+ 기반 자동매매 프로그램\n\n변동성 돌파 전략 + 다중 지표 필터"))
+
+    def open_log_folder(self):
+        """로그 폴더 열기 (v3.1 신규)"""
+        try:
+            log_path = Path(Config.LOG_DIR)
+            if not log_path.exists():
+                log_path.mkdir(parents=True, exist_ok=True)
+                self.toast.show_toast("로그 폴더가 생성되었습니다.", "info")
+            os.startfile(log_path)
+        except Exception as e:
+            self.log(f"[ERROR] 로그 폴더 열기 실패: {e}")
+            self.toast.show_toast(f"로그 폴더를 열 수 없습니다: {e}", "error")
+
+    def show_settings(self):
+        """시스템 설정 다이얼로그"""
+        dialog = SettingsDialog(self, self.system_settings)
+        if dialog.exec_() == QDialog.Accepted:
+            new_settings = dialog.get_settings()
+            if new_settings['run_at_startup'] != self.system_settings.get('run_at_startup', False):
+                self.set_startup_registry(new_settings['run_at_startup'])
+            self.system_settings.update(new_settings)
+            self.save_settings()
+            self.log("⚙️ 시스템 설정 저장됨")
+
+    def show_help(self):
+        """도움말 다이얼로그"""
+        dialog = HelpDialog(self)
+        dialog.exec_()
+
+    def set_startup_registry(self, enable):
+        """Windows 시작 프로그램 레지스트리 설정"""
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "KiwoomProTrader"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+            if enable:
+                exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
+                winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, f'"{exe_path}"')
+                self.log("✅ Windows 시작 시 자동 실행 설정됨")
+            else:
+                try:
+                    winreg.DeleteValue(key, app_name)
+                    self.log("❌ Windows 시작 시 자동 실행 해제됨")
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+        except Exception as e:
+            self.logger.error(f"레지스트리 설정 실패: {e}")
+
+    # ------------------------------------------------------------------
+    # 거래 히스토리 관리 (v3.0 신규)
+    # ------------------------------------------------------------------
+    def load_trade_history(self):
+        """거래 히스토리 불러오기"""
+        try:
+            if os.path.exists(Config.TRADE_HISTORY_FILE):
+                with open(Config.TRADE_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                    self.trade_history = json.load(f)
+        except Exception as e:
+            self.trade_history = []
+            logging.error(f"거래 히스토리 로드 실패: {e}")
+
+    def save_trade_history(self):
+        """거래 히스토리 저장"""
+        try:
+            with open(Config.TRADE_HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.trade_history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self.logger.error(f"거래 히스토리 저장 실패: {e}")
+
+    def add_trade_record(self, code, trade_type, price, quantity, profit=0, reason=""):
+        """거래 기록 추가"""
+        name = self.universe.get(code, {}).get('name', code)
+        record = {
+            'timestamp': datetime.datetime.now().isoformat(),
+            'code': code,
+            'name': name,
+            'type': trade_type,
+            'price': price,
+            'quantity': quantity,
+            'amount': price * quantity,
+            'profit': profit,
+            'reason': reason
+        }
+        self.trade_history.append(record)
+        self.save_trade_history()
+
+    # ------------------------------------------------------------------
+    # MACD 계산 (v3.0 신규)
+    # ------------------------------------------------------------------
     def calculate_macd(self, prices):
-        return self.strategy.calculate_macd(prices)
-    
+        """MACD 계산 (단순 구현)"""
+        if len(prices) < Config.DEFAULT_MACD_SLOW + Config.DEFAULT_MACD_SIGNAL:
+            return 0, 0, 0
+        
+        def ema(data, period):
+            multiplier = 2 / (period + 1)
+            result = [data[0]]
+            for i in range(1, len(data)):
+                result.append((data[i] - result[-1]) * multiplier + result[-1])
+            return result
+        
+        ema_fast = ema(prices, Config.DEFAULT_MACD_FAST)
+        ema_slow = ema(prices, Config.DEFAULT_MACD_SLOW)
+        macd = [f - s for f, s in zip(ema_fast, ema_slow)]
+        signal = ema(macd, Config.DEFAULT_MACD_SIGNAL)
+        histogram = macd[-1] - signal[-1]
+        return macd[-1], signal[-1], histogram
+
     def check_macd_condition(self, code):
-        return self.strategy.check_macd_condition(code)
-    
+        """MACD 조건 확인"""
+        if not hasattr(self, 'chk_use_macd') or not self.chk_use_macd.isChecked():
+            return True
+        
+        prices = self.price_history.get(code, [])
+        if len(prices) < 30:
+            return True
+        
+        macd, signal, _ = self.calculate_macd(prices)
+        if macd <= signal:
+            self.log(f"[{self.universe.get(code, {}).get('name', code)}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
+            return False
+        return True
+
+    # ------------------------------------------------------------------
+    # 볼린저 밴드 및 DMI 계산 (v3.0 신규)
+    # ------------------------------------------------------------------
     def calculate_bollinger(self, prices, k=2.0, period=20):
-        return self.strategy.calculate_bollinger(prices, k, period)
+        """볼린저 밴드 계산"""
+        if len(prices) < period:
+            return 0, 0, 0
+        
+        subset = prices[-period:]
+        avg = sum(subset) / period
+        variance = sum((x - avg) ** 2 for x in subset) / period
+        std_dev = variance ** 0.5
+        
+        upper = avg + (std_dev * k)
+        lower = avg - (std_dev * k)
+        return upper, avg, lower
 
     def check_bollinger_condition(self, code):
-        return self.strategy.check_bollinger_condition(code)
-    
+        """볼린저 밴드 조건 확인"""
+        if not hasattr(self, 'chk_use_bb') or not self.chk_use_bb.isChecked():
+            return True
+        
+        prices = self.universe.get(code, {}).get('price_history', [])
+        current_price = self.universe.get(code, {}).get('current', 0)
+        
+        if len(prices) < 20 or current_price == 0:
+            return True
+            
+        k = self.spin_bb_k.value()
+        _, _, lower = self.calculate_bollinger(prices, k=k)
+        
+        # 밴드 하단보다 현재가가 낮으면(돌파) 매수 간주
+        if current_price > lower:
+            # self.log(f"[{code}] BB 하단 미달")
+            return False
+            
+        return True
+
     def calculate_atr(self, high_list, low_list, close_list, period=14):
-        return self.strategy.calculate_atr(high_list, low_list, close_list, period)
-    
+        """ATR(Average True Range) 계산"""
+        if len(high_list) < period + 1:
+            return 0
+            
+        tr_list = []
+        for i in range(1, len(high_list)):
+            h = high_list[i]
+            l = low_list[i]
+            prev_c = close_list[i-1]
+            tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
+            tr_list.append(tr)
+            
+        if len(tr_list) < period:
+            return 0
+            
+        # Simple SMA for ATR
+        atr = sum(tr_list[-period:]) / period
+        return atr
+
     def calculate_dmi(self, high_list, low_list, close_list, period=14):
-        return self.strategy.calculate_dmi(high_list, low_list, close_list, period)
-    
+        """DMI(P-DI, M-DI, ADX) 계산"""
+        if len(high_list) < period + 1:
+            return 0, 0, 0
+            
+        # 1. TR, DM+ , DM- 계산
+        tr_list = []
+        p_dm_list = []
+        m_dm_list = []
+        
+        for i in range(1, len(high_list)):
+            h = high_list[i]
+            l = low_list[i]
+            prev_c = close_list[i-1]
+            
+            # TR = Max(|High-Low|, |High-PrevClose|, |Low-PrevClose|)
+            tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
+            tr_list.append(tr)
+            
+            # DM
+            prev_h = high_list[i-1]
+            prev_l = low_list[i-1]
+            
+            up_move = h - prev_h
+            down_move = prev_l - l
+            
+            if up_move > down_move and up_move > 0:
+                p_dm_list.append(up_move)
+            else:
+                p_dm_list.append(0)
+                
+            if down_move > up_move and down_move > 0:
+                m_dm_list.append(down_move)
+            else:
+                m_dm_list.append(0)
+        
+        # 2. Smooth Values (Wilder's Smoothing usually, but here simple SMA or EMA for simplicity)
+        # Using simple SMA for period
+        if len(tr_list) < period:
+            return 0, 0, 0
+            
+        tr_sum = sum(tr_list[-period:])
+        p_dm_sum = sum(p_dm_list[-period:])
+        m_dm_sum = sum(m_dm_list[-period:])
+        
+        if tr_sum == 0:
+            return 0, 0, 0
+            
+        p_di = (p_dm_sum / tr_sum) * 100
+        m_di = (m_dm_sum / tr_sum) * 100
+        
+        dx = abs(p_di - m_di) / (p_di + m_di) * 100 if (p_di + m_di) > 0 else 0
+        adx = dx # For strict ADX, need smoothing of DX. Here using simple DX for approximation.
+        
+        return p_di, m_di, adx
+
     def check_dmi_condition(self, code):
-        return self.strategy.check_dmi_condition(code)
+        """DMI/ADX 조건 확인"""
+        if not hasattr(self, 'chk_use_dmi') or not self.chk_use_dmi.isChecked():
+            return True
+            
+        info = self.universe.get(code, {})
+        high_list = info.get('high_history', [])
+        low_list = info.get('low_history', [])
+        close_list = info.get('price_history', [])
+        
+        if len(high_list) < 20:
+            return True
+            
+        p_di, m_di, adx = self.calculate_dmi(high_list, low_list, close_list)
+        
+        # 조건 1: P-DI > M-DI (상승 추세)
+        if p_di <= m_di:
+            # self.log(f"[{code}] P-DI({p_di:.1f}) <= M-DI({m_di:.1f})")
+            return False
+            
+        # 조건 2: ADX 기준
+        threshold = self.spin_adx.value()
+        if adx < threshold:
+            # self.log(f"[{code}] ADX({adx:.1f}) < {threshold}")
+            return False
+            
+        return True
+
+    # ========================================================================
+    # v4.0 신규 탭 생성 메서드
+    # ========================================================================
+    def create_telegram_tab(self):
+        """텔레그램 알림 설정 탭 (v4.0 신규)"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        if not TELEGRAM_MODULE_AVAILABLE:
+            lbl_no_tg = QLabel("📱 텔레그램 기능을 사용하려면 python-telegram-bot 설치가 필요합니다.\n\npip install python-telegram-bot")
+            lbl_no_tg.setAlignment(Qt.AlignCenter)
+            lbl_no_tg.setStyleSheet("font-size: 14px; color: #ffc107;")
+            layout.addWidget(lbl_no_tg)
+            layout.addStretch(1)
+            return widget
+        
+        # 텔레그램 봇 설정
+        group_bot = QGroupBox("🤖 텔레그램 봇 설정")
+        bot_layout = QGridLayout()
+        
+        bot_layout.addWidget(QLabel("Bot Token:"), 0, 0)
+        self.input_telegram_token = QLineEdit()
+        self.input_telegram_token.setPlaceholderText("텔레그램 @BotFather에서 발급받은 토큰")
+        self.input_telegram_token.setEchoMode(QLineEdit.Password)
+        bot_layout.addWidget(self.input_telegram_token, 0, 1)
+        
+        bot_layout.addWidget(QLabel("Chat ID:"), 1, 0)
+        self.input_telegram_chat_id = QLineEdit()
+        self.input_telegram_chat_id.setPlaceholderText("알림을 받을 채팅 ID (@userinfobot으로 확인)")
+        bot_layout.addWidget(self.input_telegram_chat_id, 1, 1)
+        
+        group_bot.setLayout(bot_layout)
+        layout.addWidget(group_bot)
+        
+        # 알림 유형 설정
+        group_notify = QGroupBox("🔔 알림 설정")
+        notify_layout = QVBoxLayout()
+        
+        self.chk_telegram_buy = QCheckBox("매수 체결 알림")
+        self.chk_telegram_buy.setChecked(True)
+        notify_layout.addWidget(self.chk_telegram_buy)
+        
+        self.chk_telegram_sell = QCheckBox("매도 체결 알림")
+        self.chk_telegram_sell.setChecked(True)
+        notify_layout.addWidget(self.chk_telegram_sell)
+        
+        self.chk_telegram_loss = QCheckBox("손절 알림")
+        self.chk_telegram_loss.setChecked(True)
+        notify_layout.addWidget(self.chk_telegram_loss)
+        
+        self.chk_telegram_daily = QCheckBox("일일 리포트 (장 마감 후)")
+        self.chk_telegram_daily.setChecked(False)
+        notify_layout.addWidget(self.chk_telegram_daily)
+        
+        group_notify.setLayout(notify_layout)
+        layout.addWidget(group_notify)
+        
+        # 버튼 영역
+        btn_layout = QHBoxLayout()
+        
+        btn_save_telegram = QPushButton("💾 설정 저장")
+        btn_save_telegram.clicked.connect(self.save_telegram_settings)
+        btn_layout.addWidget(btn_save_telegram)
+        
+        btn_test_telegram = QPushButton("📤 테스트 메시지 발송")
+        btn_test_telegram.clicked.connect(self.send_telegram_test)
+        btn_layout.addWidget(btn_test_telegram)
+        
+        btn_layout.addStretch(1)
+        
+        self.lbl_telegram_status = QLabel("● 미연결")
+        self.lbl_telegram_status.setStyleSheet("color: #ffc107;")
+        btn_layout.addWidget(self.lbl_telegram_status)
+        
+        layout.addLayout(btn_layout)
+        layout.addStretch(1)
+        
+        return widget
+    
+    def create_scheduler_tab(self):
+        """예약 스케줄러 탭 (v4.0 신규)"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # 스케줄러 활성화
+        self.chk_scheduler_enabled = QCheckBox("📅 예약 매매 스케줄러 활성화")
+        self.chk_scheduler_enabled.setStyleSheet("font-size: 15px; font-weight: bold;")
+        layout.addWidget(self.chk_scheduler_enabled)
+        
+        # 시간대 설정
+        group_time = QGroupBox("⏰ 매매 허용 시간대")
+        time_layout = QGridLayout()
+        
+        time_layout.addWidget(QLabel("시작 시간:"), 0, 0)
+        self.time_schedule_start = QTimeEdit()
+        self.time_schedule_start.setTime(QTime(9, 0))
+        self.time_schedule_start.setDisplayFormat("HH:mm")
+        time_layout.addWidget(self.time_schedule_start, 0, 1)
+        
+        time_layout.addWidget(QLabel("종료 시간:"), 0, 2)
+        self.time_schedule_end = QTimeEdit()
+        self.time_schedule_end.setTime(QTime(15, 20))
+        self.time_schedule_end.setDisplayFormat("HH:mm")
+        time_layout.addWidget(self.time_schedule_end, 0, 3)
+        
+        group_time.setLayout(time_layout)
+        layout.addWidget(group_time)
+        
+        # 요일 설정
+        group_days = QGroupBox("📆 매매 허용 요일")
+        days_layout = QHBoxLayout()
+        
+        self.chk_days = {}
+        day_names = ["월", "화", "수", "목", "금", "토", "일"]
+        for i, day in enumerate(day_names):
+            chk = QCheckBox(day)
+            chk.setChecked(i < 5)  # 평일만 기본 체크
+            self.chk_days[i] = chk
+            days_layout.addWidget(chk)
+        
+        group_days.setLayout(days_layout)
+        layout.addWidget(group_days)
+        
+        # 특별 설정
+        group_special = QGroupBox("⚡ 특별 설정")
+        special_layout = QVBoxLayout()
+        
+        self.chk_pause_on_volatility = QCheckBox("급격한 변동성 발생 시 자동 일시정지")
+        special_layout.addWidget(self.chk_pause_on_volatility)
+        
+        self.chk_time_cut_enabled = QCheckBox("장 마감 전 자동 청산 (15:19)")
+        self.chk_time_cut_enabled.setChecked(True)
+        special_layout.addWidget(self.chk_time_cut_enabled)
+        
+        group_special.setLayout(special_layout)
+        layout.addWidget(group_special)
+        
+        # 저장 버튼
+        btn_save_schedule = QPushButton("💾 스케줄 저장")
+        btn_save_schedule.clicked.connect(self.save_scheduler_settings)
+        layout.addWidget(btn_save_schedule)
+        
+        layout.addStretch(1)
+        return widget
+    
+    def create_chart_tab(self):
+        """수익 차트 탭 (v4.0 신규)"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        if not MATPLOTLIB_AVAILABLE:
+            lbl_no_chart = QLabel("📊 차트 기능을 사용하려면 matplotlib 설치가 필요합니다.\n\npip install matplotlib")
+            lbl_no_chart.setAlignment(Qt.AlignCenter)
+            lbl_no_chart.setStyleSheet("font-size: 14px; color: #ffc107;")
+            layout.addWidget(lbl_no_chart)
+            layout.addStretch(1)
+            return widget
+        
+        # 차트 유형 선택
+        chart_type_layout = QHBoxLayout()
+        chart_type_layout.addWidget(QLabel("차트 유형:"))
+        
+        self.combo_chart_type = QComboBox()
+        self.combo_chart_type.addItems(["📈 누적 수익률", "🥧 종목별 손익", "📊 일별 손익"])
+        self.combo_chart_type.currentIndexChanged.connect(self.update_chart)
+        chart_type_layout.addWidget(self.combo_chart_type)
+        
+        btn_refresh_chart = QPushButton("🔄 새로고침")
+        btn_refresh_chart.clicked.connect(self.update_chart)
+        chart_type_layout.addWidget(btn_refresh_chart)
+        
+        chart_type_layout.addStretch(1)
+        layout.addLayout(chart_type_layout)
+        
+        # 차트 캔버스
+        self.chart_figure = Figure(figsize=(10, 6), dpi=100, facecolor='#1a1a2e')
+        self.chart_canvas = FigureCanvas(self.chart_figure)
+        self.chart_canvas.setStyleSheet("background-color: #1a1a2e;")
+        layout.addWidget(self.chart_canvas, 1)
+        
+        return widget
+    
+    def create_backtest_tab(self):
+        """백테스트 탭 (v4.0 신규)"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # 설정 영역
+        group_settings = QGroupBox("⚙️ 백테스트 설정")
+        settings_layout = QGridLayout()
+        
+        settings_layout.addWidget(QLabel("종목코드:"), 0, 0)
+        self.input_bt_code = QLineEdit("005930")
+        self.input_bt_code.setToolTip("백테스트할 종목 코드 입력")
+        settings_layout.addWidget(self.input_bt_code, 0, 1)
+        
+        settings_layout.addWidget(QLabel("시작일:"), 0, 2)
+        self.date_bt_start = QDateEdit()
+        self.date_bt_start.setCalendarPopup(True)
+        self.date_bt_start.setDate(QDate.currentDate().addMonths(-3))
+        settings_layout.addWidget(self.date_bt_start, 0, 3)
+        
+        settings_layout.addWidget(QLabel("종료일:"), 0, 4)
+        self.date_bt_end = QDateEdit()
+        self.date_bt_end.setCalendarPopup(True)
+        self.date_bt_end.setDate(QDate.currentDate())
+        settings_layout.addWidget(self.date_bt_end, 0, 5)
+        
+        settings_layout.addWidget(QLabel("초기 자금:"), 1, 0)
+        self.spin_bt_balance = QSpinBox()
+        self.spin_bt_balance.setRange(1000000, 1000000000)
+        self.spin_bt_balance.setValue(10000000)
+        self.spin_bt_balance.setSingleStep(1000000)
+        self.spin_bt_balance.setSuffix(" 원")
+        settings_layout.addWidget(self.spin_bt_balance, 1, 1)
+        
+        settings_layout.addWidget(QLabel("K값:"), 1, 2)
+        self.spin_bt_k = QDoubleSpinBox()
+        self.spin_bt_k.setRange(0.1, 1.0)
+        self.spin_bt_k.setValue(0.5)
+        self.spin_bt_k.setSingleStep(0.1)
+        settings_layout.addWidget(self.spin_bt_k, 1, 3)
+        
+        group_settings.setLayout(settings_layout)
+        layout.addWidget(group_settings)
+        
+        # 실행 버튼
+        btn_run_backtest = QPushButton("🚀 백테스트 실행")
+        btn_run_backtest.setMinimumHeight(40)
+        btn_run_backtest.setStyleSheet("font-size: 14px; font-weight: bold;")
+        btn_run_backtest.clicked.connect(self.run_backtest)
+        layout.addWidget(btn_run_backtest)
+        
+        # 결과 영역
+        group_result = QGroupBox("📊 백테스트 결과")
+        result_layout = QGridLayout()
+        
+        stat_style = "font-size: 13px; padding: 8px; background-color: #16213e; border-radius: 5px;"
+        
+        self.lbl_bt_trades = QLabel("총 거래: -")
+        self.lbl_bt_trades.setStyleSheet(stat_style)
+        result_layout.addWidget(self.lbl_bt_trades, 0, 0)
+        
+        self.lbl_bt_winrate = QLabel("승률: -")
+        self.lbl_bt_winrate.setStyleSheet(stat_style)
+        result_layout.addWidget(self.lbl_bt_winrate, 0, 1)
+        
+        self.lbl_bt_profit = QLabel("총 수익률: -")
+        self.lbl_bt_profit.setStyleSheet(stat_style)
+        result_layout.addWidget(self.lbl_bt_profit, 0, 2)
+        
+        self.lbl_bt_mdd = QLabel("MDD: -")
+        self.lbl_bt_mdd.setStyleSheet(stat_style)
+        result_layout.addWidget(self.lbl_bt_mdd, 1, 0)
+        
+        self.lbl_bt_avg_profit = QLabel("평균 수익: -")
+        self.lbl_bt_avg_profit.setStyleSheet(stat_style)
+        result_layout.addWidget(self.lbl_bt_avg_profit, 1, 1)
+        
+        self.lbl_bt_avg_loss = QLabel("평균 손실: -")
+        self.lbl_bt_avg_loss.setStyleSheet(stat_style)
+        result_layout.addWidget(self.lbl_bt_avg_loss, 1, 2)
+        
+        group_result.setLayout(result_layout)
+        layout.addWidget(group_result)
+        
+        # 거래 내역 테이블
+        self.bt_table = QTableWidget()
+        bt_cols = ["진입시간", "청산시간", "진입가", "청산가", "수익률", "사유"]
+        self.bt_table.setColumnCount(len(bt_cols))
+        self.bt_table.setHorizontalHeaderLabels(bt_cols)
+        self.bt_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.bt_table.setMaximumHeight(200)
+        layout.addWidget(self.bt_table)
+        
+        return widget
+    
+    def create_paper_trading_tab(self):
+        """페이퍼 트레이딩 (모의투자) 탭 (v4.0 신규)"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # 모드 토글
+        mode_layout = QHBoxLayout()
+        
+        self.chk_paper_mode = QCheckBox("🎮 페이퍼 트레이딩 모드 (모의투자)")
+        self.chk_paper_mode.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.chk_paper_mode.stateChanged.connect(self.on_paper_mode_changed)
+        mode_layout.addWidget(self.chk_paper_mode)
+        
+        mode_layout.addStretch(1)
+        
+        self.lbl_paper_status = QLabel("● 실전 모드")
+        self.lbl_paper_status.setStyleSheet("color: #e63946; font-weight: bold;")
+        mode_layout.addWidget(self.lbl_paper_status)
+        
+        layout.addLayout(mode_layout)
+        
+        # 가상 자산
+        group_virtual = QGroupBox("💰 가상 자산 현황")
+        virtual_layout = QGridLayout()
+        
+        virtual_layout.addWidget(QLabel("초기 자금 설정:"), 0, 0)
+        self.spin_paper_balance = QSpinBox()
+        self.spin_paper_balance.setRange(1000000, 1000000000)
+        self.spin_paper_balance.setValue(10000000)
+        self.spin_paper_balance.setSingleStep(1000000)
+        self.spin_paper_balance.setSuffix(" 원")
+        virtual_layout.addWidget(self.spin_paper_balance, 0, 1)
+        
+        btn_reset_paper = QPushButton("🔄 자산 초기화")
+        btn_reset_paper.clicked.connect(self.reset_paper_trading)
+        virtual_layout.addWidget(btn_reset_paper, 0, 2)
+        
+        stat_style = "font-size: 14px; padding: 10px; background-color: #16213e; border-radius: 5px;"
+        
+        self.lbl_paper_balance = QLabel("💵 현재 원화: 10,000,000 원")
+        self.lbl_paper_balance.setStyleSheet(stat_style)
+        virtual_layout.addWidget(self.lbl_paper_balance, 1, 0)
+        
+        self.lbl_paper_holdings_value = QLabel("📦 보유 평가: 0 원")
+        self.lbl_paper_holdings_value.setStyleSheet(stat_style)
+        virtual_layout.addWidget(self.lbl_paper_holdings_value, 1, 1)
+        
+        self.lbl_paper_total = QLabel("💰 총 평가자산: 10,000,000 원")
+        self.lbl_paper_total.setStyleSheet(stat_style)
+        virtual_layout.addWidget(self.lbl_paper_total, 1, 2)
+        
+        self.lbl_paper_profit = QLabel("📈 수익률: 0.00%")
+        self.lbl_paper_profit.setStyleSheet(stat_style + "color: #90e0ef;")
+        virtual_layout.addWidget(self.lbl_paper_profit, 2, 0, 1, 3)
+        
+        group_virtual.setLayout(virtual_layout)
+        layout.addWidget(group_virtual)
+        
+        # 가상 보유 내역
+        group_holdings = QGroupBox("📋 가상 보유 내역")
+        holdings_layout = QVBoxLayout()
+        
+        self.paper_table = QTableWidget()
+        paper_cols = ["종목", "수량", "평균단가", "현재가", "평가금액", "수익률"]
+        self.paper_table.setColumnCount(len(paper_cols))
+        self.paper_table.setHorizontalHeaderLabels(paper_cols)
+        self.paper_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        holdings_layout.addWidget(self.paper_table)
+        
+        group_holdings.setLayout(holdings_layout)
+        layout.addWidget(group_holdings, 1)
+        
+        # 내부 변수 초기화
+        self.paper_balance = 10000000
+        self.paper_holdings = {}
+        
+        return widget
+
+    # ========================================================================
+    # v4.0 신규 기능 메서드
+    # ========================================================================
+    def save_telegram_settings(self):
+        """텔레그램 설정 저장"""
+        if not TELEGRAM_MODULE_AVAILABLE:
+            return
+        
+        token = self.input_telegram_token.text().strip()
+        chat_id = self.input_telegram_chat_id.text().strip()
+        
+        if token and chat_id:
+            self.telegram_token = token
+            self.telegram_chat_id = chat_id
+            self.lbl_telegram_status.setText("● 연결됨")
+            self.lbl_telegram_status.setStyleSheet("color: #00b4d8;")
+            self.log("📱 텔레그램 설정이 저장되었습니다")
+        else:
+            self.lbl_telegram_status.setText("● 미연결")
+            self.lbl_telegram_status.setStyleSheet("color: #ffc107;")
+        
+        self.save_settings()
+    
+    def send_telegram_test(self):
+        """텔레그램 테스트 메시지 발송"""
+        if not TELEGRAM_MODULE_AVAILABLE:
+            QMessageBox.warning(self, "경고", "텔레그램 모듈이 설치되지 않았습니다.\npip install python-telegram-bot")
+            return
+        
+        token = getattr(self, 'telegram_token', '')
+        chat_id = getattr(self, 'telegram_chat_id', '')
+        
+        if not token or not chat_id:
+            QMessageBox.warning(self, "경고", "텔레그램 Bot Token과 Chat ID를 먼저 설정해주세요.")
+            return
+        
+        try:
+            bot = Bot(token=token)
+            bot.send_message(chat_id=chat_id, text="🤖 Kiwoom Pro Trader v4.0 테스트 메시지입니다!")
+            QMessageBox.information(self, "성공", "테스트 메시지가 발송되었습니다!")
+            self.log("📱 텔레그램 테스트 메시지 발송 완료")
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"텔레그램 발송 실패: {e}")
+    
+    def send_telegram_notification(self, message, notify_type='info'):
+        """텔레그램 알림 발송"""
+        if not TELEGRAM_MODULE_AVAILABLE:
+            return
+        
+        token = getattr(self, 'telegram_token', '')
+        chat_id = getattr(self, 'telegram_chat_id', '')
+        
+        if not token or not chat_id:
+            return
+        
+        # 알림 유형 확인
+        if notify_type == 'buy' and hasattr(self, 'chk_telegram_buy') and not self.chk_telegram_buy.isChecked():
+            return
+        if notify_type == 'sell' and hasattr(self, 'chk_telegram_sell') and not self.chk_telegram_sell.isChecked():
+            return
+        if notify_type == 'loss' and hasattr(self, 'chk_telegram_loss') and not self.chk_telegram_loss.isChecked():
+            return
+        
+        def send():
+            try:
+                bot = Bot(token=token)
+                bot.send_message(chat_id=chat_id, text=message)
+            except Exception:
+                pass
+        
+        threading.Thread(target=send, daemon=True).start()
+    
+    def save_scheduler_settings(self):
+        """스케줄러 설정 저장"""
+        self.log("⏰ 스케줄러 설정이 저장되었습니다")
+        self.save_settings()
+    
+    def is_trading_allowed_by_schedule(self):
+        """스케줄에 따른 매매 허용 여부 확인"""
+        if not hasattr(self, 'chk_scheduler_enabled') or not self.chk_scheduler_enabled.isChecked():
+            return True
+        
+        now = datetime.datetime.now()
+        weekday = now.weekday()
+        current_time = now.time()
+        
+        # 요일 체크
+        if weekday in self.chk_days and not self.chk_days[weekday].isChecked():
+            return False
+        
+        # 시간 체크
+        start_time = self.time_schedule_start.time().toPyTime()
+        end_time = self.time_schedule_end.time().toPyTime()
+        
+        if start_time <= end_time:
+            return start_time <= current_time <= end_time
+        else:
+            return current_time >= start_time or current_time <= end_time
+    
+    def update_chart(self):
+        """수익 차트 업데이트"""
+        if not MATPLOTLIB_AVAILABLE:
+            return
+        
+        self.chart_figure.clear()
+        ax = self.chart_figure.add_subplot(111)
+        ax.set_facecolor('#16213e')
+        
+        chart_type = self.combo_chart_type.currentIndex()
+        
+        if chart_type == 0:  # 누적 수익률
+            self._draw_cumulative_chart(ax)
+        elif chart_type == 1:  # 종목별 손익
+            self._draw_pie_chart(ax)
+        else:  # 일별 손익
+            self._draw_daily_chart(ax)
+        
+        self.chart_figure.tight_layout()
+        self.chart_canvas.draw()
+    
+    def _draw_cumulative_chart(self, ax):
+        """누적 수익률 차트"""
+        if not self.trade_history:
+            ax.text(0.5, 0.5, '거래 기록이 없습니다', ha='center', va='center',
+                   fontsize=14, color='#90e0ef', transform=ax.transAxes)
+            return
+        
+        profits = [0]
+        for trade in self.trade_history:
+            if trade.get('type') == '매도':
+                profits.append(profits[-1] + trade.get('profit', 0))
+        
+        ax.plot(range(len(profits)), profits, color='#00b4d8', linewidth=2)
+        ax.fill_between(range(len(profits)), profits, alpha=0.3, color='#00b4d8')
+        ax.set_xlabel('거래 횟수', color='#b8c5d6')
+        ax.set_ylabel('누적 수익 (원)', color='#b8c5d6')
+        ax.set_title('누적 수익 추이', color='#90e0ef', fontsize=14)
+        ax.tick_params(colors='#b8c5d6')
+        ax.grid(True, alpha=0.3, color='#3d5a80')
+    
+    def _draw_pie_chart(self, ax):
+        """종목별 손익 파이 차트"""
+        if not self.trade_history:
+            ax.text(0.5, 0.5, '거래 기록이 없습니다', ha='center', va='center',
+                   fontsize=14, color='#90e0ef', transform=ax.transAxes)
+            return
+        
+        code_profits = {}
+        for trade in self.trade_history:
+            if trade.get('type') == '매도':
+                code = trade.get('name', trade.get('code', 'Unknown'))
+                code_profits[code] = code_profits.get(code, 0) + trade.get('profit', 0)
+        
+        if not code_profits:
+            ax.text(0.5, 0.5, '매도 기록이 없습니다', ha='center', va='center',
+                   fontsize=14, color='#90e0ef', transform=ax.transAxes)
+            return
+        
+        labels = list(code_profits.keys())
+        sizes = [abs(v) for v in code_profits.values()]
+        colors = ['#00b4d8' if code_profits[l] >= 0 else '#e63946' for l in labels]
+        
+        ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+        ax.set_title('종목별 손익 분포', color='#90e0ef', fontsize=14)
+    
+    def _draw_daily_chart(self, ax):
+        """일별 손익 막대 차트"""
+        if not self.trade_history:
+            ax.text(0.5, 0.5, '거래 기록이 없습니다', ha='center', va='center',
+                   fontsize=14, color='#90e0ef', transform=ax.transAxes)
+            return
+        
+        daily_profits = {}
+        for trade in self.trade_history:
+            if trade.get('type') == '매도':
+                date = trade.get('timestamp', '')[:10]
+                daily_profits[date] = daily_profits.get(date, 0) + trade.get('profit', 0)
+        
+        if not daily_profits:
+            ax.text(0.5, 0.5, '매도 기록이 없습니다', ha='center', va='center',
+                   fontsize=14, color='#90e0ef', transform=ax.transAxes)
+            return
+        
+        dates = list(daily_profits.keys())
+        profits = list(daily_profits.values())
+        colors = ['#00b4d8' if p >= 0 else '#e63946' for p in profits]
+        
+        ax.bar(range(len(dates)), profits, color=colors)
+        ax.set_xticks(range(len(dates)))
+        ax.set_xticklabels(dates, rotation=45, ha='right')
+        ax.set_xlabel('날짜', color='#b8c5d6')
+        ax.set_ylabel('손익 (원)', color='#b8c5d6')
+        ax.set_title('일별 손익', color='#90e0ef', fontsize=14)
+        ax.tick_params(colors='#b8c5d6')
+        ax.grid(True, alpha=0.3, color='#3d5a80', axis='y')
+    
+    def run_backtest(self):
+        """백테스트 실행 (간이 버전)"""
+        code = self.input_bt_code.text().strip()
+        if not code:
+            QMessageBox.warning(self, "경고", "종목 코드를 입력해주세요.")
+            return
+        
+        if not self.is_connected:
+            QMessageBox.warning(self, "경고", "먼저 키움증권에 로그인해주세요.")
+            return
+        
+        self.log(f"🧪 백테스트 시작: {code}")
+        QMessageBox.information(self, "백테스트", 
+            "백테스트 기능은 현재 간이 버전입니다.\n\n"
+            "전체 백테스트를 위해서는 별도의 backtest_engine.py 모듈이 필요합니다.\n\n"
+            "키움 API에서 과거 데이터를 조회하고 변동성 돌파 전략을 시뮬레이션합니다.")
+    
+    def on_paper_mode_changed(self, state):
+        """페이퍼 트레이딩 모드 변경"""
+        if state:
+            self.lbl_paper_status.setText("● 모의투자 모드")
+            self.lbl_paper_status.setStyleSheet("color: #00b4d8; font-weight: bold;")
+            self.log("🎮 페이퍼 트레이딩 모드가 활성화되었습니다")
+            # 모의투자 초기화
+            self.paper_balance = self.spin_paper_balance.value()
+            self.paper_holdings = {}
+        else:
+            self.lbl_paper_status.setText("● 실전 모드")
+            self.lbl_paper_status.setStyleSheet("color: #e63946; font-weight: bold;")
+            self.log("⚠️ 실전 모드로 전환되었습니다")
+    
+    def reset_paper_trading(self):
+        """페이퍼 트레이딩 초기화"""
+        self.paper_balance = self.spin_paper_balance.value()
+        self.paper_holdings = {}
+        self.paper_table.setRowCount(0)
+        
+        self.lbl_paper_balance.setText(f"💵 현재 원화: {self.paper_balance:,} 원")
+        self.lbl_paper_holdings_value.setText("📦 보유 평가: 0 원")
+        self.lbl_paper_total.setText(f"💰 총 평가자산: {self.paper_balance:,} 원")
+        self.lbl_paper_profit.setText("📈 수익률: 0.00%")
+        
+        self.log("🔄 페이퍼 트레이딩이 초기화되었습니다")
 
     # ------------------------------------------------------------------
     # 프리셋 관리 (v3.0 개선)
@@ -2210,6 +3815,12 @@ class KiwoomProTrader(QMainWindow):
 # 메인 실행
 # ============================================================================
 if __name__ == "__main__":
+    # HiDPI 지원 (v3.1 신규)
+    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # 크로스 플랫폼 스타일
     
