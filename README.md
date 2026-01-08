@@ -1,84 +1,111 @@
-# 🚀 Kiwoom Pro Algo-Trader v4.1
+# Kiwoom Pro Algo-Trader v4.1
 
-키움증권 REST API 기반 프리미엄 자동매매 프로그램 (PyQt6)
-
-## ✨ v4.1 주요 변경사항 (UI/UX 리팩토링)
-
-사용자 경험을 극대화하기 위해 UI/UX를 전면적으로 개선했습니다.
-
-- **🎨 Premium Dark Theme**: 눈이 편안하고 세련된 다크 테마 적용
-- **💎 Glassmorphism Design**: 반투명 그라디언트와 깊이감 있는 카드 UI
-- **⚡ Reactive UI**: 실시간 상태에 반응하는 애니메이션 인디케이터
-- **📟 Modern Log Terminal**: 가독성이 향상된 컬러 코딩 로그 시스템
-- **💹 Dynamic Data Grid**: 수익/손실에 따라 실시간으로 변하는 테이블 디자인
-
----
+키움증권 REST API 기반 자동매매 프로그램
 
 ## ✨ 주요 기능
 
-### 📈 자동매매
-- **변동성 돌파 전략** (Larry Williams)
-- **트레일링 스톱** (수익 보존) + 자동 손절매
-- **RSI, MACD, 볼린저밴드, DMI 필터**
-- **일일 손실 한도** / 시간 자동 청산
+### 📈 매매 전략
+- **변동성 돌파 전략** + 트레일링 스톱
+- RSI, MACD, 볼린저밴드, DMI 필터
+- 시간대별 K값 자동 조정
 
-### 📊 시세 조회
-| 탭 | 기능 |
-|----|------|
-| 📈 차트 | 일봉/주봉/분봉 OHLCV 및 보조지표 |
-| 📋 호가창 | 10단 매수/매도 호가 및 잔량 분석 |
-| 🔍 조건검색 | 영웅문4 조건식 실시간 연동 |
-| 🏆 순위 | 거래량/등락률 실시간 랭킹 |
+### 🔔 알림 시스템
+- Windows 데스크톱 토스트 알림
+- 사운드 알림 (winsound)
+- 텔레그램 알림 연동
 
-### 🔔 스마트 알림
-- **텔레그램 봇**: 매매 체결, 에러, 수익률 실시간 전송
-- **시스템 트레이**: 백그라운드 실행 및 상태 아이콘
+### 📊 백테스팅
+- 과거 데이터 기반 시뮬레이션
+- MDD, 샤프비율, 승률 계산
+- 거래 내역 리포트
+
+### 🔎 종목 스크리너
+- 골든/데드 크로스 감지
+- RSI 과매수/과매도
+- 거래량 급증, 변동성 돌파
+
+### 🛡️ 리스크 관리
+- 드로다운 모니터링
+- 연속 손실 자동 일시정지
+- 종목별 블랙리스트
+
+### 🎨 UI/UX
+- 다크/라이트 테마
+- 미니 모드 지원
+- 우클릭 수동 매매
 
 ---
 
-## 🛠️ 설치 및 실행
+## 📦 설치
 
-### 필수 조건
-- Windows 10/11 (64bit 권장)
-- Python 3.10 이상
-- 키움증권 REST API 신청
+### 요구사항
+- Python 3.10+
+- Windows 10/11
 
-### 설치
+### 의존성 설치
 ```bash
 pip install -r requirements.txt
+```
+
+### 선택적 의존성
+```bash
+pip install plyer  # 데스크톱 알림 (선택)
+```
+
+---
+
+## 🚀 실행
+
+```bash
 python "키움증권 자동매매.py"
 ```
 
 ---
 
-## 📁 프로젝트 구조
+## 📦 빌드
 
-```
-├── 키움증권 자동매매.py   # 메인 실행 파일 (UI)
-├── config.py              # 설정 및 상수
-├── strategy_manager.py    # 매매 전략(Algo)
-├── api/                   # REST API 코어
-│   ├── auth.py            # OAuth2 인증
-│   ├── rest_client.py     # HTTP 요청
-│   ├── websocket_client.py # 실시간 시세
-│   └── models.py          # 데이터 모델
-```
-
----
-
-## 🏗️ 실행 파일 빌드 (경량화)
-
-최적화된 PyInstaller 설정을 통해 가볍고 빠른 실행 파일을 생성합니다.
-
+### PyInstaller 빌드 (단일 EXE)
 ```bash
-# 빌드 실행
-pyinstaller KiwoomTrader.spec
+pyinstaller KiwoomProTrader_v4.1.spec
+```
+
+빌드 결과: `dist/KiwoomProTrader.exe`
+
+---
+
+## 📁 파일 구조
+
+```
+├── 키움증권 자동매매.py    # 메인 애플리케이션
+├── config.py              # 설정 상수
+├── strategy_manager.py    # 매매 전략 로직
+├── notification_manager.py # 알림 시스템
+├── risk_manager.py        # 리스크 관리
+├── stock_screener.py      # 종목 스크리너
+├── backtest_engine.py     # 백테스팅 엔진
+├── themes.py              # UI 테마
+└── api/
+    ├── auth.py            # 인증 관리
+    ├── rest_client.py     # REST API
+    └── websocket_client.py # WebSocket
 ```
 
 ---
 
-## ⚠️ 주의사항
+## ⚙️ API 설정
 
-- 본 프로그램은 개인 학습 및 연구 목적으로 제작되었습니다.
-- **모의투자** 환경에서 충분한 테스트 후 사용하시기 바랍니다.
-- **투자 손실에 대한 책임은 전적으로 사용자에게 있습니다.**
+1. 키움증권 Open API 신청
+2. API Key/Secret 발급
+3. 프로그램 내 API 탭에서 설정
+
+---
+
+## 📋 라이선스
+
+MIT License
+
+---
+
+## 📞 주의사항
+
+⚠️ **투자 책임**: 이 프로그램 사용으로 인한 손실은 본인 책임입니다.

@@ -1,7 +1,28 @@
+"""
+Strategy Manager for Kiwoom Pro Algo-Trader
+매매 전략 로직 및 기술적 지표 계산
+"""
+
+from typing import Optional, Tuple, List, Dict, Any
 from config import Config
+
+# ============================================================================
+# 상수 정의 (매직 넘버 제거)
+# ============================================================================
+DEFAULT_RSI_VALUE = 50          # 데이터 부족 시 기본 RSI
+DEFAULT_RSI_PERIOD = 14         # RSI 기본 기간
+DEFAULT_BB_PERIOD = 20          # 볼린저밴드 기본 기간
+DEFAULT_BB_K = 2.0              # 볼린저밴드 표준편차 배수
+DEFAULT_ATR_PERIOD = 14         # ATR 기본 기간
+DEFAULT_DMI_PERIOD = 14         # DMI 기본 기간
+MIN_DATA_POINTS = 15            # 최소 데이터 포인트
+GOLDEN_CROSS = 'golden'
+DEAD_CROSS = 'dead'
+
 
 class StrategyManager:
     """매매 전략 로직 분리"""
+    
     def __init__(self, trader):
         self.trader = trader
 
@@ -11,40 +32,59 @@ class StrategyManager:
     # ------------------------------------------------------------------
     # RSI 계산 및 체크
     # ------------------------------------------------------------------
-    def calculate_rsi(self, code, period=14):
-        """RSI 계산 (종목별 저장된 가격 데이터 기반)"""
+    def calculate_rsi(self, code: str, period: int = DEFAULT_RSI_PERIOD) -> float:
+        """
+        RSI 계산 (종목별 저장된 가격 데이터 기반)
+        
+        Args:
+            code: 종목코드
+            period: RSI 기간 (기본 14)
+        
+        Returns:
+            RSI 값 (0-100)
+        """
         if code not in self.trader.universe:
-            return 50  # 기본값
+            return DEFAULT_RSI_VALUE
         
         info = self.trader.universe[code]
         prices = info.get('price_history', [])
         
-        if len(prices) < period + 1:
-            return 50  # 데이터 부족
+        # 데이터 유효성 검사
+        if not prices or len(prices) < period + 1:
+            return DEFAULT_RSI_VALUE
+        
+        if period <= 0:
+            return DEFAULT_RSI_VALUE
         
         # 가격 변화 계산
         gains = []
         losses = []
         
-        for i in range(1, period + 1):
-            change = prices[-(i)] - prices[-(i+1)]
-            if change > 0:
-                gains.append(change)
-                losses.append(0)
-            else:
-                gains.append(0)
-                losses.append(abs(change))
+        try:
+            for i in range(1, period + 1):
+                change = prices[-(i)] - prices[-(i+1)]
+                if change > 0:
+                    gains.append(change)
+                    losses.append(0)
+                else:
+                    gains.append(0)
+                    losses.append(abs(change))
+            
+            avg_gain = sum(gains) / period
+            avg_loss = sum(losses) / period
+            
+            # 0 나누기 방지
+            if avg_loss == 0:
+                return 100.0 if avg_gain > 0 else DEFAULT_RSI_VALUE
+            
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            
+            return max(0.0, min(100.0, rsi))  # 범위 제한
         
-        avg_gain = sum(gains) / period
-        avg_loss = sum(losses) / period
-        
-        if avg_loss == 0:
-            return 100
-        
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        return rsi
+        except (IndexError, ZeroDivisionError, TypeError) as e:
+            self.log(f"RSI 계산 오류 ({code}): {e}")
+            return DEFAULT_RSI_VALUE
     
     def check_rsi_condition(self, code):
         """RSI 조건 확인"""
@@ -109,57 +149,82 @@ class StrategyManager:
         histogram = macd[-1] - signal[-1]
         return macd[-1], signal[-1], histogram
 
-    def check_macd_condition(self, code):
+    def check_macd_condition(self, code: str) -> bool:
         """MACD 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_macd') or not self.trader.chk_use_macd.isChecked():
+        # UI 위젯이 없으면 기본값 반환
+        chk_use_macd = getattr(self.trader, 'chk_use_macd', None)
+        if chk_use_macd is None or not chk_use_macd.isChecked():
             return True
         
         prices = self.trader.price_history.get(code, [])
         if len(prices) < 30:
             return True
         
-        macd, signal, _ = self.calculate_macd(prices)
-        if macd <= signal:
-            self.log(f"[{self.trader.universe.get(code, {}).get('name', code)}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
-            return False
+        try:
+            macd, signal, _ = self.calculate_macd(prices)
+            if macd <= signal:
+                name = self.trader.universe.get(code, {}).get('name', code)
+                self.log(f"[{name}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
+                return False
+        except Exception as e:
+            self.log(f"MACD 조건 확인 오류 ({code}): {e}")
         return True
 
     # ------------------------------------------------------------------
     # 볼린저 밴드 체크
     # ------------------------------------------------------------------
-    def calculate_bollinger(self, prices, k=2.0, period=20):
-        """볼린저 밴드 계산"""
-        if len(prices) < period:
-            return 0, 0, 0
+    def calculate_bollinger(self, prices: List[float], k: float = DEFAULT_BB_K, 
+                           period: int = DEFAULT_BB_PERIOD) -> Tuple[float, float, float]:
+        """
+        볼린저 밴드 계산
         
-        subset = prices[-period:]
-        avg = sum(subset) / period
-        variance = sum((x - avg) ** 2 for x in subset) / period
-        std_dev = variance ** 0.5
+        Args:
+            prices: 가격 리스트
+            k: 표준편차 배수 (기본 2.0)
+            period: 기간 (기본 20)
         
-        upper = avg + (std_dev * k)
-        lower = avg - (std_dev * k)
-        return upper, avg, lower
+        Returns:
+            (upper, middle, lower) 밴드 값
+        """
+        if not prices or len(prices) < period or period <= 0:
+            return 0.0, 0.0, 0.0
+        
+        try:
+            subset = prices[-period:]
+            avg = sum(subset) / period
+            variance = sum((x - avg) ** 2 for x in subset) / period
+            std_dev = variance ** 0.5
+            
+            upper = avg + (std_dev * k)
+            lower = avg - (std_dev * k)
+            return upper, avg, lower
+        except (TypeError, ZeroDivisionError) as e:
+            return 0.0, 0.0, 0.0
 
-    def check_bollinger_condition(self, code):
+    def check_bollinger_condition(self, code: str) -> bool:
         """볼린저 밴드 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_bb') or not self.trader.chk_use_bb.isChecked():
+        chk_use_bb = getattr(self.trader, 'chk_use_bb', None)
+        if chk_use_bb is None or not chk_use_bb.isChecked():
             return True
         
-        prices = self.trader.universe.get(code, {}).get('price_history', [])
-        current_price = self.trader.universe.get(code, {}).get('current', 0)
+        info = self.trader.universe.get(code, {})
+        prices = info.get('price_history', [])
+        current_price = info.get('current', 0)
         
-        if len(prices) < 20 or current_price == 0:
+        if len(prices) < DEFAULT_BB_PERIOD or current_price <= 0:
             return True
-            
-        k = self.trader.spin_bb_k.value()
-        _, _, lower = self.calculate_bollinger(prices, k=k)
         
-        # 밴드 하단보다 현재가가 낮으면(돌파) 매수 간주
-        if current_price > lower:
-            # self.log(f"[{code}] BB 하단 미달")
-            return False
+        try:
+            spin_bb_k = getattr(self.trader, 'spin_bb_k', None)
+            k = spin_bb_k.value() if spin_bb_k else DEFAULT_BB_K
+            _, _, lower = self.calculate_bollinger(prices, k=k)
             
+            # 밴드 하단보다 현재가가 낮으면(돌파) 매수 간주
+            if current_price > lower:
+                return False
+        except Exception:
+            pass
+        
         return True
 
     # ------------------------------------------------------------------
