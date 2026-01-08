@@ -1,14 +1,25 @@
 """
-Kiwoom Pro Algo-Trader Config
+Kiwoom Pro Algo-Trader Config v4.0
+REST API 기반으로 재설계됨
 """
 
 class Config:
     """프로그램 설정 상수"""
-    # 화면 번호
-    SCREEN_DEPOSIT = "1002"
-    SCREEN_DAILY = "1001"
-    SCREEN_REAL = "2000"
-    SCREEN_ORDER = "0101"
+    
+    # =========================================================================
+    # REST API 설정 (v4.0 신규)
+    # =========================================================================
+    REST_API_BASE_URL = "https://api.kiwoom.com"
+    WEBSOCKET_URL = "wss://api.kiwoom.com/ws/realtime"
+    
+    # 인증 설정
+    DEFAULT_APP_KEY = ""
+    DEFAULT_SECRET_KEY = ""
+    TOKEN_CACHE_FILE = "kiwoom_token_cache.json"
+    
+    # API 요청 제한 (초당 최대 요청 수)
+    API_RATE_LIMIT = 5
+    API_REQUEST_TIMEOUT = 10
     
     # 기본값
     DEFAULT_CODES = "005930,000660,042700,005380"
@@ -82,10 +93,38 @@ class Config:
     DEFAULT_USE_PARTIAL_PROFIT = False
     
     # 파일 경로
+    DATA_DIR = "data"  # 데이터 디렉토리 (v4.1)
     SETTINGS_FILE = "kiwoom_settings.json"
     PRESETS_FILE = "kiwoom_presets.json"
     TRADE_HISTORY_FILE = "kiwoom_trade_history.json"
     LOG_DIR = "logs"
+    
+    # =========================================================================
+    # v4.1 신규 전략 설정
+    # =========================================================================
+    
+    # 이동평균 크로스오버
+    DEFAULT_MA_SHORT = 5
+    DEFAULT_MA_LONG = 20
+    DEFAULT_USE_MA = False
+    
+    # 시간대별 전략
+    TIME_STRATEGY_AGGRESSIVE = {'start': '09:00', 'end': '09:30', 'k_mult': 1.4}
+    TIME_STRATEGY_NORMAL = {'start': '09:30', 'end': '14:30', 'k_mult': 1.0}
+    TIME_STRATEGY_CONSERVATIVE = {'start': '14:30', 'end': '15:20', 'k_mult': 0.6}
+    DEFAULT_USE_TIME_STRATEGY = False
+    
+    # 분할 주문
+    DEFAULT_SPLIT_COUNT = 3
+    DEFAULT_SPLIT_PERCENT = 0.5
+    DEFAULT_USE_SPLIT = False
+    
+    # ATR 포지션 사이징
+    DEFAULT_RISK_PERCENT = 1.0
+    DEFAULT_USE_ATR_SIZING = False
+    
+    # 메모리 관리
+    MAX_PRICE_HISTORY = 100  # 종목당 최대 가격 히스토리
     
     # 텔레그램 설정 (v3.1 신규)
     DEFAULT_TELEGRAM_BOT_TOKEN = ""
