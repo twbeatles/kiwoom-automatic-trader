@@ -518,9 +518,7 @@ MIT License
 
 ---
 
-## 📞 문의
 
-- **작성자**: Kiwoom Pro Algo-Trader Team
 - **버전**: 4.2
 - **최종 업데이트**: 2026-01-14
 
@@ -531,3 +529,4 @@ MIT License
 **💡 Smart Trading with Kiwoom Pro Algo-Trader 💡**
 
 </div>
+
