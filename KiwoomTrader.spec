@@ -44,12 +44,11 @@ hiddenimports = [
 ]
 
 # ============================================================================
-# 제외할 모듈 (경량화를 위한 제외 - 필수 모듈은 유지)
+# 제외할 모듈 (확실히 사용하지 않는 모듈만)
 # ============================================================================
 excludes = [
-    # 데이터 과학 라이브러리 (사용하지 않음)
+    # 데이터 과학 라이브러리
     'matplotlib',
-    'matplotlib.pyplot',
     'numpy',
     'pandas',
     'scipy',
@@ -57,22 +56,19 @@ excludes = [
     'seaborn',
     'plotly',
     
-    # 개발 도구
+    # 개발/테스트 도구
     'IPython',
     'jupyter',
     'notebook',
     'pytest',
     'unittest',
-    'doctest',
     'pdb',
     'pydoc',
-    'pydoc_data',
     
-    # GUI (PyQt6만 사용)
+    # 대체 GUI
     'tkinter',
     'Tkinter',
     'PIL',
-    'PIL.Image',
     
     # 웹 프레임워크
     'flask',
@@ -80,21 +76,12 @@ excludes = [
     'tornado',
     'bottle',
     
-    # 데이터베이스 (사용하지 않음)
+    # ORM/DB 라이브러리
     'sqlalchemy',
     'pymongo',
     'psycopg2',
     
-    # 네트워크 서버 (클라이언트만 사용)
-    'asyncore',
-    'smtpd',
-    'ftplib',
-    
-    # 멀티프로세싱 (사용하지 않음)
-    'multiprocessing',
-    'concurrent.futures',
-    
-    # 컴파일러/빌드 도구
+    # 빌드 도구
     'setuptools',
     'distutils',
     'lib2to3',
@@ -104,12 +91,6 @@ excludes = [
     # 문서화
     'sphinx',
     'docutils',
-    
-    # 기타 불필요한 모듈
-    'curses',
-    'readline',
-    '_pytest',
-    'py',
 ]
 
 # ============================================================================
@@ -141,20 +122,20 @@ pyz = PYZ(
 )
 
 # ============================================================================
-# EXE 단계 - ONEFILE 모드 (단일 실행 파일 생성)
+# EXE 단계 - ONEFILE 모드
 # ============================================================================
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,       # ONEFILE: 바이너리 포함
-    a.zipfiles,       # ONEFILE: zip 파일 포함
-    a.datas,          # ONEFILE: 데이터 파일 포함
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
     name='KiwoomTrader_v4.2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,         # UPX 압축 활성화
+    upx=True,
     upx_exclude=[
         'vcruntime140.dll',
         'python3*.dll',
