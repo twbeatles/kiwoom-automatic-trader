@@ -1,4 +1,4 @@
-# 키움증권 REST API 자동매매 프로그램 Dependencies (v4.1)
+# 키움증권 REST API 자동매매 프로그램 Dependencies (v4.0)
 
 # GUI
 PyQt6>=6.5.0
@@ -12,6 +12,3 @@ keyring>=23.0.0
 
 # Utilities
 python-dateutil>=2.8.0
-
-# Optional - Desktop Notifications (설치 안 해도 프로그램 실행 가능)
-# pip install plyer

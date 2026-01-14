@@ -1,23 +1,11 @@
 """
-Strategy Manager for Kiwoom Pro Algo-Trader
-매매 전략 로직 및 기술적 지표 계산
+Strategy Manager v4.2
+매매 전략 로직 - 확장된 기능 포함
 """
 
-from typing import Optional, Tuple, List, Dict, Any
 from config import Config
-
-# ============================================================================
-# 상수 정의 (매직 넘버 제거)
-# ============================================================================
-DEFAULT_RSI_VALUE = 50          # 데이터 부족 시 기본 RSI
-DEFAULT_RSI_PERIOD = 14         # RSI 기본 기간
-DEFAULT_BB_PERIOD = 20          # 볼린저밴드 기본 기간
-DEFAULT_BB_K = 2.0              # 볼린저밴드 표준편차 배수
-DEFAULT_ATR_PERIOD = 14         # ATR 기본 기간
-DEFAULT_DMI_PERIOD = 14         # DMI 기본 기간
-MIN_DATA_POINTS = 15            # 최소 데이터 포인트
-GOLDEN_CROSS = 'golden'
-DEAD_CROSS = 'dead'
+import datetime
+from typing import Tuple, Optional, List, Dict, Any
 
 
 class StrategyManager:
@@ -25,66 +13,585 @@ class StrategyManager:
     
     def __init__(self, trader):
         self.trader = trader
+        # 연속 손실 추적 (Anti-Martingale용)
+        self.consecutive_losses = 0
+        self.consecutive_wins = 0
+        # 섹터별 투자 추적
+        self.sector_investments: Dict[str, float] = {}
+        # 시장별 투자 추적
+        self.market_investments = {'kospi': 0, 'kosdaq': 0}
 
     def log(self, msg):
         self.trader.log(msg)
 
-    # ------------------------------------------------------------------
-    # RSI 계산 및 체크
-    # ------------------------------------------------------------------
-    def calculate_rsi(self, code: str, period: int = DEFAULT_RSI_PERIOD) -> float:
-        """
-        RSI 계산 (종목별 저장된 가격 데이터 기반)
-        
-        Args:
-            code: 종목코드
-            period: RSI 기간 (기본 14)
+    # ==================================================================
+    # 스토캐스틱 RSI (신규)
+    # ==================================================================
+    def calculate_stochastic_rsi(self, code, rsi_period=14, stoch_period=14, 
+                                   k_period=3, d_period=3) -> Tuple[float, float]:
+        """스토캐스틱 RSI 계산
         
         Returns:
-            RSI 값 (0-100)
+            (K값, D값) 튜플
         """
         if code not in self.trader.universe:
-            return DEFAULT_RSI_VALUE
+            return 50, 50
         
         info = self.trader.universe[code]
         prices = info.get('price_history', [])
         
-        # 데이터 유효성 검사
-        if not prices or len(prices) < period + 1:
-            return DEFAULT_RSI_VALUE
+        if len(prices) < rsi_period + stoch_period:
+            return 50, 50
         
-        if period <= 0:
-            return DEFAULT_RSI_VALUE
+        # RSI 값들 계산
+        rsi_values = []
+        for i in range(stoch_period + k_period + d_period):
+            end_idx = len(prices) - i
+            start_idx = max(0, end_idx - rsi_period - 1)
+            sub_prices = prices[start_idx:end_idx]
+            if len(sub_prices) >= rsi_period + 1:
+                rsi = self._calculate_rsi_from_prices(sub_prices, rsi_period)
+                rsi_values.insert(0, rsi)
         
-        # 가격 변화 계산
+        if len(rsi_values) < stoch_period:
+            return 50, 50
+        
+        # Stochastic RSI 계산
+        stoch_k_values = []
+        for i in range(len(rsi_values) - stoch_period + 1):
+            window = rsi_values[i:i + stoch_period]
+            min_rsi = min(window)
+            max_rsi = max(window)
+            if max_rsi - min_rsi > 0:
+                stoch = (window[-1] - min_rsi) / (max_rsi - min_rsi) * 100
+            else:
+                stoch = 50
+            stoch_k_values.append(stoch)
+        
+        if len(stoch_k_values) < k_period:
+            return 50, 50
+        
+        # %K (SMA of Stoch RSI)
+        k_value = sum(stoch_k_values[-k_period:]) / k_period
+        
+        # %D (SMA of %K)
+        if len(stoch_k_values) >= k_period + d_period - 1:
+            k_smooth = []
+            for i in range(d_period):
+                idx = len(stoch_k_values) - d_period + i - k_period + 1
+                if idx >= 0:
+                    k_smooth.append(sum(stoch_k_values[idx:idx + k_period]) / k_period)
+            d_value = sum(k_smooth) / len(k_smooth) if k_smooth else k_value
+        else:
+            d_value = k_value
+        
+        return k_value, d_value
+    
+    def _calculate_rsi_from_prices(self, prices, period):
+        """가격 리스트에서 RSI 계산"""
+        if len(prices) < period + 1:
+            return 50
+        
+        gains = []
+        losses = []
+        for i in range(1, period + 1):
+            change = prices[-(i)] - prices[-(i+1)] if i + 1 <= len(prices) else 0
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
+        
+        avg_gain = sum(gains) / period if gains else 0
+        avg_loss = sum(losses) / period if losses else 0
+        
+        if avg_loss == 0:
+            return 100 if avg_gain > 0 else 50
+        
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+    
+    def check_stochastic_rsi_condition(self, code) -> bool:
+        """스토캐스틱 RSI 조건 확인"""
+        if not hasattr(self.trader, 'chk_use_stoch_rsi') or not self.trader.chk_use_stoch_rsi.isChecked():
+            return True
+        
+        k, d = self.calculate_stochastic_rsi(code)
+        
+        upper = getattr(self.trader, 'spin_stoch_upper', None)
+        upper_limit = upper.value() if upper else 80
+        
+        lower = getattr(self.trader, 'spin_stoch_lower', None)
+        lower_limit = lower.value() if lower else 20
+        
+        # 과매수 시 진입 보류
+        if k >= upper_limit:
+            info = self.trader.universe.get(code, {})
+            self.log(f"[{info.get('name', code)}] StochRSI K={k:.1f} >= {upper_limit} (과매수) 진입 보류")
+            return False
+        
+        return True
+
+    # ==================================================================
+    # 다중 시간프레임 분석 (MTF) (신규)
+    # ==================================================================
+    def check_mtf_condition(self, code) -> bool:
+        """다중 시간프레임 조건 확인
+        일봉과 분봉의 추세가 일치할 때만 진입
+        """
+        if not hasattr(self.trader, 'chk_use_mtf') or not self.trader.chk_use_mtf.isChecked():
+            return True
+        
+        info = self.trader.universe.get(code, {})
+        
+        # 일봉 추세 (MA 기반)
+        daily_prices = info.get('daily_prices', info.get('price_history', []))
+        daily_trend = self._get_trend(daily_prices, 20)
+        
+        # 분봉 추세 (현재 가격 기반)
+        minute_prices = info.get('minute_prices', info.get('price_history', []))
+        minute_trend = self._get_trend(minute_prices, 10)
+        
+        # 둘 다 상승 추세일 때만 진입
+        if daily_trend != 'up' or minute_trend != 'up':
+            self.log(f"[{info.get('name', code)}] MTF 불일치: 일봉={daily_trend}, 분봉={minute_trend}")
+            return False
+        
+        return True
+    
+    def _get_trend(self, prices, period) -> str:
+        """추세 판단"""
+        if len(prices) < period:
+            return 'neutral'
+        
+        short_ma = sum(prices[-5:]) / 5 if len(prices) >= 5 else prices[-1]
+        long_ma = sum(prices[-period:]) / period
+        current = prices[-1]
+        
+        if current > long_ma and short_ma > long_ma:
+            return 'up'
+        elif current < long_ma and short_ma < long_ma:
+            return 'down'
+        return 'neutral'
+
+    # ==================================================================
+    # 단계별 익절 (Partial Take Profit) (신규)
+    # ==================================================================
+    def calculate_partial_take_profit(self, code, current_profit_rate: float) -> Optional[Dict]:
+        """단계별 익절 계산
+        
+        Args:
+            code: 종목코드
+            current_profit_rate: 현재 수익률 (%)
+        
+        Returns:
+            {'sell_ratio': 매도비율, 'level': 단계} 또는 None
+        """
+        if not hasattr(self.trader, 'chk_use_partial_profit') or \
+           not self.trader.chk_use_partial_profit.isChecked():
+            return None
+        
+        info = self.trader.universe.get(code, {})
+        executed_levels = info.get('partial_profit_levels', set())
+        
+        for i, level in enumerate(Config.PARTIAL_TAKE_PROFIT):
+            if i not in executed_levels and current_profit_rate >= level['rate']:
+                return {
+                    'sell_ratio': level['sell_ratio'],
+                    'level': i,
+                    'rate': level['rate']
+                }
+        
+        return None
+    
+    def mark_partial_profit_executed(self, code, level: int):
+        """단계별 익절 실행 표시"""
+        if code in self.trader.universe:
+            if 'partial_profit_levels' not in self.trader.universe[code]:
+                self.trader.universe[code]['partial_profit_levels'] = set()
+            self.trader.universe[code]['partial_profit_levels'].add(level)
+
+    # ==================================================================
+    # 진입 점수 시스템 (신규)
+    # ==================================================================
+    def calculate_entry_score(self, code) -> Tuple[int, Dict[str, int]]:
+        """진입 점수 계산
+        
+        Returns:
+            (총점, {지표별 점수}) 튜플
+        """
+        scores = {}
+        info = self.trader.universe.get(code, {})
+        prices = info.get('price_history', [])
+        current = info.get('current', 0)
+        target = info.get('target', 0)
+        
+        # 1. 목표가 돌파 점수
+        if target > 0 and current >= target:
+            scores['target_break'] = Config.ENTRY_WEIGHTS.get('target_break', 20)
+        else:
+            scores['target_break'] = 0
+        
+        # 2. 이동평균 필터 점수
+        if len(prices) >= 20:
+            ma20 = sum(prices[-20:]) / 20
+            ma5 = sum(prices[-5:]) / 5 if len(prices) >= 5 else current
+            if current > ma20 and ma5 > ma20:
+                scores['ma_filter'] = Config.ENTRY_WEIGHTS.get('ma_filter', 15)
+            else:
+                scores['ma_filter'] = 0
+        else:
+            scores['ma_filter'] = Config.ENTRY_WEIGHTS.get('ma_filter', 15) // 2
+        
+        # 3. RSI 최적 영역 점수
+        rsi = self.calculate_rsi(code, 14)
+        if 30 <= rsi <= 60:  # 최적 진입 영역
+            scores['rsi_optimal'] = Config.ENTRY_WEIGHTS.get('rsi_optimal', 20)
+        elif rsi < 70:
+            scores['rsi_optimal'] = Config.ENTRY_WEIGHTS.get('rsi_optimal', 20) // 2
+        else:
+            scores['rsi_optimal'] = 0
+        
+        # 4. MACD 골든크로스 점수
+        macd, signal, _ = self.calculate_macd(prices)
+        if macd > signal:
+            scores['macd_golden'] = Config.ENTRY_WEIGHTS.get('macd_golden', 20)
+        else:
+            scores['macd_golden'] = 0
+        
+        # 5. 거래량 확인 점수
+        current_volume = info.get('current_volume', 0)
+        avg_volume = info.get('avg_volume_5', 0)
+        if avg_volume > 0 and current_volume >= avg_volume * 1.2:
+            scores['volume_confirm'] = Config.ENTRY_WEIGHTS.get('volume_confirm', 15)
+        elif avg_volume > 0 and current_volume >= avg_volume:
+            scores['volume_confirm'] = Config.ENTRY_WEIGHTS.get('volume_confirm', 15) // 2
+        else:
+            scores['volume_confirm'] = 0
+        
+        # 6. 볼린저 밴드 위치 점수
+        if len(prices) >= 20:
+            upper, middle, lower = self.calculate_bollinger(prices)
+            if lower <= current <= middle:
+                scores['bb_position'] = Config.ENTRY_WEIGHTS.get('bb_position', 10)
+            elif current < lower:
+                scores['bb_position'] = Config.ENTRY_WEIGHTS.get('bb_position', 10) // 2
+            else:
+                scores['bb_position'] = 0
+        else:
+            scores['bb_position'] = 0
+        
+        total = sum(scores.values())
+        return total, scores
+    
+    def check_entry_score_condition(self, code) -> Tuple[bool, int]:
+        """진입 점수 조건 확인
+        
+        Returns:
+            (통과여부, 점수) 튜플
+        """
+        if not Config.USE_ENTRY_SCORING:
+            return True, 100
+        
+        total, details = self.calculate_entry_score(code)
+        threshold = Config.ENTRY_SCORE_THRESHOLD
+        
+        if total < threshold:
+            info = self.trader.universe.get(code, {})
+            self.log(f"[{info.get('name', code)}] 진입점수 {total}/{threshold} 미달: {details}")
+            return False, total
+        
+        return True, total
+
+    # ==================================================================
+    # 갭 분석 (신규)
+    # ==================================================================
+    def analyze_gap(self, code) -> Tuple[str, float]:
+        """갭 분석
+        
+        Returns:
+            (갭 유형, 갭 비율%) 튜플
+            갭 유형: 'gap_up', 'gap_down', 'no_gap'
+        """
+        info = self.trader.universe.get(code, {})
+        today_open = info.get('open', 0)
+        prev_close = info.get('prev_close', 0)
+        
+        if prev_close == 0 or today_open == 0:
+            return 'no_gap', 0
+        
+        gap_ratio = (today_open - prev_close) / prev_close * 100
+        
+        gap_threshold = getattr(Config, 'GAP_THRESHOLD', 2.0)
+        
+        if gap_ratio >= gap_threshold:
+            return 'gap_up', gap_ratio
+        elif gap_ratio <= -gap_threshold:
+            return 'gap_down', gap_ratio
+        else:
+            return 'no_gap', gap_ratio
+    
+    def check_gap_condition(self, code) -> bool:
+        """갭 조건 확인"""
+        if not hasattr(self.trader, 'chk_use_gap') or not self.trader.chk_use_gap.isChecked():
+            return True
+        
+        gap_type, gap_ratio = self.analyze_gap(code)
+        
+        # 갭 상승 시 더 보수적인 진입 (K값 조정됨)
+        if gap_type == 'gap_up':
+            info = self.trader.universe.get(code, {})
+            self.log(f"[{info.get('name', code)}] ⚡ 갭상승 {gap_ratio:.1f}% 감지 - 보수적 진입")
+            # 갭 상승이 너무 크면 진입 보류
+            if gap_ratio > 5.0:
+                return False
+        
+        return True
+    
+    def get_gap_adjusted_k(self, code) -> float:
+        """갭에 따른 조정된 K값 반환"""
+        base_k = self.trader.spin_k.value()
+        gap_type, gap_ratio = self.analyze_gap(code)
+        
+        if gap_type == 'gap_up':
+            # 갭 상승 시 K값 감소 (더 보수적)
+            adjustment = min(0.2, gap_ratio / 100)
+            return max(0.2, base_k - adjustment)
+        elif gap_type == 'gap_down':
+            # 갭 하락 시 K값 증가 (더 공격적)
+            adjustment = min(0.15, abs(gap_ratio) / 100)
+            return min(0.8, base_k + adjustment)
+        
+        return base_k
+
+    # ==================================================================
+    # 동적 포지션 사이징 (Anti-Martingale) (신규)
+    # ==================================================================
+    def calculate_dynamic_position_size(self, code) -> int:
+        """동적 포지션 크기 계산 (Anti-Martingale)
+        
+        연속 손실 시 포지션 축소, 연속 이익 시 포지션 확대
+        """
+        info = self.trader.universe.get(code, {})
+        current_price = info.get('current', 0)
+        
+        if current_price <= 0:
+            return 0
+        
+        # 기본 투자금
+        base_invest = self.trader.deposit * (self.trader.spin_betting.value() / 100)
+        
+        # 동적 사이징 활성화 체크
+        if not hasattr(self.trader, 'chk_use_dynamic_sizing') or \
+           not self.trader.chk_use_dynamic_sizing.isChecked():
+            return max(1, int(base_invest / current_price))
+        
+        # Anti-Martingale 적용
+        if self.consecutive_losses >= 3:
+            # 연속 3회 이상 손실 시 50% 축소
+            adjusted_invest = base_invest * 0.5
+            self.log(f"[동적사이징] 연속 {self.consecutive_losses}회 손실 - 투자금 50% 축소")
+        elif self.consecutive_losses >= 2:
+            # 연속 2회 손실 시 25% 축소
+            adjusted_invest = base_invest * 0.75
+        elif self.consecutive_wins >= 3:
+            # 연속 3회 이상 이익 시 25% 확대
+            adjusted_invest = base_invest * 1.25
+            self.log(f"[동적사이징] 연속 {self.consecutive_wins}회 이익 - 투자금 25% 확대")
+        elif self.consecutive_wins >= 2:
+            # 연속 2회 이익 시 10% 확대
+            adjusted_invest = base_invest * 1.1
+        else:
+            adjusted_invest = base_invest
+        
+        # 최대/최소 제한
+        max_invest = self.trader.deposit * 0.2  # 최대 20%
+        min_invest = self.trader.deposit * 0.02  # 최소 2%
+        adjusted_invest = max(min_invest, min(max_invest, adjusted_invest))
+        
+        return max(1, int(adjusted_invest / current_price))
+    
+    def update_consecutive_results(self, is_profit: bool):
+        """연속 손익 결과 업데이트"""
+        if is_profit:
+            self.consecutive_wins += 1
+            self.consecutive_losses = 0
+        else:
+            self.consecutive_losses += 1
+            self.consecutive_wins = 0
+
+    # ==================================================================
+    # 자산군 분산 (신규)
+    # ==================================================================
+    def check_market_diversification(self, code) -> bool:
+        """시장별 분산 조건 확인"""
+        if not hasattr(self.trader, 'chk_use_market_limit') or \
+           not self.trader.chk_use_market_limit.isChecked():
+            return True
+        
+        market = self._get_stock_market(code)
+        current_allocation = self.market_investments.get(market, 0)
+        
+        # 한 시장에 최대 70% 제한
+        max_ratio = getattr(self.trader, 'spin_market_limit', None)
+        max_ratio = max_ratio.value() / 100 if max_ratio else 0.7
+        
+        total_invested = sum(self.market_investments.values())
+        if total_invested > 0:
+            market_ratio = current_allocation / total_invested
+            if market_ratio >= max_ratio:
+                self.log(f"[분산관리] {market.upper()} 비중 {market_ratio*100:.0f}% >= {max_ratio*100:.0f}% 진입 보류")
+                return False
+        
+        return True
+    
+    def _get_stock_market(self, code) -> str:
+        """종목의 시장 구분 반환"""
+        # 코드 첫자리로 간단 구분 (실제로는 API 조회 필요)
+        if code.startswith('0') or code.startswith('1') or code.startswith('2'):
+            return 'kospi'
+        return 'kosdaq'
+    
+    def update_market_investment(self, code, amount, is_buy=True):
+        """시장별 투자금 업데이트"""
+        market = self._get_stock_market(code)
+        if is_buy:
+            self.market_investments[market] = self.market_investments.get(market, 0) + amount
+        else:
+            self.market_investments[market] = max(0, self.market_investments.get(market, 0) - amount)
+
+    # ==================================================================
+    # 섹터 제한 (신규)
+    # ==================================================================
+    def check_sector_limit(self, code) -> bool:
+        """섹터별 투자 제한 확인"""
+        if not hasattr(self.trader, 'chk_use_sector_limit') or \
+           not self.trader.chk_use_sector_limit.isChecked():
+            return True
+        
+        sector = self._get_stock_sector(code)
+        current_allocation = self.sector_investments.get(sector, 0)
+        
+        # 한 섹터에 최대 투자금 제한
+        max_amt = getattr(self.trader, 'spin_sector_limit', None)
+        max_sector_invest = self.trader.deposit * (max_amt.value() / 100) if max_amt else \
+                           self.trader.deposit * 0.3
+        
+        if current_allocation >= max_sector_invest:
+            self.log(f"[섹터관리] {sector} 섹터 한도 도달 ({current_allocation:,.0f}원)")
+            return False
+        
+        return True
+    
+    def _get_stock_sector(self, code) -> str:
+        """종목의 섹터 반환 (실제로는 API 조회 필요)"""
+        info = self.trader.universe.get(code, {})
+        return info.get('sector', '기타')
+    
+    def update_sector_investment(self, code, amount, is_buy=True):
+        """섹터별 투자금 업데이트"""
+        sector = self._get_stock_sector(code)
+        if is_buy:
+            self.sector_investments[sector] = self.sector_investments.get(sector, 0) + amount
+        else:
+            self.sector_investments[sector] = max(0, self.sector_investments.get(sector, 0) - amount)
+
+    # ==================================================================
+    # 변동성 기반 손절 (ATR Stop) (신규)
+    # ==================================================================
+    def calculate_atr_stop_loss(self, code, multiplier=2.0) -> float:
+        """ATR 기반 손절가 계산
+        
+        Args:
+            code: 종목코드
+            multiplier: ATR 배수
+        
+        Returns:
+            손절가
+        """
+        info = self.trader.universe.get(code, {})
+        current_price = info.get('current', 0)
+        buy_price = info.get('buy_price', 0)
+        
+        if current_price <= 0 or buy_price <= 0:
+            return 0
+        
+        high_list = info.get('high_history', [])
+        low_list = info.get('low_history', [])
+        close_list = info.get('price_history', [])
+        
+        atr = self.calculate_atr(high_list, low_list, close_list, period=14)
+        
+        if atr <= 0:
+            # ATR 계산 불가 시 고정 손절 사용
+            return buy_price * (1 - self.trader.spin_loss.value() / 100)
+        
+        # ATR 기반 손절가 = 매입가 - (ATR * 배수)
+        stop_price = buy_price - (atr * multiplier)
+        
+        return max(0, stop_price)
+    
+    def check_atr_stop_loss(self, code) -> Tuple[bool, float]:
+        """ATR 손절 조건 확인
+        
+        Returns:
+            (손절 필요 여부, 손절가)
+        """
+        if not hasattr(self.trader, 'chk_use_atr_stop') or \
+           not self.trader.chk_use_atr_stop.isChecked():
+            return False, 0
+        
+        info = self.trader.universe.get(code, {})
+        current_price = info.get('current', 0)
+        
+        multiplier = getattr(self.trader, 'spin_atr_mult', None)
+        mult = multiplier.value() if multiplier else 2.0
+        
+        stop_price = self.calculate_atr_stop_loss(code, mult)
+        
+        if stop_price > 0 and current_price <= stop_price:
+            self.log(f"[{info.get('name', code)}] ATR 손절 발동: 현재가 {current_price:,} <= 손절가 {stop_price:,.0f}")
+            return True, stop_price
+        
+        return False, stop_price
+
+    # ==================================================================
+    # 기존 전략 함수들 (유지)
+    # ==================================================================
+    def calculate_rsi(self, code, period=14):
+        """RSI 계산 (종목별 저장된 가격 데이터 기반)"""
+        if code not in self.trader.universe:
+            return 50
+        
+        info = self.trader.universe[code]
+        prices = info.get('price_history', [])
+        
+        if len(prices) < period + 1:
+            return 50
+        
         gains = []
         losses = []
         
-        try:
-            for i in range(1, period + 1):
-                change = prices[-(i)] - prices[-(i+1)]
-                if change > 0:
-                    gains.append(change)
-                    losses.append(0)
-                else:
-                    gains.append(0)
-                    losses.append(abs(change))
-            
-            avg_gain = sum(gains) / period
-            avg_loss = sum(losses) / period
-            
-            # 0 나누기 방지
-            if avg_loss == 0:
-                return 100.0 if avg_gain > 0 else DEFAULT_RSI_VALUE
-            
-            rs = avg_gain / avg_loss
-            rsi = 100 - (100 / (1 + rs))
-            
-            return max(0.0, min(100.0, rsi))  # 범위 제한
+        for i in range(1, period + 1):
+            change = prices[-(i)] - prices[-(i+1)]
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
         
-        except (IndexError, ZeroDivisionError, TypeError) as e:
-            self.log(f"RSI 계산 오류 ({code}): {e}")
-            return DEFAULT_RSI_VALUE
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+        
+        if avg_loss == 0:
+            return 100
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        return rsi
     
     def check_rsi_condition(self, code):
         """RSI 조건 확인"""
@@ -101,9 +608,6 @@ class StrategyManager:
         
         return True
 
-    # ------------------------------------------------------------------
-    # 거래량 체크
-    # ------------------------------------------------------------------
     def check_volume_condition(self, code):
         """거래량 조건 확인"""
         if not self.trader.chk_use_volume.isChecked():
@@ -127,9 +631,6 @@ class StrategyManager:
         
         return True
 
-    # ------------------------------------------------------------------
-    # MACD 계산 및 체크
-    # ------------------------------------------------------------------
     def calculate_macd(self, prices):
         """MACD 계산 (단순 구현)"""
         if len(prices) < Config.DEFAULT_MACD_SLOW + Config.DEFAULT_MACD_SIGNAL:
@@ -149,87 +650,63 @@ class StrategyManager:
         histogram = macd[-1] - signal[-1]
         return macd[-1], signal[-1], histogram
 
-    def check_macd_condition(self, code: str) -> bool:
+    def check_macd_condition(self, code):
         """MACD 조건 확인"""
-        # UI 위젯이 없으면 기본값 반환
-        chk_use_macd = getattr(self.trader, 'chk_use_macd', None)
-        if chk_use_macd is None or not chk_use_macd.isChecked():
-            return True
-        
-        prices = self.trader.price_history.get(code, [])
-        if len(prices) < 30:
-            return True
-        
-        try:
-            macd, signal, _ = self.calculate_macd(prices)
-            if macd <= signal:
-                name = self.trader.universe.get(code, {}).get('name', code)
-                self.log(f"[{name}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
-                return False
-        except Exception as e:
-            self.log(f"MACD 조건 확인 오류 ({code}): {e}")
-        return True
-
-    # ------------------------------------------------------------------
-    # 볼린저 밴드 체크
-    # ------------------------------------------------------------------
-    def calculate_bollinger(self, prices: List[float], k: float = DEFAULT_BB_K, 
-                           period: int = DEFAULT_BB_PERIOD) -> Tuple[float, float, float]:
-        """
-        볼린저 밴드 계산
-        
-        Args:
-            prices: 가격 리스트
-            k: 표준편차 배수 (기본 2.0)
-            period: 기간 (기본 20)
-        
-        Returns:
-            (upper, middle, lower) 밴드 값
-        """
-        if not prices or len(prices) < period or period <= 0:
-            return 0.0, 0.0, 0.0
-        
-        try:
-            subset = prices[-period:]
-            avg = sum(subset) / period
-            variance = sum((x - avg) ** 2 for x in subset) / period
-            std_dev = variance ** 0.5
-            
-            upper = avg + (std_dev * k)
-            lower = avg - (std_dev * k)
-            return upper, avg, lower
-        except (TypeError, ZeroDivisionError) as e:
-            return 0.0, 0.0, 0.0
-
-    def check_bollinger_condition(self, code: str) -> bool:
-        """볼린저 밴드 조건 확인"""
-        chk_use_bb = getattr(self.trader, 'chk_use_bb', None)
-        if chk_use_bb is None or not chk_use_bb.isChecked():
+        if not hasattr(self.trader, 'chk_use_macd') or not self.trader.chk_use_macd.isChecked():
             return True
         
         info = self.trader.universe.get(code, {})
         prices = info.get('price_history', [])
-        current_price = info.get('current', 0)
-        
-        if len(prices) < DEFAULT_BB_PERIOD or current_price <= 0:
+        if len(prices) < 30:
             return True
         
-        try:
-            spin_bb_k = getattr(self.trader, 'spin_bb_k', None)
-            k = spin_bb_k.value() if spin_bb_k else DEFAULT_BB_K
-            _, _, lower = self.calculate_bollinger(prices, k=k)
-            
-            # 밴드 하단보다 현재가가 낮으면(돌파) 매수 간주
-            if current_price > lower:
-                return False
-        except Exception:
-            pass
-        
+        macd, signal, _ = self.calculate_macd(prices)
+        if macd <= signal:
+            self.log(f"[{info.get('name', code)}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
+            return False
         return True
 
-    # ------------------------------------------------------------------
-    # ATR 및 DMI 체크
-    # ------------------------------------------------------------------
+    def calculate_bollinger(self, prices, k=2.0, period=20):
+        """볼린저 밴드 계산"""
+        if len(prices) < period:
+            return 0, 0, 0
+        
+        subset = prices[-period:]
+        avg = sum(subset) / period
+        variance = sum((x - avg) ** 2 for x in subset) / period
+        std_dev = variance ** 0.5
+        
+        upper = avg + (std_dev * k)
+        lower = avg - (std_dev * k)
+        return upper, avg, lower
+
+    def check_bollinger_condition(self, code):
+        """볼린저 밴드 조건 확인
+        
+        하단 밴드 근처에서 매수 기회로 판단 (과매도 상태)
+        상단 밴드 이상에서는 진입 보류 (과매수 상태)
+        """
+        if not hasattr(self.trader, 'chk_use_bb') or not self.trader.chk_use_bb.isChecked():
+            return True
+        
+        prices = self.trader.universe.get(code, {}).get('price_history', [])
+        current_price = self.trader.universe.get(code, {}).get('current', 0)
+        
+        if len(prices) < 20 or current_price == 0:
+            return True
+            
+        k = self.trader.spin_bb_k.value()
+        upper, middle, lower = self.calculate_bollinger(prices, k=k)
+        
+        # 상단 밴드 이상이면 과매수 → 진입 보류
+        if current_price >= upper:
+            info = self.trader.universe.get(code, {})
+            self.log(f"[{info.get('name', code)}] 볼린저 상단 돌파 ({current_price:,} >= {upper:,.0f}) 진입 보류")
+            return False
+        
+        # 하단~중단 사이 또는 하단 이하면 매수 유효
+        return True
+
     def calculate_atr(self, high_list, low_list, close_list, period=14):
         """ATR(Average True Range) 계산"""
         if len(high_list) < period + 1:
@@ -246,7 +723,6 @@ class StrategyManager:
         if len(tr_list) < period:
             return 0
             
-        # Simple SMA for ATR
         atr = sum(tr_list[-period:]) / period
         return atr
 
@@ -255,7 +731,6 @@ class StrategyManager:
         if len(high_list) < period + 1:
             return 0, 0, 0
             
-        # 1. TR, DM+ , DM- 계산
         tr_list = []
         p_dm_list = []
         m_dm_list = []
@@ -265,11 +740,9 @@ class StrategyManager:
             l = low_list[i]
             prev_c = close_list[i-1]
             
-            # TR = Max(|High-Low|, |High-PrevClose|, |Low-PrevClose|)
             tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
             tr_list.append(tr)
             
-            # DM
             prev_h = high_list[i-1]
             prev_l = low_list[i-1]
             
@@ -286,8 +759,6 @@ class StrategyManager:
             else:
                 m_dm_list.append(0)
         
-        # 2. Smooth Values (Wilder's Smoothing usually, but here simple SMA or EMA for simplicity)
-        # Using simple SMA for period
         if len(tr_list) < period:
             return 0, 0, 0
             
@@ -302,7 +773,7 @@ class StrategyManager:
         m_di = (m_dm_sum / tr_sum) * 100
         
         dx = abs(p_di - m_di) / (p_di + m_di) * 100 if (p_di + m_di) > 0 else 0
-        adx = dx # For strict ADX, need smoothing of DX. Here using simple DX for approximation.
+        adx = dx
         
         return p_di, m_di, adx
 
@@ -321,27 +792,17 @@ class StrategyManager:
             
         p_di, m_di, adx = self.calculate_dmi(high_list, low_list, close_list)
         
-        # 조건 1: P-DI > M-DI (상승 추세)
         if p_di <= m_di:
             return False
             
-        # 조건 2: ADX 기준
         threshold = self.trader.spin_adx.value()
         if adx < threshold:
             return False
             
         return True
 
-    # ------------------------------------------------------------------
-    # 이동평균 크로스오버 (신규)
-    # ------------------------------------------------------------------
     def calculate_ma(self, prices, period, ma_type='SMA'):
-        """이동평균 계산
-        Args:
-            prices: 가격 리스트
-            period: 기간
-            ma_type: 'SMA' 또는 'EMA'
-        """
+        """이동평균 계산"""
         if len(prices) < period:
             return None
         
@@ -356,12 +817,7 @@ class StrategyManager:
         return None
     
     def check_ma_crossover(self, code, short_period=5, long_period=20):
-        """이동평균 골든크로스/데드크로스 확인
-        Returns:
-            'golden': 골든크로스 (매수 신호)
-            'dead': 데드크로스 (매도 신호)
-            None: 신호 없음
-        """
+        """이동평균 골든크로스/데드크로스 확인"""
         if not hasattr(self.trader, 'chk_use_ma') or not self.trader.chk_use_ma.isChecked():
             return None
             
@@ -371,7 +827,6 @@ class StrategyManager:
         if len(prices) < long_period + 2:
             return None
         
-        # 현재와 이전 MA 계산
         short_ma_now = self.calculate_ma(prices, short_period)
         long_ma_now = self.calculate_ma(prices, long_period)
         short_ma_prev = self.calculate_ma(prices[:-1], short_period)
@@ -380,37 +835,24 @@ class StrategyManager:
         if None in [short_ma_now, long_ma_now, short_ma_prev, long_ma_prev]:
             return None
         
-        # 골든크로스: 단기MA가 장기MA를 상향 돌파
         if short_ma_prev <= long_ma_prev and short_ma_now > long_ma_now:
             self.log(f"[{info.get('name', code)}] 🌟 골든크로스 발생 (MA{short_period}>{long_period})")
             return 'golden'
         
-        # 데드크로스: 단기MA가 장기MA를 하향 돌파
         if short_ma_prev >= long_ma_prev and short_ma_now < long_ma_now:
             self.log(f"[{info.get('name', code)}] ☠️ 데드크로스 발생 (MA{short_period}<{long_period})")
             return 'dead'
         
         return None
 
-    # ------------------------------------------------------------------
-    # ATR 기반 포지션 사이징 (신규)
-    # ------------------------------------------------------------------
     def calculate_position_size(self, code, risk_percent=1.0, atr_multiplier=2.0):
-        """ATR 기반 포지션 크기 계산
-        Args:
-            code: 종목코드
-            risk_percent: 계좌 대비 위험 비율 (%)
-            atr_multiplier: ATR 배수 (손절폭)
-        Returns:
-            적정 수량
-        """
+        """ATR 기반 포지션 크기 계산"""
         info = self.trader.universe.get(code, {})
         high_list = info.get('high_history', [])
         low_list = info.get('low_history', [])
         close_list = info.get('price_history', [])
         
         if len(high_list) < 15 or len(low_list) < 15 or len(close_list) < 15:
-            # 데이터 부족시 기본 계산
             return self._default_position_size(code)
         
         atr = self.calculate_atr(high_list, low_list, close_list, period=14)
@@ -421,19 +863,14 @@ class StrategyManager:
         if current_price <= 0:
             return 0
         
-        # 손절폭 = ATR * 배수
         stop_loss_amount = atr * atr_multiplier
-        
-        # 위험 금액 = 예수금 * 위험비율%
         risk_amount = self.trader.deposit * (risk_percent / 100)
         
-        # 적정 수량 = 위험금액 / 손절폭
         if stop_loss_amount > 0:
             position_size = int(risk_amount / stop_loss_amount)
         else:
             position_size = 0
         
-        # 최대 투자금 제한 적용
         max_invest = self.trader.deposit * (self.trader.spin_betting.value() / 100)
         max_quantity = int(max_invest / current_price) if current_price > 0 else 0
         
@@ -445,7 +882,7 @@ class StrategyManager:
         return max(1, final_size)
     
     def _default_position_size(self, code):
-        """기본 포지션 크기 계산 (ATR 데이터 부족시)"""
+        """기본 포지션 크기 계산"""
         info = self.trader.universe.get(code, {})
         current_price = info.get('current', 0)
         if current_price <= 0:
@@ -454,30 +891,21 @@ class StrategyManager:
         invest_amount = self.trader.deposit * (self.trader.spin_betting.value() / 100)
         return max(1, int(invest_amount / current_price))
 
-    # ------------------------------------------------------------------
-    # 시간대별 전략 파라미터 (신규)
-    # ------------------------------------------------------------------
     def get_time_based_k_value(self):
-        """시간대별 K값 반환
-        - 09:00-09:30: 공격적 (K * 1.4)
-        - 09:30-14:30: 기본 (K * 1.0)
-        - 14:30-15:20: 보수적 (K * 0.6)
-        """
-        import datetime
+        """시간대별 K값 반환"""
         now = datetime.datetime.now()
         hour, minute = now.hour, now.minute
         time_val = hour * 60 + minute
         
         base_k = self.trader.spin_k.value()
         
-        # 시간대별 조정
-        if time_val < 9 * 60 + 30:  # 09:00-09:30 (공격적)
+        if time_val < 9 * 60 + 30:
             adjusted_k = base_k * 1.4
             phase = "공격적"
-        elif time_val < 14 * 60 + 30:  # 09:30-14:30 (기본)
+        elif time_val < 14 * 60 + 30:
             adjusted_k = base_k * 1.0
             phase = "기본"
-        else:  # 14:30-15:20 (보수적)
+        else:
             adjusted_k = base_k * 0.6
             phase = "보수적"
         
@@ -493,8 +921,11 @@ class StrategyManager:
         if prev_high == 0 or prev_low == 0 or today_open == 0:
             return 0
         
-        # 시간대별 K값 적용
-        if hasattr(self.trader, 'chk_use_time_strategy') and self.trader.chk_use_time_strategy.isChecked():
+        # 갭 조정 K값 사용
+        if hasattr(self.trader, 'chk_use_gap') and self.trader.chk_use_gap.isChecked():
+            k_value = self.get_gap_adjusted_k(code)
+            phase = "갭조정"
+        elif hasattr(self.trader, 'chk_use_time_strategy') and self.trader.chk_use_time_strategy.isChecked():
             k_value, phase = self.get_time_based_k_value()
         else:
             k_value = self.trader.spin_k.value()
@@ -504,18 +935,8 @@ class StrategyManager:
         
         return target
 
-    # ------------------------------------------------------------------
-    # 분할 매수/매도 (신규)
-    # ------------------------------------------------------------------
     def get_split_orders(self, total_quantity, current_price, order_type='buy'):
-        """분할 주문 생성
-        Args:
-            total_quantity: 총 수량
-            current_price: 현재가
-            order_type: 'buy' 또는 'sell'
-        Returns:
-            [(수량, 가격), ...] 리스트
-        """
+        """분할 주문 생성"""
         if not hasattr(self.trader, 'chk_use_split') or not self.trader.chk_use_split.isChecked():
             return [(total_quantity, current_price)]
         
@@ -538,7 +959,6 @@ class StrategyManager:
                 qty = total_quantity // split_count
                 remaining -= qty
             
-            # 가격 조정
             if order_type == 'buy':
                 price_adj = 1 - (split_percent / 100) * i
             else:
@@ -549,10 +969,10 @@ class StrategyManager:
         
         return orders
 
-    # ------------------------------------------------------------------
-    # 종합 매수 조건 체크
-    # ------------------------------------------------------------------
-    def check_all_buy_conditions(self, code):
+    # ==================================================================
+    # 종합 매수 조건 체크 (확장)
+    # ==================================================================
+    def check_all_buy_conditions(self, code) -> Tuple[bool, Dict[str, bool]]:
         """모든 매수 조건 확인"""
         conditions = {
             'rsi': self.check_rsi_condition(code),
@@ -560,6 +980,11 @@ class StrategyManager:
             'macd': self.check_macd_condition(code),
             'bollinger': self.check_bollinger_condition(code),
             'dmi': self.check_dmi_condition(code),
+            'stoch_rsi': self.check_stochastic_rsi_condition(code),
+            'mtf': self.check_mtf_condition(code),
+            'gap': self.check_gap_condition(code),
+            'market_div': self.check_market_diversification(code),
+            'sector': self.check_sector_limit(code),
         }
         
         # MA 크로스오버 체크 (골든크로스만 매수)
@@ -569,5 +994,16 @@ class StrategyManager:
         else:
             conditions['ma_cross'] = True
         
+        # 진입 점수 체크
+        if Config.USE_ENTRY_SCORING:
+            passed, score = self.check_entry_score_condition(code)
+            conditions['entry_score'] = passed
+        
         return all(conditions.values()), conditions
-
+    
+    def reset_tracking(self):
+        """추적 데이터 초기화"""
+        self.consecutive_losses = 0
+        self.consecutive_wins = 0
+        self.sector_investments.clear()
+        self.market_investments = {'kospi': 0, 'kosdaq': 0}

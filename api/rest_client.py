@@ -62,25 +62,6 @@ class KiwoomRESTClient:
         # 요청 속도 제한 (1초에 최대 5건)
         self._last_request_time = 0
         self._min_request_interval = 0.2  # 200ms
-    
-    def __enter__(self):
-        """컨텍스트 매니저 진입"""
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """컨텍스트 매니저 종료"""
-        self.close()
-        return False
-    
-    def close(self):
-        """세션 정리 및 리소스 해제"""
-        if self.session:
-            try:
-                self.session.close()
-            except Exception:
-                pass
-            self.session = None
-        self.logger.debug("REST 클라이언트 종료")
         
     def _create_session(self) -> requests.Session:
         """재시도 로직이 포함된 세션 생성"""
@@ -120,11 +101,6 @@ class KiwoomRESTClient:
         Returns:
             응답 JSON 딕셔너리, 실패 시 None
         """
-        # 세션 유효성 검사
-        if self.session is None:
-            self.logger.error("세션이 초기화되지 않았습니다.")
-            return None
-        
         self._rate_limit()
         
         url = f"{self.BASE_URL}{endpoint}"
