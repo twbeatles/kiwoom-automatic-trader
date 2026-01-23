@@ -1,6 +1,6 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 """
-Kiwoom Pro Algo-Trader v4.2 - PyInstaller Build Specification
+Kiwoom Pro Algo-Trader v4.3 - PyInstaller Build Specification
 경량화 최적화 빌드 설정 (ONEFILE 모드)
 """
 
@@ -37,6 +37,9 @@ hiddenimports = [
     'api.rest_client',
     'api.websocket_client',
     'api.models',
+    'dark_theme',
+    'telegram_notifier',
+    'ui_dialogs',
     
     # 유틸리티
     'dateutil',
@@ -131,7 +134,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='KiwoomTrader_v4.2',
+    name='KiwoomTrader_v4.3',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -149,3 +152,4 @@ exe = EXE(
     entitlements_file=None,
     icon=None,
 )
+

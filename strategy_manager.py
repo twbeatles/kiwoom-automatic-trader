@@ -1,5 +1,5 @@
-"""
-Strategy Manager v4.2
+﻿"""
+Strategy Manager v4.3
 매매 전략 로직 - 확장된 기능 포함
 """
 
@@ -618,7 +618,7 @@ class StrategyManager:
         
         info = self.trader.universe[code]
         current_volume = info.get('current_volume', 0)
-        avg_volume = info.get('avg_volume_5', 0)
+        avg_volume = info.get('avg_volume_20', 0) or info.get('avg_volume_5', 0)
         
         if avg_volume == 0:
             return True
@@ -629,6 +629,57 @@ class StrategyManager:
         if actual_mult < required_mult:
             return False
         
+        return True
+
+    # ==================================================================
+    # 유동성/스프레드 필터 (v4.3 신규)
+    # ==================================================================
+    def check_liquidity_condition(self, code) -> bool:
+        """유동성 조건 확인 (20일 평균 거래대금)"""
+        if not hasattr(self.trader, 'chk_use_liquidity') or not self.trader.chk_use_liquidity.isChecked():
+            return True
+
+        info = self.trader.universe.get(code, {})
+        avg_value = info.get('avg_value_20', 0)
+
+        min_value = Config.DEFAULT_MIN_AVG_VALUE
+        min_value_spin = getattr(self.trader, 'spin_min_value', None)
+        if min_value_spin:
+            min_value = int(min_value_spin.value() * 100_000_000)
+
+        if avg_value <= 0:
+            return True
+
+        if avg_value < min_value:
+            self.log(f"[{info.get('name', code)}] 유동성 부족: 평균 거래대금 {avg_value:,.0f}원 < 기준 {min_value:,.0f}원")
+            return False
+
+        return True
+
+    def check_spread_condition(self, code) -> bool:
+        """스프레드 조건 확인"""
+        if not hasattr(self.trader, 'chk_use_spread') or not self.trader.chk_use_spread.isChecked():
+            return True
+
+        info = self.trader.universe.get(code, {})
+        ask = info.get('ask_price', 0)
+        bid = info.get('bid_price', 0)
+
+        if ask <= 0 or bid <= 0:
+            return True
+
+        mid = (ask + bid) / 2
+        if mid <= 0:
+            return True
+
+        spread_pct = (ask - bid) / mid * 100
+        max_spread = getattr(self.trader, 'spin_spread_max', None)
+        max_spread = max_spread.value() if max_spread else Config.DEFAULT_MAX_SPREAD_PCT
+
+        if spread_pct > max_spread:
+            self.log(f"[{info.get('name', code)}] 스프레드 {spread_pct:.2f}% > {max_spread:.2f}% 진입 보류")
+            return False
+
         return True
 
     def calculate_macd(self, prices):
@@ -977,6 +1028,8 @@ class StrategyManager:
         conditions = {
             'rsi': self.check_rsi_condition(code),
             'volume': self.check_volume_condition(code),
+            'liquidity': self.check_liquidity_condition(code),
+            'spread': self.check_spread_condition(code),
             'macd': self.check_macd_condition(code),
             'bollinger': self.check_bollinger_condition(code),
             'dmi': self.check_dmi_condition(code),
@@ -1007,3 +1060,4 @@ class StrategyManager:
         self.consecutive_wins = 0
         self.sector_investments.clear()
         self.market_investments = {'kospi': 0, 'kosdaq': 0}
+

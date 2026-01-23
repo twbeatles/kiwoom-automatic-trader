@@ -1,11 +1,11 @@
-"""
+﻿"""
 Light Theme for Kiwoom Pro Algo-Trader
 라이트 테마 스타일시트
 """
 
 LIGHT_STYLESHEET = """
 /* ============================================
-   Kiwoom Pro Algo-Trader v4.2 Light Theme
+   Kiwoom Pro Algo-Trader v4.3 Light Theme
    Modern, Clean, Professional
    ============================================ */
 
@@ -409,3 +409,4 @@ QMessageBox QPushButton {
     padding: 10px 20px;
 }
 """
+
