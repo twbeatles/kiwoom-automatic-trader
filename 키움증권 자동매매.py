@@ -44,6 +44,22 @@ from api.models import StockQuote, ExecutionData, OrderType, PriceType
 
 
 # ============================================================================
+# 커스텀 위젯 (휠 스크롤 방지)
+# ============================================================================
+class NoScrollSpinBox(QSpinBox):
+    def wheelEvent(self, event):
+        # 마우스 휠로 값 변경 방지 (항상 부모에게 이벤트 전달 -> 스크롤 가능)
+        event.ignore()
+
+class NoScrollDoubleSpinBox(QDoubleSpinBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
+class NoScrollComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
+# ============================================================================
 # 메인 트레이더 클래스
 # ============================================================================
 class KiwoomProTrader(QMainWindow):
@@ -162,7 +178,7 @@ class KiwoomProTrader(QMainWindow):
         account_layout.setSpacing(8)
         lbl_account = QLabel("계좌:")
         lbl_account.setStyleSheet("color: #8b949e; font-weight: 500;")
-        self.combo_acc = QComboBox()
+        self.combo_acc = NoScrollComboBox()
         self.combo_acc.setMinimumWidth(160)
         self.combo_acc.currentTextChanged.connect(self._on_account_changed)
         account_layout.addWidget(lbl_account)
@@ -235,7 +251,7 @@ class KiwoomProTrader(QMainWindow):
         layout.setSpacing(10)
         
         # 즐겨찾기 콤보박스
-        self.combo_favorites = QComboBox()
+        self.combo_favorites = NoScrollComboBox()
         self.combo_favorites.addItem("📌 즐겨찾기 선택...")
         self._load_favorites()
         self.combo_favorites.currentIndexChanged.connect(self._on_favorite_selected)
@@ -257,35 +273,35 @@ class KiwoomProTrader(QMainWindow):
         layout.addWidget(btn_save_fav, 0, 5)
         
         layout.addWidget(QLabel("💵 투자비중:"), 1, 0)
-        self.spin_betting = QDoubleSpinBox()
+        self.spin_betting = NoScrollDoubleSpinBox()
         self.spin_betting.setRange(1, 100)
         self.spin_betting.setValue(Config.DEFAULT_BETTING_RATIO)
         self.spin_betting.setSuffix(" %")
         layout.addWidget(self.spin_betting, 1, 1)
         
         layout.addWidget(QLabel("📐 K값:"), 1, 2)
-        self.spin_k = QDoubleSpinBox()
+        self.spin_k = NoScrollDoubleSpinBox()
         self.spin_k.setRange(0.1, 1.0)
         self.spin_k.setSingleStep(0.1)
         self.spin_k.setValue(Config.DEFAULT_K_VALUE)
         layout.addWidget(self.spin_k, 1, 3)
         
         layout.addWidget(QLabel("🎯 TS 발동:"), 2, 0)
-        self.spin_ts_start = QDoubleSpinBox()
+        self.spin_ts_start = NoScrollDoubleSpinBox()
         self.spin_ts_start.setRange(0.5, 20)
         self.spin_ts_start.setValue(Config.DEFAULT_TS_START)
         self.spin_ts_start.setSuffix(" %")
         layout.addWidget(self.spin_ts_start, 2, 1)
         
         layout.addWidget(QLabel("📉 TS 하락:"), 2, 2)
-        self.spin_ts_stop = QDoubleSpinBox()
+        self.spin_ts_stop = NoScrollDoubleSpinBox()
         self.spin_ts_stop.setRange(0.5, 10)
         self.spin_ts_stop.setValue(Config.DEFAULT_TS_STOP)
         self.spin_ts_stop.setSuffix(" %")
         layout.addWidget(self.spin_ts_stop, 2, 3)
         
         layout.addWidget(QLabel("🛑 손절률:"), 2, 4)
-        self.spin_loss = QDoubleSpinBox()
+        self.spin_loss = NoScrollDoubleSpinBox()
         self.spin_loss.setRange(0.5, 10)
         self.spin_loss.setValue(Config.DEFAULT_LOSS_CUT)
         self.spin_loss.setSuffix(" %")
@@ -329,7 +345,16 @@ class KiwoomProTrader(QMainWindow):
         return widget
     
     def _create_advanced_tab(self):
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        main_layout.addWidget(scroll)
+        
         widget = QWidget()
+        scroll.setWidget(widget)
+        
         layout = QGridLayout(widget)
         layout.setSpacing(10)
         
@@ -338,12 +363,12 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_rsi.setChecked(Config.DEFAULT_USE_RSI)
         layout.addWidget(self.chk_use_rsi, 0, 0)
         layout.addWidget(QLabel("과매수:"), 0, 1)
-        self.spin_rsi_upper = QSpinBox()
+        self.spin_rsi_upper = NoScrollSpinBox()
         self.spin_rsi_upper.setRange(50, 90)
         self.spin_rsi_upper.setValue(Config.DEFAULT_RSI_UPPER)
         layout.addWidget(self.spin_rsi_upper, 0, 2)
         layout.addWidget(QLabel("기간:"), 0, 3)
-        self.spin_rsi_period = QSpinBox()
+        self.spin_rsi_period = NoScrollSpinBox()
         self.spin_rsi_period.setRange(5, 30)
         self.spin_rsi_period.setValue(Config.DEFAULT_RSI_PERIOD)
         layout.addWidget(self.spin_rsi_period, 0, 4)
@@ -358,7 +383,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_bb.setChecked(Config.DEFAULT_USE_BB)
         layout.addWidget(self.chk_use_bb, 2, 0)
         layout.addWidget(QLabel("배수:"), 2, 1)
-        self.spin_bb_k = QDoubleSpinBox()
+        self.spin_bb_k = NoScrollDoubleSpinBox()
         self.spin_bb_k.setRange(1.0, 3.0)
         self.spin_bb_k.setValue(Config.DEFAULT_BB_STD)
         layout.addWidget(self.spin_bb_k, 2, 2)
@@ -368,7 +393,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_dmi.setChecked(Config.DEFAULT_USE_DMI)
         layout.addWidget(self.chk_use_dmi, 3, 0)
         layout.addWidget(QLabel("ADX 기준:"), 3, 1)
-        self.spin_adx = QSpinBox()
+        self.spin_adx = NoScrollSpinBox()
         self.spin_adx.setRange(10, 50)
         self.spin_adx.setValue(Config.DEFAULT_ADX_THRESHOLD)
         layout.addWidget(self.spin_adx, 3, 2)
@@ -378,7 +403,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_volume.setChecked(Config.DEFAULT_USE_VOLUME)
         layout.addWidget(self.chk_use_volume, 4, 0)
         layout.addWidget(QLabel("배수:"), 4, 1)
-        self.spin_volume_mult = QDoubleSpinBox()
+        self.spin_volume_mult = NoScrollDoubleSpinBox()
         self.spin_volume_mult.setRange(1.0, 5.0)
         self.spin_volume_mult.setValue(Config.DEFAULT_VOLUME_MULTIPLIER)
         layout.addWidget(self.spin_volume_mult, 4, 2)
@@ -388,13 +413,13 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_risk.setChecked(Config.DEFAULT_USE_RISK_MGMT)
         layout.addWidget(self.chk_use_risk, 5, 0)
         layout.addWidget(QLabel("한도:"), 5, 1)
-        self.spin_max_loss = QDoubleSpinBox()
+        self.spin_max_loss = NoScrollDoubleSpinBox()
         self.spin_max_loss.setRange(1, 20)
         self.spin_max_loss.setValue(Config.DEFAULT_MAX_DAILY_LOSS)
         self.spin_max_loss.setSuffix(" %")
         layout.addWidget(self.spin_max_loss, 5, 2)
         layout.addWidget(QLabel("최대보유:"), 5, 3)
-        self.spin_max_holdings = QSpinBox()
+        self.spin_max_holdings = NoScrollSpinBox()
         self.spin_max_holdings.setRange(1, 20)
         self.spin_max_holdings.setValue(Config.DEFAULT_MAX_HOLDINGS)
         layout.addWidget(self.spin_max_holdings, 5, 4)
@@ -406,12 +431,12 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_ma = QCheckBox("MA 크로스오버")
         layout.addWidget(self.chk_use_ma, 7, 0)
         layout.addWidget(QLabel("단기:"), 7, 1)
-        self.spin_ma_short = QSpinBox()
+        self.spin_ma_short = NoScrollSpinBox()
         self.spin_ma_short.setRange(3, 20)
         self.spin_ma_short.setValue(5)
         layout.addWidget(self.spin_ma_short, 7, 2)
         layout.addWidget(QLabel("장기:"), 7, 3)
-        self.spin_ma_long = QSpinBox()
+        self.spin_ma_long = NoScrollSpinBox()
         self.spin_ma_long.setRange(10, 60)
         self.spin_ma_long.setValue(20)
         layout.addWidget(self.spin_ma_long, 7, 4)
@@ -425,7 +450,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_atr_sizing = QCheckBox("ATR 사이징")
         layout.addWidget(self.chk_use_atr_sizing, 8, 2)
         layout.addWidget(QLabel("위험%:"), 8, 3)
-        self.spin_risk_percent = QDoubleSpinBox()
+        self.spin_risk_percent = NoScrollDoubleSpinBox()
         self.spin_risk_percent.setRange(0.5, 5.0)
         self.spin_risk_percent.setValue(1.0)
         self.spin_risk_percent.setSuffix(" %")
@@ -435,12 +460,12 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_split = QCheckBox("분할 주문")
         layout.addWidget(self.chk_use_split, 9, 0)
         layout.addWidget(QLabel("횟수:"), 9, 1)
-        self.spin_split_count = QSpinBox()
+        self.spin_split_count = NoScrollSpinBox()
         self.spin_split_count.setRange(2, 5)
         self.spin_split_count.setValue(3)
         layout.addWidget(self.spin_split_count, 9, 2)
         layout.addWidget(QLabel("간격%:"), 9, 3)
-        self.spin_split_percent = QDoubleSpinBox()
+        self.spin_split_percent = NoScrollDoubleSpinBox()
         self.spin_split_percent.setRange(0.1, 2.0)
         self.spin_split_percent.setValue(0.5)
         self.spin_split_percent.setSuffix(" %")
@@ -454,12 +479,12 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_stoch_rsi.setToolTip("RSI보다 민감한 과매수/과매도 감지")
         layout.addWidget(self.chk_use_stoch_rsi, 11, 0)
         layout.addWidget(QLabel("상한:"), 11, 1)
-        self.spin_stoch_upper = QSpinBox()
+        self.spin_stoch_upper = NoScrollSpinBox()
         self.spin_stoch_upper.setRange(60, 95)
         self.spin_stoch_upper.setValue(80)
         layout.addWidget(self.spin_stoch_upper, 11, 2)
         layout.addWidget(QLabel("하한:"), 11, 3)
-        self.spin_stoch_lower = QSpinBox()
+        self.spin_stoch_lower = NoScrollSpinBox()
         self.spin_stoch_lower.setRange(5, 40)
         self.spin_stoch_lower.setValue(20)
         layout.addWidget(self.spin_stoch_lower, 11, 4)
@@ -489,7 +514,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_market_limit.setToolTip("코스피/코스닥 비중 제한")
         layout.addWidget(self.chk_use_market_limit, 14, 0)
         layout.addWidget(QLabel("최대%:"), 14, 1)
-        self.spin_market_limit = QSpinBox()
+        self.spin_market_limit = NoScrollSpinBox()
         self.spin_market_limit.setRange(50, 100)
         self.spin_market_limit.setValue(70)
         layout.addWidget(self.spin_market_limit, 14, 2)
@@ -499,7 +524,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_sector_limit.setToolTip("동일 업종 투자 비중 제한")
         layout.addWidget(self.chk_use_sector_limit, 14, 3)
         layout.addWidget(QLabel("%:"), 14, 4)
-        self.spin_sector_limit = QSpinBox()
+        self.spin_sector_limit = NoScrollSpinBox()
         self.spin_sector_limit.setRange(10, 50)
         self.spin_sector_limit.setValue(30)
         layout.addWidget(self.spin_sector_limit, 14, 5)
@@ -509,7 +534,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_atr_stop.setToolTip("변동성 기반 동적 손절선")
         layout.addWidget(self.chk_use_atr_stop, 15, 0)
         layout.addWidget(QLabel("배수:"), 15, 1)
-        self.spin_atr_mult = QDoubleSpinBox()
+        self.spin_atr_mult = NoScrollDoubleSpinBox()
         self.spin_atr_mult.setRange(1.0, 5.0)
         self.spin_atr_mult.setValue(2.0)
         layout.addWidget(self.spin_atr_mult, 15, 2)
@@ -529,7 +554,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_liquidity.setChecked(Config.DEFAULT_USE_LIQUIDITY)
         layout.addWidget(self.chk_use_liquidity, 17, 0)
         layout.addWidget(QLabel("최소(억):"), 17, 1)
-        self.spin_min_value = QDoubleSpinBox()
+        self.spin_min_value = NoScrollDoubleSpinBox()
         self.spin_min_value.setRange(1, 500)
         self.spin_min_value.setValue(Config.DEFAULT_MIN_AVG_VALUE / 100_000_000)
         self.spin_min_value.setSuffix(" 억")
@@ -541,7 +566,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_spread.setChecked(Config.DEFAULT_USE_SPREAD)
         layout.addWidget(self.chk_use_spread, 18, 0)
         layout.addWidget(QLabel("최대%:"), 18, 1)
-        self.spin_spread_max = QDoubleSpinBox()
+        self.spin_spread_max = NoScrollDoubleSpinBox()
         self.spin_spread_max.setRange(0.05, 2.0)
         self.spin_spread_max.setValue(Config.DEFAULT_MAX_SPREAD_PCT)
         self.spin_spread_max.setSuffix(" %")
@@ -553,7 +578,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_breakout_confirm.setChecked(Config.DEFAULT_USE_BREAKOUT_CONFIRM)
         layout.addWidget(self.chk_use_breakout_confirm, 19, 0)
         layout.addWidget(QLabel("틱수:"), 19, 1)
-        self.spin_breakout_ticks = QSpinBox()
+        self.spin_breakout_ticks = NoScrollSpinBox()
         self.spin_breakout_ticks.setRange(1, 10)
         self.spin_breakout_ticks.setValue(Config.DEFAULT_BREAKOUT_TICKS)
         layout.addWidget(self.spin_breakout_ticks, 19, 2)
@@ -564,7 +589,7 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_cooldown.setChecked(Config.DEFAULT_USE_COOLDOWN)
         layout.addWidget(self.chk_use_cooldown, 20, 0)
         layout.addWidget(QLabel("분:"), 20, 1)
-        self.spin_cooldown_min = QSpinBox()
+        self.spin_cooldown_min = NoScrollSpinBox()
         self.spin_cooldown_min.setRange(1, 120)
         self.spin_cooldown_min.setValue(Config.DEFAULT_COOLDOWN_MINUTES)
         layout.addWidget(self.spin_cooldown_min, 20, 2)
@@ -575,13 +600,80 @@ class KiwoomProTrader(QMainWindow):
         self.chk_use_time_stop.setChecked(Config.DEFAULT_USE_TIME_STOP)
         layout.addWidget(self.chk_use_time_stop, 21, 0)
         layout.addWidget(QLabel("분:"), 21, 1)
-        self.spin_time_stop_min = QSpinBox()
+        self.spin_time_stop_min = NoScrollSpinBox()
         self.spin_time_stop_min.setRange(5, 480)
         self.spin_time_stop_min.setValue(Config.DEFAULT_MAX_HOLD_MINUTES)
         layout.addWidget(self.spin_time_stop_min, 21, 2)
 
+        
+        # === 이벤트 연결 및 초기 상태 설정 ===
+        self.chk_use_rsi.toggled.connect(lambda s: self.spin_rsi_upper.setEnabled(s))
+        self.chk_use_rsi.toggled.connect(lambda s: self.spin_rsi_period.setEnabled(s))
+        self.spin_rsi_upper.setEnabled(self.chk_use_rsi.isChecked())
+        self.spin_rsi_period.setEnabled(self.chk_use_rsi.isChecked())
+        
+        # MACD (입력 필드 없음, 체크박스만 있음)
+        
+        self.chk_use_bb.toggled.connect(lambda s: self.spin_bb_k.setEnabled(s))
+        self.spin_bb_k.setEnabled(self.chk_use_bb.isChecked())
+        
+        self.chk_use_dmi.toggled.connect(lambda s: self.spin_adx.setEnabled(s))
+        self.spin_adx.setEnabled(self.chk_use_dmi.isChecked())
+        
+        self.chk_use_volume.toggled.connect(lambda s: self.spin_volume_mult.setEnabled(s))
+        self.spin_volume_mult.setEnabled(self.chk_use_volume.isChecked())
+        
+        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_loss.setEnabled(s))
+        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_holdings.setEnabled(s))
+        self.spin_max_loss.setEnabled(self.chk_use_risk.isChecked())
+        self.spin_max_holdings.setEnabled(self.chk_use_risk.isChecked())
+        
+        self.chk_use_ma.toggled.connect(lambda s: self.spin_ma_short.setEnabled(s))
+        self.chk_use_ma.toggled.connect(lambda s: self.spin_ma_long.setEnabled(s))
+        self.spin_ma_short.setEnabled(self.chk_use_ma.isChecked())
+        self.spin_ma_long.setEnabled(self.chk_use_ma.isChecked())
+        
+        self.chk_use_atr_sizing.toggled.connect(lambda s: self.spin_risk_percent.setEnabled(s))
+        self.spin_risk_percent.setEnabled(self.chk_use_atr_sizing.isChecked())
+        
+        self.chk_use_split.toggled.connect(lambda s: self.spin_split_count.setEnabled(s))
+        self.chk_use_split.toggled.connect(lambda s: self.spin_split_percent.setEnabled(s))
+        self.spin_split_count.setEnabled(self.chk_use_split.isChecked())
+        self.spin_split_percent.setEnabled(self.chk_use_split.isChecked())
+        
+        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_upper.setEnabled(s))
+        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_lower.setEnabled(s))
+        self.spin_stoch_upper.setEnabled(self.chk_use_stoch_rsi.isChecked())
+        self.spin_stoch_lower.setEnabled(self.chk_use_stoch_rsi.isChecked())
+        
+        # MTF, 단계별 익절, 갭 분석, 동적 사이징 (현재 입력 필드 없음 혹은 로직상 별도 처리)
+        
+        self.chk_use_market_limit.toggled.connect(lambda s: self.spin_market_limit.setEnabled(s))
+        self.spin_market_limit.setEnabled(self.chk_use_market_limit.isChecked())
+        
+        self.chk_use_sector_limit.toggled.connect(lambda s: self.spin_sector_limit.setEnabled(s))
+        self.spin_sector_limit.setEnabled(self.chk_use_sector_limit.isChecked())
+        
+        self.chk_use_atr_stop.toggled.connect(lambda s: self.spin_atr_mult.setEnabled(s))
+        self.spin_atr_mult.setEnabled(self.chk_use_atr_stop.isChecked())
+        
+        self.chk_use_liquidity.toggled.connect(lambda s: self.spin_min_value.setEnabled(s))
+        self.spin_min_value.setEnabled(self.chk_use_liquidity.isChecked())
+        
+        self.chk_use_spread.toggled.connect(lambda s: self.spin_spread_max.setEnabled(s))
+        self.spin_spread_max.setEnabled(self.chk_use_spread.isChecked())
+        
+        self.chk_use_breakout_confirm.toggled.connect(lambda s: self.spin_breakout_ticks.setEnabled(s))
+        self.spin_breakout_ticks.setEnabled(self.chk_use_breakout_confirm.isChecked())
+        
+        self.chk_use_cooldown.toggled.connect(lambda s: self.spin_cooldown_min.setEnabled(s))
+        self.spin_cooldown_min.setEnabled(self.chk_use_cooldown.isChecked())
+        
+        self.chk_use_time_stop.toggled.connect(lambda s: self.spin_time_stop_min.setEnabled(s))
+        self.spin_time_stop_min.setEnabled(self.chk_use_time_stop.isChecked())
+
         layout.setRowStretch(22, 1)
-        return widget
+        return main_widget
     
     def _create_chart_tab(self):
         """📈 차트 시각화 탭"""
@@ -595,7 +687,7 @@ class KiwoomProTrader(QMainWindow):
         self.chart_code_input.setMaximumWidth(100)
         ctrl_layout.addWidget(self.chart_code_input)
         
-        self.chart_type_combo = QComboBox()
+        self.chart_type_combo = NoScrollComboBox()
         self.chart_type_combo.addItems(["일봉", "주봉", "1분봉", "5분봉", "15분봉", "30분봉", "60분봉"])
         ctrl_layout.addWidget(self.chart_type_combo)
         
@@ -685,7 +777,7 @@ class KiwoomProTrader(QMainWindow):
         # 조건식 선택
         ctrl_layout = QHBoxLayout()
         ctrl_layout.addWidget(QLabel("조건식:"))
-        self.condition_combo = QComboBox()
+        self.condition_combo = NoScrollComboBox()
         self.condition_combo.setMinimumWidth(200)
         ctrl_layout.addWidget(self.condition_combo)
         
@@ -722,11 +814,11 @@ class KiwoomProTrader(QMainWindow):
         
         # 순위 유형 선택
         ctrl_layout = QHBoxLayout()
-        self.ranking_type = QComboBox()
+        self.ranking_type = NoScrollComboBox()
         self.ranking_type.addItems(["거래량 상위", "상승률 상위", "하락률 상위"])
         ctrl_layout.addWidget(self.ranking_type)
         
-        self.ranking_market = QComboBox()
+        self.ranking_market = NoScrollComboBox()
         self.ranking_market.addItems(["전체", "코스피", "코스닥"])
         ctrl_layout.addWidget(self.ranking_market)
         
@@ -971,10 +1063,8 @@ class KiwoomProTrader(QMainWindow):
     
     def _create_stock_panel(self):
         """주식 테이블 + 로그 패널 (내부 스플리터)"""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setHandleWidth(6)
         
         # 주식 테이블
         self.table = QTableWidget()
@@ -982,18 +1072,21 @@ class KiwoomProTrader(QMainWindow):
         self.table.setColumnCount(len(cols))
         self.table.setHorizontalHeaderLabels(cols)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        layout.addWidget(self.table, 3)  # 비율 3
+        splitter.addWidget(self.table)
         
         # 로그 영역
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setMinimumHeight(100)
-        layout.addWidget(self.log_text, 1)  # 비율 1
+        splitter.addWidget(self.log_text)
         
-        return panel
+        # 초기 비율 설정 (대략 3:1)
+        splitter.setSizes([600, 200])
+        
+        return splitter
     
     def _create_statusbar(self):
         # 시간 표시
@@ -1172,8 +1265,28 @@ class KiwoomProTrader(QMainWindow):
         secret_key = self.input_secret.text().strip()
         
         if not app_key or not secret_key:
-            QMessageBox.warning(self, "경고", "App Key와 Secret Key를 입력해주세요.")
+            # API 탭(인덱스 8)으로 이동
+            tabs = self.centralWidget().findChild(QTabWidget)
+            if tabs:
+                tabs.setCurrentIndex(8)
+            
+            # 입력 필드 강조 (빨간 테두리)
+            if not app_key:
+                self.input_app_key.setStyleSheet("border: 2px solid #ff5555;")
+            else:
+                self.input_app_key.setStyleSheet("")
+                
+            if not secret_key:
+                self.input_secret.setStyleSheet("border: 2px solid #ff5555;")
+            else:
+                self.input_secret.setStyleSheet("")
+                
+            QMessageBox.warning(self, "경고", "API 연동을 위해 App Key와 Secret Key를 입력해주세요.")
             return
+        
+        # 입력 스타일 초기화
+        self.input_app_key.setStyleSheet("")
+        self.input_secret.setStyleSheet("")
         
         self.log("🔄 API 연결 시도...")
         self.lbl_status.setText("● 연결 중...")

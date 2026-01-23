@@ -85,11 +85,7 @@ excludes = [
     'psycopg2',
     
     # 빌드 도구
-    'setuptools',
-    'distutils',
     'lib2to3',
-    'pip',
-    'wheel',
     
     # 문서화
     'sphinx',
