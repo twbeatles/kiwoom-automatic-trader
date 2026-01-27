@@ -1,6 +1,6 @@
 ﻿# -*- mode: python ; coding: utf-8 -*-
 """
-Kiwoom Pro Algo-Trader v4.3 - PyInstaller Build Specification
+Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 경량화 최적화 빌드 설정 (ONEFILE 모드)
 """
 
@@ -12,7 +12,7 @@ block_cipher = None
 # ============================================================================
 # 데이터 파일 수집
 # ============================================================================
-datas = []
+datas = [('icon.png', '.')] # 아이콘 파일 포함 (만약 있다면)
 
 # ============================================================================
 # 숨겨진 imports (자동 감지 안 되는 모듈)
@@ -44,6 +44,9 @@ hiddenimports = [
     # 유틸리티
     'dateutil',
     'dateutil.parser',
+    
+    # 시스템
+    'winreg',
 ]
 
 # ============================================================================
@@ -130,7 +133,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='KiwoomTrader_v4.3',
+    name='KiwoomTrader_v4.5',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

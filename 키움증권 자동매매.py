@@ -15,6 +15,8 @@ import json
 import csv
 import datetime
 import logging
+import winreg
+import keyring  # v4.4 for Secure Key Storage
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -22,7 +24,7 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import QColor, QFont, QTextCursor, QIcon, QAction, QShortcut, QKeySequence
 
-from config import Config
+from config import Config, TradingConfig
 from strategy_manager import StrategyManager
 from sound_notifier import SoundNotifier
 from profile_manager import ProfileManager
@@ -60,11 +62,36 @@ class NoScrollComboBox(QComboBox):
         event.ignore()
 
 # ============================================================================
+class WorkerSignals(QObject):
+    finished = pyqtSignal(object)
+    error = pyqtSignal(Exception)
+    progress = pyqtSignal(int)
+
+class Worker(QRunnable):
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+    @pyqtSlot()
+    def run(self):
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+            self.signals.finished.emit(result)
+        except Exception as e:
+            self.signals.error.emit(e)
+
+# ============================================================================
 # 메인 트레이더 클래스
 # ============================================================================
 class KiwoomProTrader(QMainWindow):
     sig_log = pyqtSignal(str)
     sig_execution = pyqtSignal(object)
+    sig_log = pyqtSignal(str)
+    sig_execution = pyqtSignal(object)
+    sig_order_execution = pyqtSignal(object)
     sig_update_table = pyqtSignal()
     
     def __init__(self):
@@ -104,6 +131,9 @@ class KiwoomProTrader(QMainWindow):
         self.sound: Optional[SoundNotifier] = None
         self.profile_manager = ProfileManager(Config.DATA_DIR)
         
+        # v4.5 아키텍처 개선 (TradingConfig)
+        self.config = TradingConfig()
+        
         # 로깅
         self._setup_logging()
         self._load_trade_history()
@@ -111,7 +141,11 @@ class KiwoomProTrader(QMainWindow):
         # 시그널 연결
         self.sig_log.connect(self._append_log)
         self.sig_execution.connect(self._on_execution)
+        self.sig_order_execution.connect(self._on_order_execution)
         self.sig_update_table.connect(self._refresh_table)
+        
+        # 전략 매니저 (Config 전달)
+        self.strategy = StrategyManager(self, self.config)
         
         # UI
         self._init_ui()
@@ -120,11 +154,86 @@ class KiwoomProTrader(QMainWindow):
         self._setup_timers()
         self._setup_shortcuts()  # v4.3 키보드 단축키
         self._load_settings()
+        self._connect_config_signals()  # 설정 UI 시그널 연결
         
         # 사운드 초기화
         self.sound = SoundNotifier(enabled=False)
         
+        # 스레드 풀 초기화
+        self.threadpool = QThreadPool()
+        
         self.logger.info("프로그램 초기화 완료 (v4.3)")
+
+    def _connect_config_signals(self):
+        """UI 변경사항을 TradingConfig에 실시간 반영"""
+        # 기본 설정
+        self.spin_betting.valueChanged.connect(lambda v: setattr(self.config, 'betting_ratio', v))
+        self.spin_k.valueChanged.connect(lambda v: setattr(self.config, 'k_value', v))
+        self.spin_ts_start.valueChanged.connect(lambda v: setattr(self.config, 'ts_start', v))
+        self.spin_ts_stop.valueChanged.connect(lambda v: setattr(self.config, 'ts_stop', v))
+        self.spin_loss.valueChanged.connect(lambda v: setattr(self.config, 'loss_cut', v))
+        
+        # RSI
+        self.chk_use_rsi.toggled.connect(lambda v: setattr(self.config, 'use_rsi', v))
+        self.spin_rsi_upper.valueChanged.connect(lambda v: setattr(self.config, 'rsi_upper', v))
+        self.spin_rsi_period.valueChanged.connect(lambda v: setattr(self.config, 'rsi_period', v))
+        
+        # MACD
+        self.chk_use_macd.toggled.connect(lambda v: setattr(self.config, 'use_macd', v))
+        
+        # 볼린저
+        self.chk_use_bb.toggled.connect(lambda v: setattr(self.config, 'use_bb', v))
+        self.spin_bb_k.valueChanged.connect(lambda v: setattr(self.config, 'bb_k', v))
+        
+        # 거래량
+        self.chk_use_volume.toggled.connect(lambda v: setattr(self.config, 'use_volume', v))
+        self.spin_volume_mult.valueChanged.connect(lambda v: setattr(self.config, 'volume_mult', v))
+        
+        # 리스크
+        self.chk_use_risk.toggled.connect(lambda v: setattr(self.config, 'use_risk_mgmt', v))
+        self.spin_max_holdings.valueChanged.connect(lambda v: setattr(self.config, 'max_holdings', v))
+        
+        # 신규 전략들
+        self.chk_use_stoch_rsi.toggled.connect(lambda v: setattr(self.config, 'use_stoch_rsi', v))
+        self.spin_stoch_upper.valueChanged.connect(lambda v: setattr(self.config, 'stoch_upper', v))
+        self.spin_stoch_lower.valueChanged.connect(lambda v: setattr(self.config, 'stoch_lower', v))
+        
+        self.chk_use_mtf.toggled.connect(lambda v: setattr(self.config, 'use_mtf', v))
+        self.chk_use_gap.toggled.connect(lambda v: setattr(self.config, 'use_gap', v))
+        self.chk_use_partial_profit.toggled.connect(lambda v: setattr(self.config, 'use_partial_profit', v))
+        self.chk_use_dynamic_sizing.toggled.connect(lambda v: setattr(self.config, 'use_dynamic_sizing', v))
+        
+        self.chk_use_atr_stop.toggled.connect(lambda v: setattr(self.config, 'use_atr_stop', v))
+        self.spin_atr_mult.valueChanged.connect(lambda v: setattr(self.config, 'atr_mult', v))
+        
+        self.chk_use_liquidity.toggled.connect(lambda v: setattr(self.config, 'use_liquidity', v))
+        self.spin_min_value.valueChanged.connect(lambda v: setattr(self.config, 'min_avg_value', int(v)))
+        
+        self.chk_use_spread.toggled.connect(lambda v: setattr(self.config, 'use_spread', v))
+        self.spin_spread_max.valueChanged.connect(lambda v: setattr(self.config, 'max_spread', v))
+        
+        self.chk_use_market_limit.toggled.connect(lambda v: setattr(self.config, 'use_market_limit', v))
+        self.spin_market_limit.valueChanged.connect(lambda v: setattr(self.config, 'market_limit', v))
+        
+        self.chk_use_sector_limit.toggled.connect(lambda v: setattr(self.config, 'use_sector_limit', v))
+        self.spin_sector_limit.valueChanged.connect(lambda v: setattr(self.config, 'sector_limit', v))
+
+        # DMI
+        self.chk_use_dmi.toggled.connect(lambda v: setattr(self.config, 'use_dmi', v))
+        self.spin_adx.valueChanged.connect(lambda v: setattr(self.config, 'adx_threshold', v))
+
+        # MA Crossover
+        self.chk_use_ma.toggled.connect(lambda v: setattr(self.config, 'use_ma', v))
+        self.spin_ma_short.valueChanged.connect(lambda v: setattr(self.config, 'ma_short', v))
+        self.spin_ma_long.valueChanged.connect(lambda v: setattr(self.config, 'ma_long', v))
+
+        # Split Orders
+        self.chk_use_split.toggled.connect(lambda v: setattr(self.config, 'use_split', v))
+        self.spin_split_count.valueChanged.connect(lambda v: setattr(self.config, 'split_count', v))
+        self.spin_split_percent.valueChanged.connect(lambda v: setattr(self.config, 'split_percent', v))
+
+        # Time Strategy
+        self.chk_use_time_strategy.toggled.connect(lambda v: setattr(self.config, 'use_time_strategy', v))
 
     
     def _setup_logging(self):
@@ -161,75 +270,130 @@ class KiwoomProTrader(QMainWindow):
         self._create_statusbar()
     
     def _create_dashboard(self):
-        group = QGroupBox("📊 Trading Dashboard")
-        group.setObjectName("dashboardCard")  # 글래스모피즘 스타일 적용
-        layout = QHBoxLayout()
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 12, 16, 12)
+        """
+        메인 대시보드 생성 - 시장 상태, 계좌 정보, 빠른 실행 버튼 포함
+        v4.4 디자인 리팩토링 - 더 깔끔한 레이아웃과 항상 보이는 컨트롤
+        """
+        group = QGroupBox("📊 트레이딩 대시보드")
+        group.setObjectName("dashboardCard")
         
-        # 연결 버튼
+        # 메인 레이아웃 (가로: 상태 패널 | 컨트롤 패널)
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # --- 왼쪽 패널: 계좌 & 상태 정보 ---
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(15)
+        
+        # 행 1: API 연결 & 계좌 선택
+        row1 = QHBoxLayout()
         self.btn_connect = QPushButton("🔌 API 연결")
         self.btn_connect.setObjectName("connectBtn")
+        self.btn_connect.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_connect.clicked.connect(self.connect_api)
-        self.btn_connect.setMinimumWidth(140)
+        self.btn_connect.setMinimumWidth(120)
         
-        # 계좌 선택
-        account_layout = QHBoxLayout()
-        account_layout.setSpacing(8)
-        lbl_account = QLabel("계좌:")
-        lbl_account.setStyleSheet("color: #8b949e; font-weight: 500;")
+        lbl_account = QLabel("계좌번호:")
+        lbl_account.setStyleSheet("color: #8b949e; font-weight: 600;")
         self.combo_acc = NoScrollComboBox()
-        self.combo_acc.setMinimumWidth(160)
+        self.combo_acc.setMinimumWidth(180)
         self.combo_acc.currentTextChanged.connect(self._on_account_changed)
-        account_layout.addWidget(lbl_account)
-        account_layout.addWidget(self.combo_acc)
         
-        # 예수금 라벨 (강조 스타일)
-        self.lbl_deposit = QLabel("💰 예수금: - 원")
+        row1.addWidget(self.btn_connect)
+        row1.addWidget(lbl_account)
+        row1.addWidget(self.combo_acc)
+        row1.addStretch()
+        
+        # 행 2: 주요 지표 (예수금, 손익, 연결상태)
+        row2 = QHBoxLayout()
+        row2.setSpacing(12)
+        
+        self.lbl_deposit = QLabel("💰 예수금: -")
         self.lbl_deposit.setStyleSheet("""
-            color: #e6edf3;
-            font-weight: bold;
-            font-size: 14px;
-            padding: 8px 16px;
-            background: rgba(88, 166, 255, 0.1);
-            border-radius: 10px;
-            border: 1px solid rgba(88, 166, 255, 0.2);
+            color: #e6edf3; font-weight: bold; font-size: 15px;
+            padding: 10px 15px; border-radius: 8px;
+            background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.2);
         """)
         
-        # 손익 라벨 (동적 스타일 - 기본 중립)
-        self.lbl_profit = QLabel("📈 손익: - 원")
+        self.lbl_profit = QLabel("📈 당일손익: -")
         self.lbl_profit.setObjectName("profitLabel")
         self.lbl_profit.setStyleSheet("""
-            color: #e6edf3;
-            font-weight: bold;
-            font-size: 14px;
-            padding: 8px 16px;
-            background: rgba(139, 148, 158, 0.1);
-            border-radius: 10px;
-            border: 1px solid rgba(139, 148, 158, 0.2);
+            color: #e6edf3; font-weight: bold; font-size: 15px;
+            padding: 10px 15px; border-radius: 8px;
+            background: rgba(139, 148, 158, 0.1); border: 1px solid rgba(139, 148, 158, 0.2);
         """)
         
-        # 상태 인디케이터 (펄스 효과 스타일)
-        self.lbl_status = QLabel("● 연결 대기")
-        self.lbl_status.setObjectName("statusPending")
-        self.lbl_status.setStyleSheet("""
-            color: #d29922;
-            font-weight: bold;
-            font-size: 13px;
-            padding: 8px 16px;
-            background: rgba(210, 153, 34, 0.15);
-            border-radius: 14px;
-            border: 1px solid rgba(210, 153, 34, 0.3);
-        """)
+        self.lbl_status = QLabel("● 연결 끊김")
+        self.lbl_status.setObjectName("statusDisconnected")
         
-        layout.addWidget(self.btn_connect)
-        layout.addLayout(account_layout)
-        layout.addSpacing(24)
-        layout.addWidget(self.lbl_deposit)
-        layout.addWidget(self.lbl_profit)
-        layout.addStretch()
-        layout.addWidget(self.lbl_status)
-        group.setLayout(layout)
+        row2.addWidget(self.lbl_deposit)
+        row2.addWidget(self.lbl_profit)
+        row2.addWidget(self.lbl_status)
+        row2.addStretch()
+        
+        left_panel.addLayout(row1)
+        left_panel.addLayout(row2)
+        
+        # --- 오른쪽 패널: 빠른 실행 (그리드) ---
+        right_panel = QGridLayout()
+        right_panel.setSpacing(10)
+        
+        # 시작/중지 버튼
+        self.btn_start = QPushButton("🚀 자동매매 시작")
+        self.btn_start.setObjectName("startBtn")
+        self.btn_start.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_start.clicked.connect(self.start_trading)
+        self.btn_start.setEnabled(False)
+        self.btn_start.setMinimumHeight(45)
+        
+        self.btn_stop = QPushButton("⏹️ 중지")
+        self.btn_stop.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_stop.clicked.connect(self.stop_trading)
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.setStyleSheet("""
+            QPushButton { background-color: #30363d; border: 1px solid #8b949e; }
+            QPushButton:hover { background-color: #3b434b; }
+        """)
+        self.btn_stop.setMinimumHeight(45)
+        
+        # 긴급 청산 버튼
+        self.btn_emergency = QPushButton("🚨 긴급 전량청산")
+        self.btn_emergency.setObjectName("emergencyBtn")
+        self.btn_emergency.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_emergency.setStyleSheet("""
+            QPushButton { 
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #9a6700, stop:1 #d29922); 
+                color: white; border: none; font-weight: bold;
+            }
+            QPushButton:hover { background: #d29922; }
+            QPushButton:pressed { background: #9a6700; }
+        """)
+        self.btn_emergency.clicked.connect(self._emergency_liquidate)
+        self.btn_emergency.setEnabled(False)
+        
+        # 보조 버튼
+        btn_preset = QPushButton("📋 프리셋")
+        btn_preset.clicked.connect(self._open_presets)
+        
+        btn_search = QPushButton("🔍 종목검색")
+        btn_search.clicked.connect(self._open_stock_search)
+        
+        # 그리드에 위젯 추가
+        # 행 0: 시작 | 중지
+        right_panel.addWidget(self.btn_start, 0, 0, 1, 2)
+        right_panel.addWidget(self.btn_stop, 0, 2, 1, 2)
+        
+        # 행 1: 프리셋 | 검색 | 긴급청산
+        right_panel.addWidget(btn_preset, 1, 0, 1, 1)
+        right_panel.addWidget(btn_search, 1, 1, 1, 1)
+        right_panel.addWidget(self.btn_emergency, 1, 2, 1, 2)
+        
+        # 메인 레이아웃에 패널 추가
+        main_layout.addLayout(left_panel, 65) # 너비 65%
+        main_layout.addLayout(right_panel, 35) # 너비 35%
+        
+        group.setLayout(main_layout)
         return group
     
     def _create_tabs(self):
@@ -307,40 +471,9 @@ class KiwoomProTrader(QMainWindow):
         self.spin_loss.setSuffix(" %")
         layout.addWidget(self.spin_loss, 2, 5)
         
-        # 버튼
-        btn_layout = QHBoxLayout()
-        self.btn_start = QPushButton("🚀 매매 시작")
-        self.btn_start.setObjectName("startBtn")
-        self.btn_start.clicked.connect(self.start_trading)
-        self.btn_start.setEnabled(False)
-        
-        self.btn_stop = QPushButton("⏹️ 매매 중지")
-        self.btn_stop.clicked.connect(self.stop_trading)
-        self.btn_stop.setEnabled(False)
-        
-        btn_preset = QPushButton("📋 프리셋")
-        btn_preset.clicked.connect(self._open_presets)
-        
-        btn_layout.addWidget(self.btn_start)
-        btn_layout.addWidget(self.btn_stop)
-        btn_layout.addWidget(btn_preset)
-        
-        # 긴급 청산 버튼 (v4.3)
-        self.btn_emergency = QPushButton("🚨 긴급청산")
-        self.btn_emergency.setObjectName("emergencyBtn")
-        self.btn_emergency.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffc107, stop:1 #ff9800); color: #000;")
-        self.btn_emergency.clicked.connect(self._emergency_liquidate)
-        self.btn_emergency.setEnabled(False)
-        btn_layout.addWidget(self.btn_emergency)
-        
-        # 종목 검색 버튼 (v4.3)
-        btn_search = QPushButton("🔍 종목검색")
-        btn_search.clicked.connect(self._open_stock_search)
-        btn_layout.addWidget(btn_search)
-        
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout, 3, 0, 1, 6)
-
+        # 버튼들이 대시보드로 이동됨 (v4.4)
+        # 공간 확보를 위한 스트레치
+        layout.setRowStretch(3, 1)
         
         return widget
     
@@ -671,9 +804,44 @@ class KiwoomProTrader(QMainWindow):
         
         self.chk_use_time_stop.toggled.connect(lambda s: self.spin_time_stop_min.setEnabled(s))
         self.spin_time_stop_min.setEnabled(self.chk_use_time_stop.isChecked())
+        
+        # === 시스템 설정 (v4.4 신규) ===
+        layout.addWidget(QLabel("─── 시스템 설정 ───"), 22, 0, 1, 5)
+        
+        self.chk_auto_start = QCheckBox("윈도우 시작 시 자동 실행")
+        self.chk_auto_start.setToolTip("윈도우 부팅 시 프로그램이 자동으로 시작됩니다.")
+        self.chk_auto_start.toggled.connect(self._set_auto_start)
+        layout.addWidget(self.chk_auto_start, 23, 0, 1, 2)
+        
+        self.chk_minimize_tray = QCheckBox("종료 시 트레이로 최소화")
+        self.chk_minimize_tray.setToolTip("창을 닫아도 프로그램이 종료되지 않고 트레이 아이콘으로 숨겨집니다.")
+        self.chk_minimize_tray.setChecked(Config.DEFAULT_MINIMIZE_TO_TRAY)
+        layout.addWidget(self.chk_minimize_tray, 23, 2, 1, 3)
 
-        layout.setRowStretch(22, 1)
+        layout.setRowStretch(24, 1)
         return main_widget
+        
+    def _set_auto_start(self, enabled):
+        """윈도우 시작 레지스트리 등록/해제"""
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "KiwoomProTrader"
+        try:
+            exe_path = f'"{os.path.abspath(sys.argv[0])}"'
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            if enabled:
+                winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, exe_path)
+                self.logger.info("자동 실행 등록 완료")
+            else:
+                try:
+                    winreg.DeleteValue(key, app_name)
+                    self.logger.info("자동 실행 해제 완료")
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+        except Exception as e:
+            self.logger.error(f"자동 실행 설정 오류: {e}")
+            QMessageBox.warning(self, "오류", f"레지스트리 설정 실패: {e}")
+            self.chk_auto_start.setChecked(not enabled)  # 롤백
     
     def _create_chart_tab(self):
         """📈 차트 시각화 탭"""
@@ -839,7 +1007,7 @@ class KiwoomProTrader(QMainWindow):
     
     # === 새로운 탭 이벤트 핸들러 ===
     def _load_chart(self):
-        """차트 데이터 조회"""
+        """차트 데이터 조회 (비동기)"""
         if not self.rest_client:
             self.log("❌ API 연결 필요")
             return
@@ -847,38 +1015,86 @@ class KiwoomProTrader(QMainWindow):
         code = self.chart_code_input.text().strip()
         chart_type = self.chart_type_combo.currentText()
         
-        try:
+        # 버튼 비활성화
+        btn = self.sender()
+        if isinstance(btn, QPushButton):
+            btn.setEnabled(False)
+            btn.setText("⏳ 조회 중...")
+        
+        def worker_fn():
+            # API 호출 (백그라운드)
             if "일봉" in chart_type:
-                data = self.rest_client.get_daily_chart(code, 60)
+                return self.rest_client.get_daily_chart(code, 60)
             elif "주봉" in chart_type:
-                data = self.rest_client.get_weekly_chart(code, 52)
+                return self.rest_client.get_weekly_chart(code, 52)
             else:
                 interval = int(chart_type.replace("분봉", ""))
-                data = self.rest_client.get_minute_chart(code, interval, 60)
+                return self.rest_client.get_minute_chart(code, interval, 60)
+        
+        def on_complete(data):
+            # UI 복구
+            if isinstance(btn, QPushButton):
+                btn.setEnabled(True)
+                btn.setText("🔄 차트 조회")
             
-            self.chart_table.setRowCount(len(data))
-            for i, candle in enumerate(data):
-                items = [candle.date, f"{candle.open_price:,}", f"{candle.high_price:,}",
-                        f"{candle.low_price:,}", f"{candle.close_price:,}", f"{candle.volume:,}"]
-                for j, text in enumerate(items):
-                    self.chart_table.setItem(i, j, QTableWidgetItem(str(text)))
-            
-            self.chart_info.setText(f"📊 {code} {chart_type} - {len(data)}개 조회")
-            self.log(f"📈 차트 조회: {code} ({chart_type})")
-        except Exception as e:
+            if not data:
+                self.chart_info.setText("❌ 데이터 없음")
+                self.log(f"❌ 차트 데이터 없음: {code}")
+                return
+
+            try:
+                self.chart_table.setRowCount(len(data))
+                for i, candle in enumerate(data):
+                    items = [candle.date, f"{candle.open_price:,}", f"{candle.high_price:,}",
+                            f"{candle.low_price:,}", f"{candle.close_price:,}", f"{candle.volume:,}"]
+                    for j, text in enumerate(items):
+                        self.chart_table.setItem(i, j, QTableWidgetItem(str(text)))
+                
+                self.chart_info.setText(f"📊 {code} {chart_type} - {len(data)}개 조회")
+                self.log(f"📈 차트 조회 완료: {code} ({chart_type})")
+            except Exception as e:
+                self.log(f"❌ 차트 UI 업데이트 오류: {e}")
+
+        def on_error(e):
+            if isinstance(btn, QPushButton):
+                btn.setEnabled(True)
+                btn.setText("🔄 차트 조회")
             self.log(f"❌ 차트 조회 실패: {e}")
+
+        # 워커 실행
+        worker = Worker(worker_fn)
+        worker.signals.finished.connect(on_complete)
+        worker.signals.error.connect(on_error)
+        self.threadpool.start(worker)
     
     def _load_orderbook(self):
-        """호가 데이터 조회"""
+        """호가 데이터 조회 (비동기)"""
         if not self.rest_client:
             self.log("❌ API 연결 필요")
             return
         
         code = self.hoga_code_input.text().strip()
         
-        try:
-            ob = self.rest_client.get_order_book(code)
-            if ob:
+        # 버튼 비활성화
+        btn = self.sender()
+        if isinstance(btn, QPushButton):
+            btn.setEnabled(False)
+            btn.setText("⏳ 조회 중...")
+            
+        def worker_fn():
+            return self.rest_client.get_order_book(code)
+            
+        def on_complete(ob):
+            # UI 복구
+            if isinstance(btn, QPushButton):
+                btn.setEnabled(True)
+                btn.setText("🔄 호가 조회")
+            
+            if not ob:
+                self.log(f"❌ 호가 데이터 없음: {code}")
+                return
+                
+            try:
                 for i in range(10):
                     # 매도 호가 (역순)
                     idx = 9 - i
@@ -889,9 +1105,20 @@ class KiwoomProTrader(QMainWindow):
                     self.bid_table.setItem(i, 1, QTableWidgetItem(f"{ob.bid_volumes[i]:,}"))
                 
                 self.hoga_info.setText(f"총 매도잔량: {ob.total_ask_volume:,} | 총 매수잔량: {ob.total_bid_volume:,}")
-                self.log(f"📋 호가 조회: {code}")
-        except Exception as e:
+                self.log(f"📋 호가 조회 완료: {code}")
+            except Exception as e:
+                self.log(f"❌ 호가 UI 업데이트 오류: {e}")
+                
+        def on_error(e):
+            if isinstance(btn, QPushButton):
+                btn.setEnabled(True)
+                btn.setText("🔄 호가 조회")
             self.log(f"❌ 호가 조회 실패: {e}")
+            
+        worker = Worker(worker_fn)
+        worker.signals.finished.connect(on_complete)
+        worker.signals.error.connect(on_error)
+        self.threadpool.start(worker)
     
     def _load_conditions(self):
         """조건식 목록 조회"""
@@ -1024,8 +1251,17 @@ class KiwoomProTrader(QMainWindow):
         return widget
     
     def _create_api_tab(self):
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        """API 설정 탭 (스크롤 적용)"""
+        tab_widget = QWidget()
+        tab_layout = QVBoxLayout(tab_widget)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
         
         # API 인증
         group1 = QGroupBox("🔐 REST API 인증")
@@ -1054,12 +1290,27 @@ class KiwoomProTrader(QMainWindow):
         form2.addRow("", self.chk_use_telegram)
         group2.setLayout(form2)
         layout.addWidget(group2)
+
+        # 시스템 설정
+        group3 = QGroupBox("⚙️ 시스템 설정")
+        form3 = QFormLayout()
+        self.chk_auto_start = QCheckBox("윈도우 시작 시 자동 실행")
+        self.chk_auto_start.setToolTip("윈도우 부팅 시 프로그램 자동 시작")
+        self.chk_auto_start.toggled.connect(self._set_auto_start)
+        form3.addRow("", self.chk_auto_start)
+        
+        group3.setLayout(form3)
+        layout.addWidget(group3)
         
         btn_save = QPushButton("💾 설정 저장")
         btn_save.clicked.connect(self._save_settings)
         layout.addWidget(btn_save)
         layout.addStretch()
-        return widget
+        
+        scroll.setWidget(content_widget)
+        tab_layout.addWidget(scroll)
+        
+        return tab_widget
     
     def _create_stock_panel(self):
         """주식 테이블 + 로그 패널 (내부 스플리터)"""
@@ -1154,17 +1405,42 @@ class KiwoomProTrader(QMainWindow):
         help_menu.addAction("ℹ️ 버전 정보", lambda: QMessageBox.information(self, "정보", "Kiwoom Pro Algo-Trader v4.3\nREST API 기반 + 확장 기능"))
     
     def _create_tray(self):
+        """시스템 트레이 아이콘 생성"""
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setToolTip("Kiwoom Trader v4.3")
+        self.tray_icon.setIcon(QIcon("icon.png")) # 아이콘 파일이 없다면 기본 아이콘 사용될 수 있음
+        self.tray_icon.setToolTip("Kiwoom Pro Algo-Trader v4.4")
         
         tray_menu = QMenu()
-        tray_menu.addAction("열기", self.showNormal)
-        tray_menu.addAction("종료", self.close)
+        
+        action_show = QAction("열기", self)
+        action_show.triggered.connect(self.showNormal)
+        tray_menu.addAction(action_show)
+        
+        tray_menu.addSeparator()
+        
+        action_quit = QAction("종료", self)
+        action_quit.triggered.connect(self._force_quit) # 강제 종료 메서드 연결
+        tray_menu.addAction(action_quit)
+        
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(lambda r: self.showNormal() if r == QSystemTrayIcon.ActivationReason.DoubleClick else None)
         self.tray_icon.show()
+        
+    def _force_quit(self):
+        """트레이 메뉴에서 '종료' 선택 시 완전히 프로그램 종료"""
+        reply = QMessageBox.question(self, "종료 확인", 
+                                   "프로그램을 완전히 종료하시겠습니까?",
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                   QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self.stop_trading()
+            # 리소스 정리
+            if self.telegram: self.telegram.stop()
+            if self.sound: self.sound.stop()
+            self.tray_icon.hide()
+            QApplication.quit()
     
     def _setup_timers(self):
         self.timer = QTimer()
@@ -1416,6 +1692,7 @@ class KiwoomProTrader(QMainWindow):
             if self.ws_client:
                 self.ws_client.connect()
                 self.ws_client.subscribe_execution(codes, self._on_realtime)
+                self.ws_client.subscribe_order_execution(self._on_order_realtime)
             
             self._init_universe(codes)
             self.log(f"🚀 매매 시작 - {len(codes)}개 종목")
@@ -1553,6 +1830,26 @@ class KiwoomProTrader(QMainWindow):
     
     def _on_realtime(self, data: ExecutionData):
         self.sig_execution.emit(data)
+
+    def _on_order_realtime(self, data):
+        """주문 체결 실시간 데이터 수신 (WebSocket Thread) -> Main Thread"""
+        self.sig_order_execution.emit(data)
+
+    def _on_order_execution(self, data):
+        """주문 체결/접수/확인 처리 (Main Thread)"""
+        # data format example: {'code': '005930', 'name': '삼성전자', 'order_status': '체결', 'order_type': '매수', ...}
+        # Note: 실제 들어오는 데이터 구조에 따라 파싱 로직 상세화 필요. 여기서는 로그만 출력.
+        try:
+            msg = f"🔔 {data.get('order_type', '주문')} {data.get('order_status', '알림')} - {data.get('name', '')} {data.get('qty', 0)}주"
+            price = data.get('price', 0)
+            if price > 0:
+                msg += f" @ {price:,}원"
+            self.log(msg)
+            
+            # TODO: 체결 시 보유 수량 정밀 동기화 (필요 시)
+            # API 쿼리 사용자가 아닌 WebSocket 체결 정보로 universe 업데이트 가능
+        except Exception as e:
+            self.logger.error(f"주문 체결 처리 오류: {e}")
     
     def _on_execution(self, data: ExecutionData):
         """실시간 체결 데이터 수신 및 매매 결정"""
@@ -1583,6 +1880,11 @@ class KiwoomProTrader(QMainWindow):
         held = info.get("held", 0)
         target = info.get("target", 0)
         buy_price = info.get("buy_price", 0)
+        status = info.get("status", "감시")
+        
+        # 매수/매도 진행 중이면 중복 주문 방지
+        if status in ["매수중", "매도중"]:
+            return
         
         # === 보유 중인 경우: 매도 조건 체크 ===
         if held > 0 and buy_price > 0:
@@ -1676,94 +1978,133 @@ class KiwoomProTrader(QMainWindow):
         self.sig_update_table.emit()
     
     def _execute_buy(self, code: str, quantity: int, price: int):
-        """매수 실행"""
+        """매수 실행 (비동기)"""
         info = self.universe.get(code, {})
         name = info.get("name", code)
         
-        try:
-            if self.rest_client and self.current_account:
-                result = self.rest_client.buy_market(self.current_account, code, quantity)
-                if result.success:
-                    amount = price * quantity
-                    info["held"] = quantity
-                    info["buy_price"] = price
-                    info["status"] = "보유"
-                    info["max_profit_rate"] = 0
-                    info["invest_amount"] = amount
-                    info["buy_time"] = datetime.datetime.now()
-                    info["cooldown_until"] = None
-                    info["breakout_hits"] = 0
-                    
-                    self.log(f"🟢 매수: {name} {quantity}주 @ {price:,}원")
-                    self._add_trade({
-                        "code": code, "name": name, "type": "매수",
-                        "price": price, "quantity": quantity, "amount": amount,
-                        "profit": 0, "reason": "목표가 돌파"
-                    })
-                    
-                    # 투자금 추적 업데이트
-                    self.strategy.update_market_investment(code, amount, is_buy=True)
-                    self.strategy.update_sector_investment(code, amount, is_buy=True)
-                    
-                    if self.sound:
-                        self.sound.play_buy()
-                    if self.telegram:
-                        self.telegram.send(f"🟢 매수: {name} {quantity}주 @ {price:,}원")
-                else:
-                    self.log(f"❌ 매수 실패 [{name}]: {result.message}")
-        except Exception as e:
-            self.log(f"❌ 매수 오류 [{name}]: {e}")
+        if not (self.rest_client and self.current_account):
+            self.log(f"❌ 매수 실패 [{name}]: API 연결 확인 필요")
+            return
+
+        # 중복 주문 방지 상태 설정
+        info["status"] = "매수중"
+
+        worker = Worker(self.rest_client.buy_market, self.current_account, code, quantity)
+        worker.signals.result.connect(lambda res: self._on_buy_result(res, code, name, quantity, price))
+        worker.signals.error.connect(lambda e: self._on_buy_error(e, code, name))
+        self.threadpool.start(worker)
+        
+    def _on_buy_error(self, e, code, name):
+        """매수 오류 처리"""
+        self.log(f"❌ 매수 오류 [{name}]: {e}")
+        # 상태 복구
+        if code in self.universe:
+            self.universe[code]["status"] = "감시"
+
+    def _on_buy_result(self, result, code, name, quantity, price):
+        """매수 결과 처리 (Main Thread)"""
+        if result.success:
+            info = self.universe.get(code, {})
+            amount = price * quantity
+            info["held"] = quantity
+            info["buy_price"] = price
+            info["status"] = "보유"
+            info["max_profit_rate"] = 0
+            info["invest_amount"] = amount
+            info["buy_time"] = datetime.datetime.now()
+            info["cooldown_until"] = None
+            info["breakout_hits"] = 0
+            
+            self.log(f"🟢 매수: {name} {quantity}주 @ {price:,}원")
+            self._add_trade({
+                "code": code, "name": name, "type": "매수",
+                "price": price, "quantity": quantity, "amount": amount,
+                "profit": 0, "reason": "목표가 돌파"
+            })
+            
+            # 투자금 추적 업데이트
+            self.strategy.update_market_investment(code, amount, is_buy=True)
+            self.strategy.update_sector_investment(code, amount, is_buy=True)
+            
+            if self.sound:
+                self.sound.play_buy()
+            if self.telegram:
+                self.telegram.send(f"🟢 매수: {name} {quantity}주 @ {price:,}원")
+        else:
+            self.log(f"❌ 매수 실패 [{name}]: {result.message}")
+            if code in self.universe:
+                self.universe[code]["status"] = "감시"  # 실패 시 상태 복구
     
     def _execute_sell(self, code: str, quantity: int, price: int, reason: str):
-        """매도 실행"""
+        """매도 실행 (비동기)"""
         info = self.universe.get(code, {})
         name = info.get("name", code)
         buy_price = info.get("buy_price", 0)
         
-        try:
-            if self.rest_client and self.current_account:
-                result = self.rest_client.sell_market(self.current_account, code, quantity)
-                if result.success:
-                    amount = price * quantity
-                    profit = (price - buy_price) * quantity if buy_price > 0 else 0
-                    
-                    # 보유 수량 업데이트
-                    remaining = info.get("held", 0) - quantity
-                    if remaining <= 0:
-                        info["held"] = 0
-                        info["buy_price"] = 0
-                        info["status"] = "감시"
-                        info["max_profit_rate"] = 0
-                        info["buy_time"] = None
-                        info["breakout_hits"] = 0
-                        info["cooldown_until"] = None
-                        if hasattr(self, 'chk_use_cooldown') and self.chk_use_cooldown.isChecked():
-                            cooldown_minutes = self.spin_cooldown_min.value()
-                            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(minutes=cooldown_minutes)
-                            info["status"] = "쿨다운"
-                    else:
-                        info["held"] = remaining
-                    
-                    self.log(f"🔴 매도: {name} {quantity}주 @ {price:,}원 ({reason}) 손익: {profit:+,}원")
-                    self._add_trade({
-                        "code": code, "name": name, "type": "매도",
-                        "price": price, "quantity": quantity, "amount": amount,
-                        "profit": profit, "reason": reason
-                    })
-                    
-                    # 연속 손익 업데이트
-                    self.strategy.update_consecutive_results(profit > 0)
-                    self.strategy.update_market_investment(code, amount, is_buy=False)
-                    self.strategy.update_sector_investment(code, amount, is_buy=False)
-                    
-                    if self.sound:
-                        self.sound.play_sell() if profit > 0 else self.sound.play_loss()
-                    if self.telegram:
-                        self.telegram.send(f"🔴 매도: {name} {quantity}주 손익: {profit:+,}원")
-                else:
-                    self.log(f"❌ 매도 실패 [{name}]: {result.message}")
-        except Exception as e:
-            self.log(f"❌ 매도 오류 [{name}]: {e}")
+        if not (self.rest_client and self.current_account):
+            self.log(f"❌ 매도 실패 [{name}]: API 연결 확인 필요")
+            return
+
+        # 중복 주문 방지 상태 설정
+        info["status"] = "매도중"
+
+        worker = Worker(self.rest_client.sell_market, self.current_account, code, quantity)
+        worker.signals.result.connect(lambda res: self._on_sell_result(res, code, name, quantity, price, buy_price, reason))
+        worker.signals.error.connect(lambda e: self._on_sell_error(e, code, name))
+        self.threadpool.start(worker)
+
+    def _on_sell_error(self, e, code, name):
+        """매도 오류 처리"""
+        self.log(f"❌ 매도 오류 [{name}]: {e}")
+        # 상태 복구
+        if code in self.universe:
+            # 보유 중이었으므로 보유 상태로 복구
+            self.universe[code]["status"] = "보유"
+
+    def _on_sell_result(self, result, code, name, quantity, price, buy_price, reason):
+        """매도 결과 처리 (Main Thread)"""
+        if result.success:
+            info = self.universe.get(code, {})
+            amount = price * quantity
+            profit = (price - buy_price) * quantity if buy_price > 0 else 0
+            
+            # 보유 수량 업데이트
+            remaining = info.get("held", 0) - quantity
+            if remaining <= 0:
+                info["held"] = 0
+                info["buy_price"] = 0
+                info["status"] = "감시"
+                info["max_profit_rate"] = 0
+                info["buy_time"] = None
+                info["breakout_hits"] = 0
+                info["cooldown_until"] = None
+                if hasattr(self, 'chk_use_cooldown') and self.chk_use_cooldown.isChecked():
+                    cooldown_minutes = self.spin_cooldown_min.value()
+                    info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(minutes=cooldown_minutes)
+                    info["status"] = "쿨다운"
+            else:
+                info["held"] = remaining
+            
+            self.log(f"🔴 매도: {name} {quantity}주 @ {price:,}원 ({reason}) 손익: {profit:+,}원")
+            self._add_trade({
+                "code": code, "name": name, "type": "매도",
+                "price": price, "quantity": quantity, "amount": amount,
+                "profit": profit, "reason": reason
+            })
+            
+            # 연속 손익 업데이트
+            self.strategy.update_consecutive_results(profit > 0)
+            self.strategy.update_market_investment(code, amount, is_buy=False)
+            self.strategy.update_sector_investment(code, amount, is_buy=False)
+            
+            if self.sound:
+                self.sound.play_sell() if profit > 0 else self.sound.play_loss()
+            if self.telegram:
+                self.telegram.send(f"🔴 매도: {name} {quantity}주 손익: {profit:+,}원")
+        else:
+            self.log(f"❌ 매도 실패 [{name}]: {result.message}")
+            if code in self.universe:
+                self.universe[code]["status"] = "보유"  # 실패 시 상태 복구
     
     # === 기록 ===
     def _add_trade(self, record: dict):
@@ -1858,9 +2199,11 @@ class KiwoomProTrader(QMainWindow):
     
     # === 설정 ===
     def _save_settings(self):
+        # 1. 일반 설정 저장
         settings = {
-            "app_key": self.input_app_key.text(), "secret_key": self.input_secret.text(),
-            "is_mock": self.chk_mock.isChecked(), "codes": self.input_codes.text(),
+            "is_mock": self.chk_mock.isChecked(), 
+            "auto_start": self.chk_auto_start.isChecked(),
+            "codes": self.input_codes.text(),
             "betting": self.spin_betting.value(), "k_value": self.spin_k.value(),
             "ts_start": self.spin_ts_start.value(), "ts_stop": self.spin_ts_stop.value(),
             "loss_cut": self.spin_loss.value(),
@@ -1907,10 +2250,24 @@ class KiwoomProTrader(QMainWindow):
             "time_stop_min": self.spin_time_stop_min.value(),
             "theme": self.current_theme,
         }
+        
+        # 2. 보안 설정 저장 (Keyring)
+        app_key = self.input_app_key.text().strip()
+        secret_key = self.input_secret.text().strip()
+        
         try:
+            if app_key:
+                keyring.set_password("KiwoomTrader", "app_key", app_key)
+            if secret_key:
+                keyring.set_password("KiwoomTrader", "secret_key", secret_key)
+            
             with open(Config.SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
-            self.log("✅ 설정 저장 완료")
+            
+            # 자동 실행 레지스트리 설정
+            self._set_auto_start(self.chk_auto_start.isChecked())
+            
+            self.log("✅ 설정 저장 완료 (Keyring 암호화)")
         except Exception as e:
             self.log(f"❌ 저장 실패: {e}")
     
@@ -1919,9 +2276,22 @@ class KiwoomProTrader(QMainWindow):
             if os.path.exists(Config.SETTINGS_FILE):
                 with open(Config.SETTINGS_FILE, 'r', encoding='utf-8') as f:
                     s = json.load(f)
-                self.input_app_key.setText(s.get("app_key", ""))
-                self.input_secret.setText(s.get("secret_key", ""))
+                
+                # 키 로드 (Keyring 우선, 없으면 JSON)
+                app_key = keyring.get_password("KiwoomTrader", "app_key")
+                secret_key = keyring.get_password("KiwoomTrader", "secret_key")
+                
+                # 마이그레이션: JSON에 있으면 Keyring으로 이동하고 JSON에서는 사용 안함
+                if not app_key and "app_key" in s:
+                    app_key = s["app_key"]
+                if not secret_key and "secret_key" in s:
+                    secret_key = s["secret_key"]
+                
+                self.input_app_key.setText(app_key if app_key else "")
+                self.input_secret.setText(secret_key if secret_key else "")
+                
                 self.chk_mock.setChecked(s.get("is_mock", False))
+                self.chk_auto_start.setChecked(s.get("auto_start", False))
                 self.input_codes.setText(s.get("codes", Config.DEFAULT_CODES))
                 self.spin_betting.setValue(s.get("betting", Config.DEFAULT_BETTING_RATIO))
                 self.spin_k.setValue(s.get("k_value", Config.DEFAULT_K_VALUE))
@@ -2242,35 +2612,44 @@ class KiwoomProTrader(QMainWindow):
         dialog = ManualOrderDialog(self, self.rest_client, self.current_account)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.order_result:
             order = dialog.order_result
-            self.log(f"📝 수동 주문: {order['type']} {order['code']} {order['qty']}주")
+            self.log(f"📝 수동 주문 요청: {order['type']} {order['code']} {order['qty']}주")
             
-            # 실제 주문 실행
-            try:
-                code = order['code']
-                qty = order['qty']
-                price = order.get('price', 0)
-                order_type = order['type']  # '매수' or '매도'
-                price_type = order.get('price_type', '시장가')  # '시장가' or '지정가'
-                
-                if order_type == '매수':
-                    if price_type == '시장가':
-                        result = self.rest_client.buy_market(self.current_account, code, qty)
-                    else:
-                        result = self.rest_client.buy_limit(self.current_account, code, qty, price)
-                else:  # 매도
-                    if price_type == '시장가':
-                        result = self.rest_client.sell_market(self.current_account, code, qty)
-                    else:
-                        result = self.rest_client.sell_limit(self.current_account, code, qty, price)
-                
-                if result.success:
-                    self.log(f"✅ 수동 주문 성공: 주문번호 {result.order_no}")
-                    if self.sound:
-                        self.sound.play_buy() if order_type == '매수' else self.sound.play_sell()
+            # 실제 주문 실행 (Worker 사용)
+            code = order['code']
+            qty = order['qty']
+            price = order.get('price', 0)
+            order_type = order['type']
+            price_type = order.get('price_type', '시장가')
+            
+            # API 호출 함수 선택
+            if order_type == '매수':
+                if price_type == '시장가':
+                    func = self.rest_client.buy_market
+                    args = (self.current_account, code, qty)
                 else:
-                    self.log(f"❌ 수동 주문 실패: {result.message}")
-            except Exception as e:
-                self.log(f"❌ 수동 주문 오류: {e}")
+                    func = self.rest_client.buy_limit
+                    args = (self.current_account, code, qty, price)
+            else:  # 매도
+                if price_type == '시장가':
+                    func = self.rest_client.sell_market
+                    args = (self.current_account, code, qty)
+                else:
+                    func = self.rest_client.sell_limit
+                    args = (self.current_account, code, qty, price)
+
+            worker = Worker(func, *args)
+            worker.signals.result.connect(lambda res: self._on_manual_order_result(res, order_type, code))
+            worker.signals.error.connect(lambda e: self.log(f"❌ 수동 주문 오류: {e}"))
+            self.threadpool.start(worker)
+
+    def _on_manual_order_result(self, result, order_type, code):
+        """수동 주문 결과 처리"""
+        if result.success:
+            self.log(f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})")
+            if self.sound:
+                self.sound.play_buy() if order_type == '매수' else self.sound.play_sell()
+        else:
+            self.log(f"❌ 수동 주문 실패: {result.message}")
     
     def _open_profile_manager(self):
         """프로필 관리 다이얼로그 열기"""
@@ -2362,7 +2741,37 @@ class KiwoomProTrader(QMainWindow):
         ])
         QMessageBox.information(self, "단축키 목록", shortcuts_text)
     
+    def _set_auto_start(self, enable: bool):
+        """윈도우 시작 시 자동 실행 설정"""
+        key_vals = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "KiwoomProTrader"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_vals, 0, winreg.KEY_ALL_ACCESS)
+            if enable:
+                exe_path = f'"{os.path.abspath(sys.argv[0])}"'
+                winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, exe_path)
+                self.log(f"✅ 자동실행 {'등록' if enable else '해제'} 완료")
+            else:
+                try:
+                    winreg.DeleteValue(key, app_name)
+                    self.log("✅ 자동실행 해제 완료")
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+        except Exception as e:
+            self.logger.error(f"자동실행 설정 오류: {e}")
+
     def closeEvent(self, event):
+        # 트레이 최소화 옵션이 켜져있으면 숨기기만 함
+        if hasattr(self, 'chk_minimize_tray') and self.chk_minimize_tray.isChecked():
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage("Kiwoom Pro Trader", 
+                                     "프로그램이 백그라운드에서 실행 중입니다.\n트레이 아이콘을 더블클릭하여 다시 열 수 있습니다.",
+                                     QSystemTrayIcon.MessageIcon.Information, 2000)
+            return
+
+        # 매매 중일 때 종료 시 확인
         if self.is_running:
             reply = QMessageBox.question(self, "종료 확인", 
                                        "현재 매매가 진행 중입니다.\n강제로 종료하시겠습니까?",

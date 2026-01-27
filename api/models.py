@@ -52,6 +52,8 @@ class StockQuote:
     ask_price: int = 0           # 매도호가 (최우선)
     bid_price: int = 0           # 매수호가 (최우선)
     timestamp: str = ""          # 체결시각
+    market_type: str = "unknown" # 시장구분 (KOSPI/KOSDAQ)
+    sector: str = ""             # 업종
 
 
 @dataclass

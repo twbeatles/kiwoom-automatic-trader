@@ -6,6 +6,7 @@
 
 import logging
 import time
+import threading
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -62,6 +63,7 @@ class KiwoomRESTClient:
         # 요청 속도 제한 (1초에 최대 5건)
         self._last_request_time = 0
         self._min_request_interval = 0.2  # 200ms
+        self._lock = threading.Lock()
         
     def _create_session(self) -> requests.Session:
         """재시도 로직이 포함된 세션 생성"""
@@ -80,11 +82,12 @@ class KiwoomRESTClient:
         return session
     
     def _rate_limit(self):
-        """요청 속도 제한"""
-        elapsed = time.time() - self._last_request_time
-        if elapsed < self._min_request_interval:
-            time.sleep(self._min_request_interval - elapsed)
-        self._last_request_time = time.time()
+        """요청 속도 제한 (Thread-Safe)"""
+        with self._lock:
+            elapsed = time.time() - self._last_request_time
+            if elapsed < self._min_request_interval:
+                time.sleep(self._min_request_interval - elapsed)
+            self._last_request_time = time.time()
     
     def _request(self, method: str, endpoint: str, 
                  data: Optional[Dict] = None,
@@ -139,7 +142,16 @@ class KiwoomRESTClient:
         except Exception as e:
             self.logger.error(f"요청 예외: {e}")
             return None
-    
+
+    def _parse_market_type(self, output: Dict) -> str:
+        """시장 구분 파싱"""
+        mkt_gb = output.get("mkt_gb", "")
+        if mkt_gb == "1":
+            return "KOSPI"
+        elif mkt_gb == "2":
+            return "KOSDAQ"
+        return "unknown"
+
     # =========================================================================
     # 시세 조회 API
     # =========================================================================
@@ -177,7 +189,9 @@ class KiwoomRESTClient:
                 prev_close=abs(int(output.get("yes_prc", 0))),
                 ask_price=abs(int(output.get("ask_prc", 0))),
                 bid_price=abs(int(output.get("bid_prc", 0))),
-                timestamp=output.get("stk_tm", "")
+                timestamp=output.get("stk_tm", ""),
+                market_type=self._parse_market_type(output),
+                sector=output.get("sect_nm", "기타")  # sect_nm이 없으면 '기타'
             )
         
         return None

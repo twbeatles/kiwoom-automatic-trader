@@ -11,8 +11,9 @@ from typing import Tuple, Optional, List, Dict, Any
 class StrategyManager:
     """매매 전략 로직 분리"""
     
-    def __init__(self, trader):
+    def __init__(self, trader, config=None):
         self.trader = trader
+        self.config = config  # TradingConfig (v4.5 아키텍처 개선)
         # 연속 손실 추적 (Anti-Martingale용)
         self.consecutive_losses = 0
         self.consecutive_wins = 0
@@ -112,18 +113,20 @@ class StrategyManager:
         rs = avg_gain / avg_loss
         return 100 - (100 / (1 + rs))
     
+    
     def check_stochastic_rsi_condition(self, code) -> bool:
         """스토캐스틱 RSI 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_stoch_rsi') or not self.trader.chk_use_stoch_rsi.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_stoch_rsi:
+                return True
+            upper_limit = self.config.stoch_upper
+        else:
+            if not hasattr(self.trader, 'chk_use_stoch_rsi') or not self.trader.chk_use_stoch_rsi.isChecked():
+                return True
+            upper = getattr(self.trader, 'spin_stoch_upper', None)
+            upper_limit = upper.value() if upper else 80
         
         k, d = self.calculate_stochastic_rsi(code)
-        
-        upper = getattr(self.trader, 'spin_stoch_upper', None)
-        upper_limit = upper.value() if upper else 80
-        
-        lower = getattr(self.trader, 'spin_stoch_lower', None)
-        lower_limit = lower.value() if lower else 20
         
         # 과매수 시 진입 보류
         if k >= upper_limit:
@@ -140,8 +143,12 @@ class StrategyManager:
         """다중 시간프레임 조건 확인
         일봉과 분봉의 추세가 일치할 때만 진입
         """
-        if not hasattr(self.trader, 'chk_use_mtf') or not self.trader.chk_use_mtf.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_mtf:
+                return True
+        else:
+            if not hasattr(self.trader, 'chk_use_mtf') or not self.trader.chk_use_mtf.isChecked():
+                return True
         
         info = self.trader.universe.get(code, {})
         
@@ -188,9 +195,13 @@ class StrategyManager:
         Returns:
             {'sell_ratio': 매도비율, 'level': 단계} 또는 None
         """
-        if not hasattr(self.trader, 'chk_use_partial_profit') or \
-           not self.trader.chk_use_partial_profit.isChecked():
-            return None
+        if self.config:
+            if not self.config.use_partial_profit:
+                return None
+        else:
+            if not hasattr(self.trader, 'chk_use_partial_profit') or \
+               not self.trader.chk_use_partial_profit.isChecked():
+                return None
         
         info = self.trader.universe.get(code, {})
         executed_levels = info.get('partial_profit_levels', set())
@@ -334,8 +345,12 @@ class StrategyManager:
     
     def check_gap_condition(self, code) -> bool:
         """갭 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_gap') or not self.trader.chk_use_gap.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_gap:
+                return True
+        else:
+            if not hasattr(self.trader, 'chk_use_gap') or not self.trader.chk_use_gap.isChecked():
+                return True
         
         gap_type, gap_ratio = self.analyze_gap(code)
         
@@ -351,7 +366,11 @@ class StrategyManager:
     
     def get_gap_adjusted_k(self, code) -> float:
         """갭에 따른 조정된 K값 반환"""
-        base_k = self.trader.spin_k.value()
+        if self.config:
+            base_k = self.config.k_value
+        else:
+            base_k = self.trader.spin_k.value()
+            
         gap_type, gap_ratio = self.analyze_gap(code)
         
         if gap_type == 'gap_up':
@@ -380,11 +399,16 @@ class StrategyManager:
             return 0
         
         # 기본 투자금
-        base_invest = self.trader.deposit * (self.trader.spin_betting.value() / 100)
+        if self.config:
+             base_invest = self.trader.deposit * (self.config.betting_ratio / 100)
+             use_dynamic = self.config.use_dynamic_sizing
+        else:
+            base_invest = self.trader.deposit * (self.trader.spin_betting.value() / 100)
+            use_dynamic = hasattr(self.trader, 'chk_use_dynamic_sizing') and \
+                          self.trader.chk_use_dynamic_sizing.isChecked()
         
         # 동적 사이징 활성화 체크
-        if not hasattr(self.trader, 'chk_use_dynamic_sizing') or \
-           not self.trader.chk_use_dynamic_sizing.isChecked():
+        if not use_dynamic:
             return max(1, int(base_invest / current_price))
         
         # Anti-Martingale 적용
@@ -426,16 +450,22 @@ class StrategyManager:
     # ==================================================================
     def check_market_diversification(self, code) -> bool:
         """시장별 분산 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_market_limit') or \
-           not self.trader.chk_use_market_limit.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_market_limit:
+                 return True
+            max_val = self.config.market_limit
+        else:
+            if not hasattr(self.trader, 'chk_use_market_limit') or \
+               not self.trader.chk_use_market_limit.isChecked():
+                return True
+            max_ratio_spin = getattr(self.trader, 'spin_market_limit', None)
+            max_val = max_ratio_spin.value() if max_ratio_spin else 70
         
         market = self._get_stock_market(code)
         current_allocation = self.market_investments.get(market, 0)
         
         # 한 시장에 최대 70% 제한
-        max_ratio = getattr(self.trader, 'spin_market_limit', None)
-        max_ratio = max_ratio.value() / 100 if max_ratio else 0.7
+        max_ratio = max_val / 100
         
         total_invested = sum(self.market_investments.values())
         if total_invested > 0:
@@ -448,7 +478,9 @@ class StrategyManager:
     
     def _get_stock_market(self, code) -> str:
         """종목의 시장 구분 반환"""
-        # 코드 첫자리로 간단 구분 (실제로는 API 조회 필요)
+        info = self.trader.universe.get(code, {})
+        if 'market_type' in info and info['market_type'] != 'unknown':
+            return info['market_type'].lower()
         if code.startswith('0') or code.startswith('1') or code.startswith('2'):
             return 'kospi'
         return 'kosdaq'
@@ -466,17 +498,22 @@ class StrategyManager:
     # ==================================================================
     def check_sector_limit(self, code) -> bool:
         """섹터별 투자 제한 확인"""
-        if not hasattr(self.trader, 'chk_use_sector_limit') or \
-           not self.trader.chk_use_sector_limit.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_sector_limit:
+                return True
+            max_val = self.config.sector_limit
+        else:
+            if not hasattr(self.trader, 'chk_use_sector_limit') or \
+               not self.trader.chk_use_sector_limit.isChecked():
+                return True
+            max_amt = getattr(self.trader, 'spin_sector_limit', None)
+            max_val = max_amt.value() if max_amt else 30
         
         sector = self._get_stock_sector(code)
         current_allocation = self.sector_investments.get(sector, 0)
         
         # 한 섹터에 최대 투자금 제한
-        max_amt = getattr(self.trader, 'spin_sector_limit', None)
-        max_sector_invest = self.trader.deposit * (max_amt.value() / 100) if max_amt else \
-                           self.trader.deposit * 0.3
+        max_sector_invest = self.trader.deposit * (max_val / 100)
         
         if current_allocation >= max_sector_invest:
             self.log(f"[섹터관리] {sector} 섹터 한도 도달 ({current_allocation:,.0f}원)")
@@ -525,7 +562,8 @@ class StrategyManager:
         
         if atr <= 0:
             # ATR 계산 불가 시 고정 손절 사용
-            return buy_price * (1 - self.trader.spin_loss.value() / 100)
+            loss_cut = self.config.loss_cut if self.config else self.trader.spin_loss.value()
+            return buy_price * (1 - loss_cut / 100)
         
         # ATR 기반 손절가 = 매입가 - (ATR * 배수)
         stop_price = buy_price - (atr * multiplier)
@@ -538,15 +576,19 @@ class StrategyManager:
         Returns:
             (손절 필요 여부, 손절가)
         """
-        if not hasattr(self.trader, 'chk_use_atr_stop') or \
-           not self.trader.chk_use_atr_stop.isChecked():
-            return False, 0
+        if self.config:
+            if not self.config.use_atr_stop:
+                return False, 0
+            mult = self.config.atr_mult
+        else:
+            if not hasattr(self.trader, 'chk_use_atr_stop') or \
+               not self.trader.chk_use_atr_stop.isChecked():
+                return False, 0
+            multiplier = getattr(self.trader, 'spin_atr_mult', None)
+            mult = multiplier.value() if multiplier else 2.0
         
         info = self.trader.universe.get(code, {})
         current_price = info.get('current', 0)
-        
-        multiplier = getattr(self.trader, 'spin_atr_mult', None)
-        mult = multiplier.value() if multiplier else 2.0
         
         stop_price = self.calculate_atr_stop_loss(code, mult)
         
@@ -595,11 +637,18 @@ class StrategyManager:
     
     def check_rsi_condition(self, code):
         """RSI 조건 확인"""
-        if not self.trader.chk_use_rsi.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_rsi:
+                return True
+            rsi_period = self.config.rsi_period
+            upper_limit = self.config.rsi_upper
+        else:
+            if not self.trader.chk_use_rsi.isChecked():
+                return True
+            rsi_period = self.trader.spin_rsi_period.value()
+            upper_limit = self.trader.spin_rsi_upper.value()
         
-        rsi = self.calculate_rsi(code, self.trader.spin_rsi_period.value())
-        upper_limit = self.trader.spin_rsi_upper.value()
+        rsi = self.calculate_rsi(code, rsi_period)
         
         if rsi >= upper_limit:
             info = self.trader.universe.get(code, {})
@@ -610,8 +659,14 @@ class StrategyManager:
 
     def check_volume_condition(self, code):
         """거래량 조건 확인"""
-        if not self.trader.chk_use_volume.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_volume:
+                return True
+            required_mult = self.config.volume_mult
+        else:
+            if not self.trader.chk_use_volume.isChecked():
+                return True
+            required_mult = self.trader.spin_volume_mult.value()
         
         if code not in self.trader.universe:
             return True
@@ -623,7 +678,6 @@ class StrategyManager:
         if avg_volume == 0:
             return True
         
-        required_mult = self.trader.spin_volume_mult.value()
         actual_mult = current_volume / avg_volume
         
         if actual_mult < required_mult:
@@ -636,16 +690,20 @@ class StrategyManager:
     # ==================================================================
     def check_liquidity_condition(self, code) -> bool:
         """유동성 조건 확인 (20일 평균 거래대금)"""
-        if not hasattr(self.trader, 'chk_use_liquidity') or not self.trader.chk_use_liquidity.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_liquidity:
+                return True
+            min_value = self.config.min_avg_value * 100_000_000
+        else:
+            if not hasattr(self.trader, 'chk_use_liquidity') or not self.trader.chk_use_liquidity.isChecked():
+                return True
+            min_value = Config.DEFAULT_MIN_AVG_VALUE
+            min_value_spin = getattr(self.trader, 'spin_min_value', None)
+            if min_value_spin:
+                min_value = int(min_value_spin.value() * 100_000_000)
 
         info = self.trader.universe.get(code, {})
         avg_value = info.get('avg_value_20', 0)
-
-        min_value = Config.DEFAULT_MIN_AVG_VALUE
-        min_value_spin = getattr(self.trader, 'spin_min_value', None)
-        if min_value_spin:
-            min_value = int(min_value_spin.value() * 100_000_000)
 
         if avg_value <= 0:
             return True
@@ -658,8 +716,15 @@ class StrategyManager:
 
     def check_spread_condition(self, code) -> bool:
         """스프레드 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_spread') or not self.trader.chk_use_spread.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_spread:
+                return True
+            max_spread = self.config.max_spread
+        else:
+            if not hasattr(self.trader, 'chk_use_spread') or not self.trader.chk_use_spread.isChecked():
+                return True
+            max_spread_spin = getattr(self.trader, 'spin_spread_max', None)
+            max_spread = max_spread_spin.value() if max_spread_spin else Config.DEFAULT_MAX_SPREAD_PCT
 
         info = self.trader.universe.get(code, {})
         ask = info.get('ask_price', 0)
@@ -673,8 +738,6 @@ class StrategyManager:
             return True
 
         spread_pct = (ask - bid) / mid * 100
-        max_spread = getattr(self.trader, 'spin_spread_max', None)
-        max_spread = max_spread.value() if max_spread else Config.DEFAULT_MAX_SPREAD_PCT
 
         if spread_pct > max_spread:
             self.log(f"[{info.get('name', code)}] 스프레드 {spread_pct:.2f}% > {max_spread:.2f}% 진입 보류")
@@ -703,8 +766,12 @@ class StrategyManager:
 
     def check_macd_condition(self, code):
         """MACD 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_macd') or not self.trader.chk_use_macd.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_macd:
+                return True
+        else:
+            if not hasattr(self.trader, 'chk_use_macd') or not self.trader.chk_use_macd.isChecked():
+                return True
         
         info = self.trader.universe.get(code, {})
         prices = info.get('price_history', [])
@@ -737,8 +804,14 @@ class StrategyManager:
         하단 밴드 근처에서 매수 기회로 판단 (과매도 상태)
         상단 밴드 이상에서는 진입 보류 (과매수 상태)
         """
-        if not hasattr(self.trader, 'chk_use_bb') or not self.trader.chk_use_bb.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_bb:
+                return True
+            k = self.config.bb_k
+        else:
+            if not hasattr(self.trader, 'chk_use_bb') or not self.trader.chk_use_bb.isChecked():
+                return True
+            k = self.trader.spin_bb_k.value()
         
         prices = self.trader.universe.get(code, {}).get('price_history', [])
         current_price = self.trader.universe.get(code, {}).get('current', 0)
@@ -746,7 +819,6 @@ class StrategyManager:
         if len(prices) < 20 or current_price == 0:
             return True
             
-        k = self.trader.spin_bb_k.value()
         upper, middle, lower = self.calculate_bollinger(prices, k=k)
         
         # 상단 밴드 이상이면 과매수 → 진입 보류
@@ -830,8 +902,14 @@ class StrategyManager:
 
     def check_dmi_condition(self, code):
         """DMI/ADX 조건 확인"""
-        if not hasattr(self.trader, 'chk_use_dmi') or not self.trader.chk_use_dmi.isChecked():
-            return True
+        if self.config:
+            if not self.config.use_dmi:
+                return True
+            threshold = self.config.adx_threshold
+        else:
+            if not hasattr(self.trader, 'chk_use_dmi') or not self.trader.chk_use_dmi.isChecked():
+                return True
+            threshold = self.trader.spin_adx.value()
             
         info = self.trader.universe.get(code, {})
         high_list = info.get('high_history', [])
@@ -846,7 +924,6 @@ class StrategyManager:
         if p_di <= m_di:
             return False
             
-        threshold = self.trader.spin_adx.value()
         if adx < threshold:
             return False
             
@@ -869,9 +946,17 @@ class StrategyManager:
     
     def check_ma_crossover(self, code, short_period=5, long_period=20):
         """이동평균 골든크로스/데드크로스 확인"""
-        if not hasattr(self.trader, 'chk_use_ma') or not self.trader.chk_use_ma.isChecked():
-            return None
-            
+        if self.config:
+            if not self.config.use_ma:
+                return None
+            short_period = self.config.ma_short
+            long_period = self.config.ma_long
+        else:
+            if not hasattr(self.trader, 'chk_use_ma') or not self.trader.chk_use_ma.isChecked():
+                return None
+            short_period = Config.DEFAULT_MA_SHORT # Or from spinbox if exists, but assuming defaults for now or previously defined values
+            # Assuming standard defaults if UI widgets missing or standard usage
+        
         info = self.trader.universe.get(code, {})
         prices = info.get('price_history', [])
         
@@ -922,7 +1007,7 @@ class StrategyManager:
         else:
             position_size = 0
         
-        max_invest = self.trader.deposit * (self.trader.spin_betting.value() / 100)
+        max_invest = self.trader.deposit * (self.config.betting_ratio / 100) if self.config else self.trader.deposit * (self.trader.spin_betting.value() / 100)
         max_quantity = int(max_invest / current_price) if current_price > 0 else 0
         
         final_size = min(position_size, max_quantity)
@@ -939,7 +1024,10 @@ class StrategyManager:
         if current_price <= 0:
             return 0
         
-        invest_amount = self.trader.deposit * (self.trader.spin_betting.value() / 100)
+        if self.config:
+            invest_amount = self.trader.deposit * (self.config.betting_ratio / 100)
+        else:
+            invest_amount = self.trader.deposit * (self.trader.spin_betting.value() / 100)
         return max(1, int(invest_amount / current_price))
 
     def get_time_based_k_value(self):
@@ -948,7 +1036,7 @@ class StrategyManager:
         hour, minute = now.hour, now.minute
         time_val = hour * 60 + minute
         
-        base_k = self.trader.spin_k.value()
+        base_k = self.config.k_value if self.config else self.trader.spin_k.value()
         
         if time_val < 9 * 60 + 30:
             adjusted_k = base_k * 1.4
@@ -973,13 +1061,14 @@ class StrategyManager:
             return 0
         
         # 갭 조정 K값 사용
-        if hasattr(self.trader, 'chk_use_gap') and self.trader.chk_use_gap.isChecked():
+        # 갭 조정 K값 사용
+        if self.config.use_gap:
             k_value = self.get_gap_adjusted_k(code)
             phase = "갭조정"
-        elif hasattr(self.trader, 'chk_use_time_strategy') and self.trader.chk_use_time_strategy.isChecked():
+        elif self.config.use_time_strategy:
             k_value, phase = self.get_time_based_k_value()
         else:
-            k_value = self.trader.spin_k.value()
+            k_value = self.config.k_value
             phase = "기본"
         
         target = today_open + (prev_high - prev_low) * k_value
@@ -988,14 +1077,13 @@ class StrategyManager:
 
     def get_split_orders(self, total_quantity, current_price, order_type='buy'):
         """분할 주문 생성"""
-        if not hasattr(self.trader, 'chk_use_split') or not self.trader.chk_use_split.isChecked():
+        if self.config:
+            if not self.config.use_split:
+                return [(total_quantity, current_price)]
+            split_count = self.config.split_count
+            split_percent = self.config.split_percent
+        else:
             return [(total_quantity, current_price)]
-        
-        split_count = getattr(self.trader, 'spin_split_count', None)
-        split_count = split_count.value() if split_count else 3
-        
-        split_percent = getattr(self.trader, 'spin_split_percent', None)
-        split_percent = split_percent.value() if split_percent else 0.5
         
         if split_count <= 1 or total_quantity < split_count:
             return [(total_quantity, current_price)]

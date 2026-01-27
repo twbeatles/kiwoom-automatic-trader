@@ -3,6 +3,79 @@ Kiwoom Pro Algo-Trader Config v4.3
 REST API 기반 + 확장 기능 설정
 """
 
+from dataclasses import dataclass, field
+from typing import List, Dict, Set, Optional
+
+@dataclass
+class TradingConfig:
+    """실시간 트레이딩 설정 (UI와 로직 분리용)"""
+    # 기본 설정
+    codes: List[str] = field(default_factory=list)
+    betting_ratio: float = 10.0
+    
+    # 전략 파라미터
+    k_value: float = 0.5
+    loss_cut: float = 2.0
+    ts_start: float = 3.0
+    ts_stop: float = 1.5
+    
+    # 지표 사용 여부 및 설정
+    use_rsi: bool = True
+    rsi_period: int = 14
+    rsi_upper: int = 70
+    rsi_lower: int = 30
+    
+    use_stoch_rsi: bool = False
+    stoch_upper: int = 80
+    stoch_lower: int = 20
+    
+    use_macd: bool = True
+    use_bb: bool = False
+    bb_k: float = 2.0
+    
+    use_volume: bool = True
+    volume_mult: float = 1.5
+    
+    # 리스크 관리
+    max_holdings: int = 5
+    use_risk_mgmt: bool = True
+    
+    # v4.3 신규 전략
+    use_mtf: bool = False
+    use_gap: bool = False
+    use_dynamic_sizing: bool = False
+    use_atr_stop: bool = False
+    atr_mult: float = 2.0
+    
+    use_liquidity: bool = False
+    min_avg_value: int = 10  # 억 단위
+    
+    use_spread: bool = False
+    max_spread: float = 0.5
+    
+    use_market_limit: bool = False
+    market_limit: int = 70
+    
+    use_sector_limit: bool = False
+    sector_limit: int = 30
+    
+    use_partial_profit: bool = False
+    
+    # 추가 필드 (v4.3 대응)
+    use_dmi: bool = False
+    adx_threshold: int = 25
+    
+    use_ma: bool = False
+    ma_short: int = 5
+    ma_long: int = 20
+    
+    use_split: bool = False
+    split_count: int = 3
+    split_percent: float = 0.5
+    
+    use_time_strategy: bool = False
+
+
 class Config:
     """프로그램 설정 상수"""
     
@@ -270,6 +343,12 @@ class Config:
     DEFAULT_USE_SCHEDULE = False
     DEFAULT_SCHEDULE_START = '09:00'
     DEFAULT_SCHEDULE_END = '15:19'
+
+    # =========================================================================
+    # 시스템 설정 (v4.4 신규)
+    # =========================================================================
+    DEFAULT_AUTO_START = False
+    DEFAULT_MINIMIZE_TO_TRAY = True
     
     # =========================================================================
     # 텔레그램 설정
