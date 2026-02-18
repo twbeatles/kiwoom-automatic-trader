@@ -25,6 +25,7 @@
 - [키보드 단축키](#-키보드-단축키)
 - [매매 전략](#-매매-전략)
 - [리스크 관리](#-리스크-관리)
+- [2026-02-18 구조 동기화 업데이트](#-2026-02-18-구조-동기화-업데이트)
 - [주의사항](#-주의사항)
 
 ---
@@ -288,6 +289,37 @@ python tools/refactor_verify.py
 
 ---
 
+## 🔄 2026-02-18 구조 동기화 업데이트
+
+이번 추가 업데이트는 실제 저장소 상태(`tree /F /A`)와 테스트 실행 결과(`pytest -q tests/unit`)를 기준으로 문서를 동기화한 내용입니다.
+
+### 현재 코드베이스에서 확인된 핵심 패키지
+
+- `app/support/execution_policy.py` - 주문 실행 정책(`market`/`limit`) 라우팅
+- `strategies/` - `types.py`, `base.py`, `pack.py` 기반 모듈형 전략 엔진
+- `backtest/engine.py` - 이벤트 드리븐 백테스트 엔진
+- `portfolio/allocator.py` - 리스크 예산 기반 가중치 배분기
+- `data/providers/` - `kiwoom`, `dart`, `macro`, `csv` 데이터 프로바이더 계층
+- `tests/unit/` - 전략팩/백테스트/설정 스키마 v3/실행 정책 검증 테스트
+
+### README 기존 트리 대비 보강 포인트
+
+- `app/support/`에는 `widgets.py`, `worker.py` 외에 `execution_policy.py`가 포함됩니다.
+- `docs/refactor/`에는 `baseline_manifest.json` 외에 `post_refactor_manifest.json`도 존재합니다.
+- 루트 패키지로 `strategies/`, `backtest/`, `portfolio/`가 추가되어 확장 경로가 코드화되어 있습니다.
+- `tools/perf_smoke.py`로 전략 평가 경로의 로컬 성능 스모크 테스트를 수행할 수 있습니다.
+
+### 테스트 현황 (2026-02-18)
+
+```bash
+pytest -q tests/unit
+# 15 passed, 2 warnings
+```
+
+- 경고 2건은 `websockets.legacy` deprecation 관련이며, 테스트 실패는 없습니다.
+
+---
+
 ## 📚 사용 방법
 
 ### 1단계: API 설정
@@ -509,6 +541,10 @@ python tools/refactor_verify.py
 - 저장은 `betting_ratio`를 기준으로 사용
 - `betting`은 기존 파일 호환을 위해 병행 저장/로드
 
+추가 메모(2026-02-18):
+- 현재 canonical 스키마는 `settings_version = 3` 입니다.
+- `settings_version < 3` 파일은 로드 시 v3 필드(`strategy_pack`, `feature_flags`, `execution_policy` 등)가 자동 보강됩니다.
+
 ### kiwoom_presets.json
 ```json
 {
@@ -564,7 +600,7 @@ MIT License
 
 - **작성자**: Kiwoom Pro Algo-Trader
 - **버전**: 4.5
-- **최종 업데이트**: 2026-02-13
+- **최종 업데이트**: 2026-02-18
 
 ---
 

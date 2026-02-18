@@ -73,7 +73,8 @@ Engine: `backtest/engine.py`
 - StrategyManager now routes through modular engine first when flag-enabled; legacy evaluator remains fallback-compatible.
 
 ## 9. Acceptance Criteria
-- Existing 9 unit tests remain green.
+- Historical baseline 9 unit tests remain green.
+- Current baseline (2026-02-18): `pytest -q tests/unit` => **15 passed, 2 warnings**.
 - New tests validate:
   - strategy-pack behavior,
   - v2->v3 settings migration,
@@ -85,3 +86,21 @@ Engine: `backtest/engine.py`
 - Add strategy registry for S01/S02/S05/S06/S09/S10/S15 production-grade implementations.
 - Add covariance-aware allocator and drawdown-aware budget adaptation.
 - Add broker abstraction layer if live multi-asset execution becomes required.
+
+## 11. Implementation Status Addendum (2026-02-18)
+- UI `Strategy Pack` selector currently exposes 16 strategy IDs and routes into `strategies/pack.py`.
+- Primary strategy IDs already wired:
+  - `volatility_breakout`, `time_series_momentum`, `cross_sectional_momentum`
+  - `ma_channel_trend`, `orb_donchian_breakout`, `pairs_trading_cointegration`
+  - `stat_arb_residual`, `rsi_bollinger_reversion`, `dmi_trend_strength`
+  - `ff5_factor_ls`, `quality_value_lowvol`, `investor_program_flow`
+  - `volatility_targeting_overlay`, `risk_parity_portfolio`
+  - `execution_algo_twap_vwap_pov`, `market_making_spread`
+- Live constraints remain unchanged in runtime:
+  - non-`kr_stock_live` scope blocked in live mode
+  - `short_enabled=True` blocked in live mode
+- Data/provider modules are now physically present for extension:
+  - `data/providers/kiwoom_provider.py`
+  - `data/providers/dart_provider.py`
+  - `data/providers/macro_provider.py`
+  - `data/providers/csv_provider.py`

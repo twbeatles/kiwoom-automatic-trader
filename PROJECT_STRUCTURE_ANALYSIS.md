@@ -58,7 +58,8 @@ Migration:
 - Existing docs listed advanced strategy options; code now has explicit `strategies/`, `backtest/`, `portfolio/`, and `data/providers/` packages to support them.
 
 ## 7. Tests and Quality Baseline
-- Existing unit tests: 9 passing baseline retained target.
+- Historical baseline: 9 passing unit tests retained as minimum target.
+- As of 2026-02-18, `pytest -q tests/unit` result is **15 passed, 2 warnings**.
 - Added architecture introduces deterministic components (`backtest`, `allocator`, strategy-pack) suitable for unit-level verification.
 
 ## 8. Technical Debt / Risk Hotspots
@@ -76,3 +77,27 @@ Migration:
 - Real trading guard remains intact (`_confirm_live_trading_guard`).
 - Live path now blocks non-`kr_stock_live` scope and short-enabled mode.
 - Feature flags allow gradual enablement even in one-shot integrated release.
+
+## 11. Repository Snapshot (2026-02-18)
+- Runtime-focused top-level packages:
+  - `app/` (16 `.py`)
+  - `api/` (5 `.py`)
+  - `strategies/` (4 `.py`)
+  - `backtest/` (2 `.py`)
+  - `portfolio/` (2 `.py`)
+  - `data/` (6 `.py`)
+  - `tools/` (4 `.py`)
+  - `tests/` (13 `.py`)
+- Runtime auxiliary modules confirmed:
+  - `app/support/execution_policy.py`
+  - `tools/perf_smoke.py`
+  - `docs/refactor/post_refactor_manifest.json`
+- Build and archival artifacts observed:
+  - `backup/refactor_phase0~6/`
+  - `build/`, `dist/`, `dist_new/`
+  - `logs/`, `.pytest_cache/`
+
+## 12. Documentation Sync Notes
+- `README.md` now has explicit addendum for post-v4.5 package growth.
+- AI operator guides (`CLAUDE.md`, `GEMINI.md`) should treat settings schema as v3 canonical.
+- Strategy blueprint acceptance criteria should be tracked against current 15-test baseline, not legacy 9-test baseline.

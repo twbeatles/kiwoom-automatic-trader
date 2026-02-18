@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-02-13
+> **최종 업데이트**: 2026-02-18
 
 ---
 
@@ -181,3 +181,28 @@ pyinstaller KiwoomTrader.spec
 
 3. 실거래 가드 우회
 - `start_trading()`의 실거래 보호 흐름은 제거/우회 금지입니다.
+
+---
+
+## 2026-02-18 추가 동기화 메모
+
+1. 설정 스키마 기준
+- 문서 내 v2 호환 설명과 별개로, 현재 canonical은 `settings_version = 3` 입니다.
+- `settings_version < 3` 로드 시 v3 키(`strategy_pack`, `strategy_params`, `portfolio_mode`, `short_enabled`, `asset_scope`, `backtest_config`, `feature_flags`, `execution_policy`)가 자동 보강됩니다.
+
+2. 누락되기 쉬운 실제 모듈
+- `app/support/execution_policy.py` (market/limit 주문 라우팅)
+- `strategies/` (모듈형 전략팩 엔진)
+- `backtest/engine.py` (이벤트 드리븐 백테스트)
+- `portfolio/allocator.py` (리스크 예산 배분)
+- `data/providers/` (`kiwoom`, `dart`, `macro`, `csv`)
+
+3. 테스트 기준 업데이트
+- 실행 기준: `pytest -q tests/unit`
+- 현재 결과(2026-02-18): **15 passed, 2 warnings**
+- 경고 2건은 `websockets.legacy` deprecation 관련이며 실패 케이스는 없음
+
+4. 추가 검증 커맨드
+```bash
+python tools/perf_smoke.py
+```

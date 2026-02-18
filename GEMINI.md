@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-02-13
+> **최종 업데이트**: 2026-02-18
 
 ---
 
@@ -128,3 +128,27 @@ pyinstaller KiwoomTrader.spec
 2. 믹스인 간 책임을 넘나드는 수정은 최소화합니다.
 3. 메서드/시그널/설정키 누락 여부는 `tools/refactor_verify.py`로 확인합니다.
 4. 실거래 가드 및 주문 중복 방지 로직은 유지합니다.
+
+---
+
+## 2026-02-18 추가 업데이트
+
+### 1) 구조 동기화 포인트
+- `app/support/execution_policy.py`가 주문 실행 정책(`market`/`limit`) 라우팅을 담당합니다.
+- 전략/연구 확장 경로가 실제 패키지로 존재합니다:
+  - `strategies/`
+  - `backtest/`
+  - `portfolio/`
+  - `data/providers/`
+- `tools/perf_smoke.py`로 전략 평가 성능 스모크 테스트를 수행할 수 있습니다.
+
+### 2) 설정 스키마 기준
+- 현재 canonical 스키마는 `settings_version = 3` 입니다.
+- v2 파일은 로드 시 v3 키가 자동 보강되며, `betting` 키는 호환 목적으로 계속 처리됩니다.
+
+### 3) 테스트 기준
+```bash
+pytest -q tests/unit
+```
+- 2026-02-18 실행 결과: **15 passed, 2 warnings**
+- 경고는 `websockets.legacy` deprecation 관련입니다.
