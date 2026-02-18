@@ -165,58 +165,193 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-```
+> 기준: `git -c core.quotePath=false ls-files` (Git 추적 파일 1:1)
+
+```text
 키움증권 자동 매매 프로그램/
-│
-├── 📄 키움증권 자동매매.py     # 엔트리포인트 래퍼(main) + 예외 핸들러
-├── 📄 config.py                # 설정 및 상수 정의
-├── 📄 strategy_manager.py      # 매매 전략/지표 계산 로직
-├── 📄 sound_notifier.py        # 사운드 알림
-├── 📄 profile_manager.py       # 다중 프로필 관리
-├── 📄 telegram_notifier.py     # 텔레그램 알림
-├── 📄 ui_dialogs.py            # 프리셋/검색/수동주문/예약 다이얼로그
-├── 📄 dark_theme.py            # 다크 테마 스타일시트
-├── 📄 light_theme.py           # 라이트 테마 스타일시트
-│
-├── 📂 app/                     # 리팩토링된 앱 본체 패키지
+├── api/
 │   ├── __init__.py
-│   ├── main_window.py          # KiwoomProTrader 클래스 조립
-│   ├── mixins/                 # 기능별 믹스인
-│   │   ├── ui_build.py
-│   │   ├── market_data_tabs.py
-│   │   ├── system_shell.py
+│   ├── auth.py
+│   ├── models.py
+│   ├── rest_client.py
+│   └── websocket_client.py
+├── app/
+│   ├── mixins/
+│   │   ├── __init__.py
 │   │   ├── api_account.py
-│   │   ├── trading_session.py
-│   │   ├── order_sync.py
+│   │   ├── dialogs_profiles.py
 │   │   ├── execution_engine.py
+│   │   ├── market_data_tabs.py
+│   │   ├── order_sync.py
 │   │   ├── persistence_settings.py
-│   │   └── dialogs_profiles.py
-│   └── support/
-│       ├── widgets.py
-│       └── worker.py
-│
-├── 📂 api/                     # REST API 코어
+│   │   ├── system_shell.py
+│   │   ├── trading_session.py
+│   │   └── ui_build.py
+│   ├── support/
+│   │   ├── __init__.py
+│   │   ├── execution_policy.py
+│   │   ├── widgets.py
+│   │   └── worker.py
 │   ├── __init__.py
-│   ├── auth.py                 # 인증 관리
-│   ├── rest_client.py          # REST API 클라이언트
-│   ├── websocket_client.py     # WebSocket 클라이언트
-│   └── models.py               # 데이터 모델
-│
-├── 📂 tools/                   # 리팩토링 검증 도구
+│   └── main_window.py
+├── backtest/
+│   ├── __init__.py
+│   └── engine.py
+├── backup/
+│   ├── refactor_phase0/
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── refactor_phase1/
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── refactor_phase2/
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── refactor_phase3/
+│   │   ├── app/
+│   │   │   ├── mixins/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── api_account.py
+│   │   │   │   ├── dialogs_profiles.py
+│   │   │   │   ├── execution_engine.py
+│   │   │   │   ├── market_data_tabs.py
+│   │   │   │   ├── order_sync.py
+│   │   │   │   ├── persistence_settings.py
+│   │   │   │   ├── system_shell.py
+│   │   │   │   ├── trading_session.py
+│   │   │   │   └── ui_build.py
+│   │   │   ├── support/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── widgets.py
+│   │   │   │   └── worker.py
+│   │   │   ├── __init__.py
+│   │   │   └── main_window.py
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── refactor_phase4/
+│   │   ├── app/
+│   │   │   ├── mixins/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── api_account.py
+│   │   │   │   ├── dialogs_profiles.py
+│   │   │   │   ├── execution_engine.py
+│   │   │   │   ├── market_data_tabs.py
+│   │   │   │   ├── order_sync.py
+│   │   │   │   ├── persistence_settings.py
+│   │   │   │   ├── system_shell.py
+│   │   │   │   ├── trading_session.py
+│   │   │   │   └── ui_build.py
+│   │   │   ├── support/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── widgets.py
+│   │   │   │   └── worker.py
+│   │   │   ├── __init__.py
+│   │   │   └── main_window.py
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── refactor_phase5/
+│   │   ├── app/
+│   │   │   ├── mixins/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── api_account.py
+│   │   │   │   ├── dialogs_profiles.py
+│   │   │   │   ├── execution_engine.py
+│   │   │   │   ├── market_data_tabs.py
+│   │   │   │   ├── order_sync.py
+│   │   │   │   ├── persistence_settings.py
+│   │   │   │   ├── system_shell.py
+│   │   │   │   ├── trading_session.py
+│   │   │   │   └── ui_build.py
+│   │   │   ├── support/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── widgets.py
+│   │   │   │   └── worker.py
+│   │   │   ├── __init__.py
+│   │   │   └── main_window.py
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── refactor_phase6/
+│   │   ├── app/
+│   │   │   ├── mixins/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── api_account.py
+│   │   │   │   ├── dialogs_profiles.py
+│   │   │   │   ├── execution_engine.py
+│   │   │   │   ├── market_data_tabs.py
+│   │   │   │   ├── order_sync.py
+│   │   │   │   ├── persistence_settings.py
+│   │   │   │   ├── system_shell.py
+│   │   │   │   ├── trading_session.py
+│   │   │   │   └── ui_build.py
+│   │   │   ├── support/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── widgets.py
+│   │   │   │   └── worker.py
+│   │   │   ├── __init__.py
+│   │   │   └── main_window.py
+│   │   ├── KiwoomTrader.spec
+│   │   └── 키움증권 자동매매.py
+│   ├── KiwoomProTrader.spec
+│   ├── upbit_trader.py
+│   ├── verify_decoupling.py
+│   ├── verify_phase3.py
+│   ├── verify_phase4.py
+│   └── 키움증권 자동매매_old.py
+├── data/
+│   ├── providers/
+│   │   ├── __init__.py
+│   │   ├── csv_provider.py
+│   │   ├── dart_provider.py
+│   │   ├── kiwoom_provider.py
+│   │   └── macro_provider.py
+│   └── __init__.py
+├── dist_new/
+│   └── KiwoomTrader_v4.5.exe
+├── portfolio/
+│   ├── __init__.py
+│   └── allocator.py
+├── strategies/
+│   ├── __init__.py
+│   ├── base.py
+│   ├── pack.py
+│   └── types.py
+├── tests/
+│   ├── unit/
+│   │   ├── __init__.py
+│   │   ├── test_backtest_engine.py
+│   │   ├── test_dirty_table_refresh.py
+│   │   ├── test_execution_policy.py
+│   │   ├── test_force_quit_close_event.py
+│   │   ├── test_order_sync_to_int.py
+│   │   ├── test_position_sync_debounce.py
+│   │   ├── test_settings_schema_compat.py
+│   │   ├── test_settings_schema_v3.py
+│   │   ├── test_strategy_decision_cache.py
+│   │   ├── test_strategy_pack_engine.py
+│   │   └── test_trading_session_state_machine.py
+│   └── __init__.py
+├── tools/
+│   ├── __init__.py
+│   ├── perf_smoke.py
 │   ├── refactor_manifest.py
 │   └── refactor_verify.py
-│
-├── 📂 docs/refactor/           # 구조 동등성 기준선/결과
-│   └── baseline_manifest.json
-│
-├── 📂 data/                    # 데이터 디렉토리
-├── 📂 logs/                    # 로그 디렉토리
-│
-├── 📄 requirements.txt         # Python 의존성
-├── 📄 KiwoomTrader.spec        # PyInstaller 빌드 설정
-├── 📄 README.md                # 본 문서
-├── 📄 kiwoom_settings.json     # 설정 파일
-└── 📄 kiwoom_presets.json      # 프리셋 파일(없으면 런타임 생성)
+├── .gitignore
+├── CLAUDE.md
+├── config.py
+├── dark_theme.py
+├── GEMINI.md
+├── icon.png
+├── KiwoomTrader.spec
+├── light_theme.py
+├── profile_manager.py
+├── PROJECT_STRUCTURE_ANALYSIS.md
+├── README.md
+├── sound_notifier.py
+├── STRATEGY_EXPANSION_BLUEPRINT.md
+├── strategy_manager.py
+├── telegram_notifier.py
+├── ui_dialogs.py
+└── 키움증권 자동매매.py
 ```
 
 ### 파일별 역할
@@ -609,4 +744,5 @@ MIT License
 **💡 Smart Trading with Kiwoom Pro Algo-Trader 💡**
 
 </div>
+
 
