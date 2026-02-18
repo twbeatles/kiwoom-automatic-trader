@@ -4,6 +4,8 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 경량화 최적화 빌드 설정 (ONEFILE 모드)
 """
 
+from PyInstaller.utils.hooks import collect_submodules
+
 block_cipher = None
 
 # ============================================================================
@@ -67,6 +69,14 @@ hiddenimports = [
     'winreg',
 ]
 
+# 로컬 패키지 하위 모듈 누락 방지 (전략팩/백테스트/포트폴리오 확장 대응)
+hiddenimports += collect_submodules('api')
+hiddenimports += collect_submodules('app')
+hiddenimports += collect_submodules('strategies')
+hiddenimports += collect_submodules('backtest')
+hiddenimports += collect_submodules('portfolio')
+hiddenimports += collect_submodules('data.providers')
+
 # ============================================================================
 # 제외할 모듈 (확실히 사용하지 않는 모듈만)
 # ============================================================================
@@ -118,7 +128,7 @@ excludes = [
 # ============================================================================
 a = Analysis(
     ['키움증권 자동매매.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
