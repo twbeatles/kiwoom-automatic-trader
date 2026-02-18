@@ -1,0 +1,68 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python cache / build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Logs and runtime artifacts
+*.log
+logs/
+log/
+*.pid
+*.out
+*.err
+
+# User-requested exclusions: text/json/db artifacts
+*.txt
+*.json
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Data / local artifacts
+data/*.db
+data/*.sqlite*
+data/*.json
+tmp/
+temp/
+*.bak
+*.tmp
+
+# Notebook / analysis artifacts
+.ipynb_checkpoints/
+
+# Test and report outputs
+.cache/
+reports/
+coverage.xml
