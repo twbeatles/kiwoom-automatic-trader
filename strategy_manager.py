@@ -420,7 +420,7 @@ class StrategyManager:
         
         # 동적 사이징 활성화 체크
         if not use_dynamic:
-            return max(1, int(base_invest / current_price))
+            return max(0, int(base_invest / current_price))
         
         # Anti-Martingale 적용
         if self.consecutive_losses >= 3:
@@ -445,7 +445,7 @@ class StrategyManager:
         min_invest = self.trader.deposit * 0.02  # 최소 2%
         adjusted_invest = max(min_invest, min(max_invest, adjusted_invest))
         
-        return max(1, int(adjusted_invest / current_price))
+        return max(0, int(adjusted_invest / current_price))
     
     def update_consecutive_results(self, is_profit: bool):
         """연속 손익 결과 업데이트"""
@@ -1026,7 +1026,7 @@ class StrategyManager:
         if final_size > 0:
             self.log(f"[{info.get('name', code)}] ATR 사이징: ATR={atr:.0f}, 적정수량={final_size}주")
         
-        return max(1, final_size)
+        return max(0, final_size)
     
     def _default_position_size(self, code):
         """기본 포지션 크기 계산"""
@@ -1039,7 +1039,7 @@ class StrategyManager:
             invest_amount = self.trader.deposit * (self.config.betting_ratio / 100)
         else:
             invest_amount = self.trader.deposit * (self.trader.spin_betting.value() / 100)
-        return max(1, int(invest_amount / current_price))
+        return max(0, int(invest_amount / current_price))
 
     def get_time_based_k_value(self):
         """시간대별 K값 반환"""

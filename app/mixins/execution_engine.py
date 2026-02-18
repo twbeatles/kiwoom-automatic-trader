@@ -209,8 +209,12 @@ class ExecutionEngineMixin:
         """Submit buy order asynchronously."""
         info = self.universe.get(code, {})
         name = info.get("name", code)
+        now = datetime.datetime.now()
 
         if quantity <= 0:
+            return
+        cooldown_until = info.get("cooldown_until")
+        if cooldown_until and cooldown_until > now:
             return
         if self._pending_order_state.get(code, {}).get("side") == "buy":
             return
@@ -219,6 +223,22 @@ class ExecutionEngineMixin:
 
         if not (self.rest_client and self.current_account):
             self.log(f"BUY failed [{name}]: API/account not ready")
+            return
+
+        current_price = int(price) if int(price) > 0 else int(info.get("current", 0) or 0)
+        required_cash = int(quantity) * current_price if current_price > 0 else 0
+        available_cash = int(getattr(self, "deposit", 0) or 0)
+        if required_cash > 0 and available_cash > 0 and required_cash > available_cash:
+            self.log(
+                f"BUY skipped [{name}]: required={required_cash:,} available={available_cash:,}"
+            )
+            seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
+            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+            info["status"] = "cooldown"
+            self.log(f"BUY cooldown [{name}] {seconds}s (INSUFFICIENT_CASH)")
+            self._dirty_codes.add(code)
+            if not hasattr(self, "_ui_flush_timer"):
+                self.sig_update_table.emit()
             return
 
         if info.get("held", 0) <= 0:
@@ -240,7 +260,11 @@ class ExecutionEngineMixin:
         self.log(f"BUY error [{name}]: {e}")
         self._clear_pending_order(code)
         if code in self.universe:
-            self.universe[code]["status"] = "watch"
+            info = self.universe[code]
+            seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
+            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+            info["status"] = "cooldown"
+            self.log(f"BUY cooldown [{name}] {seconds}s (BUY_ERROR)")
         held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
         pending_buy = sum(
             1
@@ -265,7 +289,11 @@ class ExecutionEngineMixin:
         else:
             self.log(f"BUY rejected [{name}]: {result.message}")
             if code in self.universe:
-                self.universe[code]["status"] = "watch"
+                info = self.universe[code]
+                seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
+                info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                info["status"] = "cooldown"
+                self.log(f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED)")
             self._clear_pending_order(code)
             held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
             pending_buy = sum(

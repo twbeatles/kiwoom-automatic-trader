@@ -134,6 +134,7 @@ class OrderSyncMixin:
 
     def _on_position_sync_result(self, code: Iterable[str], positions):
         self._position_sync_pending.discard("__batch__")
+        self._position_sync_retry_count = 0
 
         if isinstance(code, str):
             target_codes: Set[str] = {code} if code else set()
@@ -283,8 +284,28 @@ class OrderSyncMixin:
                 self._position_sync_batch.add(code)
         else:
             self._position_sync_batch.update(c for c in code if c)
-        self.logger.warning(f"포지션 동기화 실패: {error}")
+        self._position_sync_retry_count = int(getattr(self, "_position_sync_retry_count", 0)) + 1
+        max_retries = max(1, int(getattr(Config, "POSITION_SYNC_MAX_RETRIES", 5)))
+
+        if self._position_sync_retry_count > max_retries:
+            dropped = len(self._position_sync_batch)
+            self._position_sync_batch.clear()
+            self._position_sync_scheduled = False
+            self._position_sync_retry_count = 0
+            self.logger.warning(f"포지션 동기화 재시도 초과로 배치를 폐기합니다 ({dropped}개): {error}")
+            return
+
+        backoff_cap_ms = max(
+            int(getattr(Config, "POSITION_SYNC_DEBOUNCE_MS", 200)),
+            int(getattr(Config, "POSITION_SYNC_BACKOFF_MAX_MS", 5000)),
+        )
+        delay_ms = min(
+            int(Config.POSITION_SYNC_DEBOUNCE_MS) * (2 ** (self._position_sync_retry_count - 1)),
+            backoff_cap_ms,
+        )
+        self.logger.warning(
+            f"포지션 동기화 실패({self._position_sync_retry_count}/{max_retries}), {delay_ms}ms 후 재시도: {error}"
+        )
         if self._position_sync_batch and not self._position_sync_scheduled:
             self._position_sync_scheduled = True
-            delay_ms = max(0, int(Config.POSITION_SYNC_DEBOUNCE_MS))
             QTimer.singleShot(delay_ms, lambda: self._sync_position_from_account(""))

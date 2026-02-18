@@ -933,14 +933,13 @@ class UIBuildMixin:
         group2.setLayout(form2)
         layout.addWidget(group2)
 
-        # 시스템 설정
+        # API 탭에서는 고급 설정 탭의 자동 실행 값을 안내만 한다.
         group3 = QGroupBox("⚙️ 시스템 설정")
         form3 = QFormLayout()
-        self.chk_auto_start = QCheckBox("윈도우 시작 시 자동 실행")
-        self.chk_auto_start.setToolTip("윈도우 부팅 시 프로그램 자동 시작")
-        self.chk_auto_start.toggled.connect(self._set_auto_start)
-        form3.addRow("", self.chk_auto_start)
-        
+        info_auto_start = QLabel("자동 실행은 [고급 설정] 탭에서 변경합니다.")
+        info_auto_start.setWordWrap(True)
+        form3.addRow("", info_auto_start)
+
         group3.setLayout(form3)
         layout.addWidget(group3)
         

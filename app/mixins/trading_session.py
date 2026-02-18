@@ -156,6 +156,8 @@ class TradingSessionMixin:
             self._position_sync_batch.clear()
         if hasattr(self, "_position_sync_scheduled"):
             self._position_sync_scheduled = False
+        if hasattr(self, "_position_sync_retry_count"):
+            self._position_sync_retry_count = 0
         self._pending_order_state.clear()
         self._last_exec_event.clear()
 

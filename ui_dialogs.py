@@ -4,6 +4,7 @@ Dialog confirmations and tooling for Kiwoom Pro Algo-Trader.
 
 import datetime
 import json
+import logging
 import os
 
 from PyQt6.QtCore import Qt, QTime
@@ -31,6 +32,7 @@ from PyQt6.QtWidgets import (
 )
 
 from config import Config
+from data.providers import StockMasterCacheProvider
 from dark_theme import DARK_STYLESHEET
 from profile_manager import ProfileManager
 
@@ -41,6 +43,7 @@ from profile_manager import ProfileManager
 class PresetDialog(QDialog):
     def __init__(self, parent=None, current_values=None):
         super().__init__(parent)
+        self.logger = logging.getLogger("KiwoomTrader")
         self.current_values = current_values or {}
         self.presets = self._load_presets()
         self.selected_preset = None
@@ -96,8 +99,12 @@ class PresetDialog(QDialog):
             if os.path.exists(Config.PRESETS_FILE):
                 with open(Config.PRESETS_FILE, 'r', encoding='utf-8') as f:
                     presets.update(json.load(f))
-        except:
-            pass
+        except json.JSONDecodeError as exc:
+            self.logger.warning(f"프리셋 파싱 실패: {exc}")
+            QMessageBox.warning(self, "프리셋 로드 실패", f"프리셋 파일 형식이 손상되었습니다.\n{exc}")
+        except OSError as exc:
+            self.logger.warning(f"프리셋 로드 실패: {exc}")
+            QMessageBox.warning(self, "프리셋 로드 실패", f"프리셋 파일을 읽을 수 없습니다.\n{exc}")
         return presets
 
     def _save_presets(self):
@@ -105,8 +112,9 @@ class PresetDialog(QDialog):
         try:
             with open(Config.PRESETS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(user, f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        except (OSError, TypeError) as exc:
+            self.logger.error(f"프리셋 저장 실패: {exc}")
+            QMessageBox.warning(self, "프리셋 저장 실패", f"프리셋을 저장할 수 없습니다.\n{exc}")
 
     def _refresh_list(self):
         self.list_widget.clear()
@@ -184,7 +192,9 @@ class StockSearchDialog(QDialog):
     def __init__(self, parent=None, rest_client=None):
         super().__init__(parent)
         self.rest_client = rest_client
+        self.cache_provider = StockMasterCacheProvider()
         self.selected_codes = []
+        self._last_results = []
         self._init_ui()
 
     def _init_ui(self):
@@ -220,8 +230,8 @@ class StockSearchDialog(QDialog):
 
         # Result Table
         self.result_table = QTableWidget()
-        self.result_table.setColumnCount(3)
-        self.result_table.setHorizontalHeaderLabels(["선택", "종목코드", "종목명"])
+        self.result_table.setColumnCount(5)
+        self.result_table.setHorizontalHeaderLabels(["선택", "종목코드", "종목명", "현재가", "출처"])
         self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.result_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.result_table.setAlternatingRowColors(True)
@@ -231,6 +241,9 @@ class StockSearchDialog(QDialog):
             QHeaderView::section { background: #161b22; padding: 8px; border: none; }
         """)
         layout.addWidget(self.result_table)
+        self.search_status = QLabel("6자리 코드는 API 확인, 종목명은 로컬 캐시에서 검색합니다.")
+        self.search_status.setWordWrap(True)
+        layout.addWidget(self.search_status)
 
         # Bottom Buttons
         btn_layout = QHBoxLayout()
@@ -255,22 +268,75 @@ class StockSearchDialog(QDialog):
         if not keyword:
             return
 
-        # 실제로는 REST API로 검색, 여기서는 샘플 데이터
-        sample_stocks = [
-            ("005930", "삼성전자"), ("000660", "SK하이닉스"),
-            ("035420", "NAVER"), ("035720", "카카오"),
-            ("005380", "현대차"), ("051910", "LG화학"),
-            ("006400", "삼성SDI"), ("003670", "포스코퓨처엠"),
-        ]
+        results = []
+        status_parts = []
 
-        results = [(c, n) for c, n in sample_stocks if keyword.lower() in n.lower() or keyword in c]
+        if len(keyword) == 6 and keyword.isdigit():
+            api_row = self._search_code_via_api(keyword)
+            if api_row:
+                results.append(api_row)
+                status_parts.append("API 확인 결과 1건")
+            else:
+                status_parts.append("API 확인 결과 없음")
+            cached_rows = self.cache_provider.search(keyword, limit=20)
+            if cached_rows:
+                status_parts.append(f"캐시 검색 {len(cached_rows)}건")
+                results.extend(cached_rows)
+        else:
+            cached_rows = self.cache_provider.search(keyword, limit=100)
+            results.extend(cached_rows)
+            status_parts.append(f"캐시 검색 {len(cached_rows)}건")
 
-        self.result_table.setRowCount(len(results))
-        for i, (code, name) in enumerate(results):
+        deduped = []
+        seen = set()
+        for row in results:
+            code = str(row.get("code", "")).strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            deduped.append(row)
+
+        self._last_results = deduped
+        self._render_results(deduped)
+        self.search_status.setText(" | ".join(status_parts) if status_parts else "검색 결과 없음")
+
+    def _search_code_via_api(self, code: str):
+        if not self.rest_client:
+            return None
+        try:
+            quote = self.rest_client.get_stock_quote(code)
+        except Exception:
+            return None
+
+        if not quote:
+            return None
+
+        name = str(getattr(quote, "name", "") or code)
+        market = str(getattr(quote, "market_type", "") or "UNKNOWN")
+        current_price = int(getattr(quote, "current_price", 0) or 0)
+        self.cache_provider.upsert(code, name, market, current_price)
+        return {
+            "code": code,
+            "name": name,
+            "market": market,
+            "current_price": current_price,
+            "source": "api",
+        }
+
+    def _render_results(self, rows):
+        self.result_table.setRowCount(len(rows))
+        for i, row in enumerate(rows):
+            code = str(row.get("code", ""))
+            name = str(row.get("name", code))
+            current_price = int(row.get("current_price", 0) or 0)
+            source = str(row.get("source", "cache"))
+
             chk = QCheckBox()
             self.result_table.setCellWidget(i, 0, chk)
             self.result_table.setItem(i, 1, QTableWidgetItem(code))
             self.result_table.setItem(i, 2, QTableWidgetItem(name))
+            self.result_table.setItem(i, 3, QTableWidgetItem(f"{current_price:,}" if current_price > 0 else "-"))
+            self.result_table.setItem(i, 4, QTableWidgetItem("API 확인" if source == "api" else "캐시"))
 
     def _apply(self):
         self.selected_codes = []

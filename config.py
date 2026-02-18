@@ -373,7 +373,8 @@ class Config:
         'emergency_stop': 'Ctrl+Shift+X',
         'refresh': 'F5',
         'export_csv': 'Ctrl+E',
-        'open_presets': 'Ctrl+P',
+        'open_profile_manager': 'Ctrl+P',
+        'open_presets': 'Ctrl+Shift+P',
         'toggle_theme': 'Ctrl+T',
         'show_help': 'F1',
         'search_stock': 'Ctrl+F',
@@ -424,8 +425,11 @@ class Config:
     UI_REFRESH_INTERVAL_MS = 100
     DECISION_CACHE_MS = 100
     POSITION_SYNC_DEBOUNCE_MS = 200
+    POSITION_SYNC_MAX_RETRIES = 5
+    POSITION_SYNC_BACKOFF_MAX_MS = 5000
     LOG_DEDUP_SEC = 30
     TABLE_BATCH_LIMIT = 200
+    ORDER_REJECT_COOLDOWN_SEC = 10
     
     # =========================================================================
     # 기본 프리셋 정의
@@ -510,6 +514,8 @@ class Config:
 - Ctrl+S: 매매 시작
 - Ctrl+Q: 매매 중지
 - Ctrl+Shift+X: 긴급 청산
+- Ctrl+P: 프로필 관리
+- Ctrl+Shift+P: 프리셋 관리
 - F5: 새로고침
         """,
         "strategy": """

@@ -59,6 +59,7 @@ class KiwoomProTrader(
         self._position_sync_pending: Set[str] = set()
         self._position_sync_batch: Set[str] = set()
         self._position_sync_scheduled = False
+        self._position_sync_retry_count = 0
         self._pending_order_state: Dict[str, Dict[str, Any]] = {}
         self._last_exec_event: Dict[str, Dict[str, Any]] = {}
         self._account_refresh_pending = False

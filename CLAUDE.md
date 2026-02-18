@@ -198,7 +198,7 @@ pyinstaller KiwoomTrader.spec
 - `data/providers/` (`kiwoom`, `dart`, `macro`, `csv`)
 
 3. 테스트 기준 업데이트
-- 실행 기준: `pytest -q tests/unit`
+- 실행 기준: `python -m pytest -q tests/unit`
 - 현재 결과(2026-02-18): **15 passed, 2 warnings**
 - 경고 2건은 `websockets.legacy` deprecation 관련이며 실패 케이스는 없음
 

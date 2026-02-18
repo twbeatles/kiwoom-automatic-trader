@@ -54,6 +54,7 @@ log/
 data/*.db
 data/*.sqlite*
 data/*.json
+!data/stock_master_cache.json
 tmp/
 temp/
 *.bak
