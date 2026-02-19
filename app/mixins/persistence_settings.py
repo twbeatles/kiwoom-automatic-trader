@@ -4,6 +4,7 @@ import csv
 import datetime
 import json
 import os
+from pathlib import Path
 
 try:
     import keyring
@@ -64,6 +65,10 @@ class PersistenceSettingsMixin:
         if record.get("profit", 0) > 0:
             self.win_count += 1
         self.total_realized_profit += record.get("profit", 0)
+        if record.get("type") == "매도":
+            self.daily_realized_profit = int(getattr(self, "daily_realized_profit", 0) or 0) + int(
+                record.get("profit", 0) or 0
+            )
 
     def _refresh_history_table(self):
         today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -172,6 +177,7 @@ class PersistenceSettingsMixin:
     def _save_trade_history(self):
         """거래 내역 저장."""
         try:
+            Path(Config.TRADE_HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.TRADE_HISTORY_FILE, "w", encoding="utf-8") as file:
                 json.dump(self.trade_history, file, ensure_ascii=False, indent=2)
         except OSError as exc:
@@ -315,6 +321,7 @@ class PersistenceSettingsMixin:
             if secret_key:
                 keyring.set_password("KiwoomTrader", "secret_key", secret_key)
 
+            Path(Config.SETTINGS_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.SETTINGS_FILE, "w", encoding="utf-8") as file:
                 json.dump(settings, file, ensure_ascii=False, indent=2)
 

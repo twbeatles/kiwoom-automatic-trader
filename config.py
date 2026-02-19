@@ -4,7 +4,11 @@ REST API 기반 + 확장 기능 설정
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, List, Dict, Set, Optional
+
+
+_BASE_PATH = Path(__file__).resolve().parent
 
 @dataclass
 class TradingConfig:
@@ -411,11 +415,12 @@ class Config:
     # =========================================================================
     # 파일 경로
     # =========================================================================
-    DATA_DIR = "data"
-    SETTINGS_FILE = "kiwoom_settings.json"
-    PRESETS_FILE = "kiwoom_presets.json"
-    TRADE_HISTORY_FILE = "kiwoom_trade_history.json"
-    LOG_DIR = "logs"
+    BASE_DIR = str(_BASE_PATH)
+    DATA_DIR = str(_BASE_PATH / "data")
+    SETTINGS_FILE = str(_BASE_PATH / "kiwoom_settings.json")
+    PRESETS_FILE = str(_BASE_PATH / "kiwoom_presets.json")
+    TRADE_HISTORY_FILE = str(_BASE_PATH / "kiwoom_trade_history.json")
+    LOG_DIR = str(_BASE_PATH / "logs")
     
     # =========================================================================
     # 메모리 관리

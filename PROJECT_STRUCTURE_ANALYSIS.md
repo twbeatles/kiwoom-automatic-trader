@@ -32,10 +32,12 @@ This repository is no longer a monolith. Runtime is assembled through `KiwoomPro
 2. `KiwoomProTrader` builds UI, loads settings, wires `TradingConfig` sync.
 3. API connect builds auth/rest/ws clients asynchronously.
 4. Start trading initializes universe from quote/daily/minute data.
+4.1 Universe initialization is followed by account-position snapshot sync; start is aborted on sync failure.
 5. Realtime ticks enter `_on_execution` and run buy/sell logic.
 6. Buy gating uses `StrategyManager.evaluate_buy_conditions`.
 7. If `feature_flags.use_modular_strategy_pack` is true, strategy-pack engine evaluates first; otherwise legacy path runs.
 8. Orders are submitted through execution policy abstraction and synced by account-position reconciliation.
+8.1 Per-code fail-safe now marks repeated sync failures as `sync_failed` and blocks only that code's auto orders.
 
 ## 5. Settings Schema (v3)
 Canonical settings now include:
@@ -61,6 +63,8 @@ Migration:
 - Historical baseline: 9 passing unit tests retained as minimum target.
 - As of 2026-02-18, `pytest -q tests/unit` result is **15 passed, 2 warnings**.
 - Added architecture introduces deterministic components (`backtest`, `allocator`, strategy-pack) suitable for unit-level verification.
+- Latest run (2026-02-19): `pytest -q tests/unit` => **37 passed, 1 warning**.
+- `websockets.legacy` deprecation warnings are resolved in current code.
 
 ## 8. Technical Debt / Risk Hotspots
 - `ui_build.py` remains large and highly stateful.
@@ -96,8 +100,23 @@ Migration:
   - `backup/refactor_phase0~6/`
   - `build/`, `dist/`, `dist_new/`
   - `logs/`, `.pytest_cache/`
+- 2026-02-19 recount:
+  - `app/` (16 `.py`)
+  - `api/` (5 `.py`)
+  - `strategies/` (4 `.py`)
+  - `backtest/` (2 `.py`)
+  - `portfolio/` (2 `.py`)
+  - `data/` (7 `.py`)
+  - `tools/` (4 `.py`)
+  - `tests/` (23 `.py`)
 
 ## 12. Documentation Sync Notes
 - `README.md` now has explicit addendum for post-v4.5 package growth.
 - AI operator guides (`CLAUDE.md`, `GEMINI.md`) should treat settings schema as v3 canonical.
 - Strategy blueprint acceptance criteria should be tracked against current 15-test baseline, not legacy 9-test baseline.
+- Added operational docs for start-time position snapshot sync, `sync_failed` fail-safe, and BASE_DIR absolute-path policy.
+
+## 13. Stability Addendum (2026-02-19)
+- Daily loss stop now uses daily-scoped metrics (`daily_realized_profit`, `daily_initial_deposit`) instead of session cumulative profit.
+- File persistence paths (`settings`, `presets`, `history`, `logs`, token cache) are anchored to `Config.BASE_DIR`.
+- WebSocket compatibility imports were updated to avoid deprecated `websockets.legacy`/`WebSocketClientProtocol` path.

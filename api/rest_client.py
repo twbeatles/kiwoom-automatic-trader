@@ -311,7 +311,7 @@ class KiwoomRESTClient:
         
         return None
     
-    def get_positions(self, account_no: str) -> List[Position]:
+    def get_positions(self, account_no: str) -> Optional[List[Position]]:
         """
         보유 종목 조회
         
@@ -328,24 +328,28 @@ class KiwoomRESTClient:
         
         result = self._request("POST", "/api/dostk/acntbal", data=data)
         
+        if not result:
+            return None
+        if result.get("return_code") != 0:
+            return None
+
         positions = []
-        if result and result.get("return_code") == 0:
-            stocks = result.get("stocks", [])
-            
-            for item in stocks:
-                positions.append(Position(
-                    code=item.get("stk_cd", ""),
-                    name=item.get("stk_nm", ""),
-                    quantity=int(item.get("hold_qty", 0)),
-                    available_qty=int(item.get("sell_psbl_qty", 0)),
-                    buy_price=int(item.get("buy_prc", 0)),
-                    current_price=abs(int(item.get("cur_prc", 0))),
-                    buy_amount=int(item.get("buy_amt", 0)),
-                    eval_amount=int(item.get("eval_amt", 0)),
-                    profit=int(item.get("eval_pl", 0)),
-                    profit_rate=float(item.get("eval_pl_rt", 0))
-                ))
-        
+        stocks = result.get("stocks", [])
+
+        for item in stocks:
+            positions.append(Position(
+                code=item.get("stk_cd", ""),
+                name=item.get("stk_nm", ""),
+                quantity=int(item.get("hold_qty", 0)),
+                available_qty=int(item.get("sell_psbl_qty", 0)),
+                buy_price=int(item.get("buy_prc", 0)),
+                current_price=abs(int(item.get("cur_prc", 0))),
+                buy_amount=int(item.get("buy_amt", 0)),
+                eval_amount=int(item.get("eval_amt", 0)),
+                profit=int(item.get("eval_pl", 0)),
+                profit_rate=float(item.get("eval_pl_rt", 0))
+            ))
+
         return positions
     
     # =========================================================================

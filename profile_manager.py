@@ -9,14 +9,19 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+from config import Config
+
 
 class ProfileManager:
     """설정 프로필 관리 클래스"""
     
     PROFILES_FILE = "kiwoom_profiles.json"
     
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = Path(data_dir)
+    def __init__(self, data_dir: str = Config.DATA_DIR):
+        raw_dir = Path(data_dir)
+        if not raw_dir.is_absolute():
+            raw_dir = Path(Config.BASE_DIR) / raw_dir
+        self.data_dir = raw_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.profiles_path = self.data_dir / self.PROFILES_FILE
         self.profiles: Dict[str, Dict[str, Any]] = {}

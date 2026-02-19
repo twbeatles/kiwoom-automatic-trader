@@ -25,7 +25,7 @@
 - [키보드 단축키](#-키보드-단축키)
 - [매매 전략](#-매매-전략)
 - [리스크 관리](#-리스크-관리)
-- [2026-02-18 구조 동기화 업데이트](#-2026-02-18-구조-동기화-업데이트)
+- [2026-02-19 안정성 동기화 업데이트](#-2026-02-19-안정성-동기화-업데이트)
 - [주의사항](#-주의사항)
 
 ---
@@ -151,7 +151,7 @@ v4.5는 **보안(Security)** 및 **시스템 통합(Integration)** 중심의 메
 ```
 PyQt6>=6.5.0          # GUI 프레임워크
 requests>=2.28.0      # HTTP 클라이언트
-websockets>=11.0      # WebSocket 실시간 통신
+websockets>=11.0,<16  # WebSocket 실시간 통신 (호환 범위 고정)
 keyring>=23.0.0       # 보안 키 저장
 python-dateutil>=2.8.0 # 날짜/시간 처리
 ```
@@ -424,7 +424,7 @@ python tools/refactor_verify.py
 
 ---
 
-## 🔄 2026-02-18 구조 동기화 업데이트
+## 🔄 2026-02-19 안정성 동기화 업데이트
 
 이번 추가 업데이트는 실제 저장소 상태(`tree /F /A`)와 테스트 실행 결과(`python -m pytest -q tests/unit`)를 기준으로 문서를 동기화한 내용입니다.
 
@@ -443,15 +443,19 @@ python tools/refactor_verify.py
 - `docs/refactor/`에는 `baseline_manifest.json` 외에 `post_refactor_manifest.json`도 존재합니다.
 - 루트 패키지로 `strategies/`, `backtest/`, `portfolio/`가 추가되어 확장 경로가 코드화되어 있습니다.
 - `tools/perf_smoke.py`로 전략 평가 경로의 로컬 성능 스모크 테스트를 수행할 수 있습니다.
+- `start_trading()`은 유니버스 초기화 후 계좌 포지션 스냅샷 동기화가 성공해야만 시작됩니다.
+- 포지션 동기화 실패가 누적되면 종목 상태가 `sync_failed`로 전환되어 해당 종목 자동 주문이 차단됩니다.
+- 설정/로그/내역 경로는 `Config.BASE_DIR` 기준 절대경로로 고정되어 실행 위치(CWD) 영향이 제거되었습니다.
 
-### 테스트 현황 (2026-02-18)
+### 테스트 현황 (2026-02-19)
 
 ```bash
 python -m pytest -q tests/unit
-# 15 passed, 2 warnings
+# 37 passed, 1 warning
 ```
 
-- 경고 2건은 `websockets.legacy` deprecation 관련이며, 테스트 실패는 없습니다.
+- `websockets.legacy` deprecation 경고는 제거되었습니다.
+- 현재 경고 1건은 테스트 외부 패키지(`langsmith`/`pydantic v1`) 호환 안내입니다.
 
 ---
 
@@ -599,7 +603,13 @@ python -m pytest -q tests/unit
 일일 손실률 > 3% → 자동 매매 중지
 ```
 
-### 4. 보유 종목 수 제한
+### 4. 포지션 동기화 Fail-safe
+
+- 주문/체결 동기화가 종목 단위로 반복 실패하면 상태가 `sync_failed`로 전환됩니다.
+- `sync_failed` 종목은 자동 진입/청산을 즉시 차단하고, 다른 종목 매매는 계속됩니다.
+- 이후 계좌 포지션 동기화가 성공하면 해당 종목은 `watch`/`holding`으로 자동 복구됩니다.
+
+### 5. 보유 종목 수 제한
 
 ```python
 최대: 7개 (공격적)
@@ -666,7 +676,7 @@ python -m pytest -q tests/unit
 ### kiwoom_settings.json
 ```json
 {
-  "settings_version": 2,
+  "settings_version": 3,
   "codes": "005930,000660",
   "k_value": 0.5,
   "betting_ratio": 10.0,
@@ -674,12 +684,10 @@ python -m pytest -q tests/unit
   ...
 }
 ```
-설정 스키마(v2) 정책:
+설정 스키마(v3) 정책:
+- canonical 스키마는 `settings_version = 3`
 - 저장은 `betting_ratio`를 기준으로 사용
-- `betting`은 기존 파일 호환을 위해 병행 저장/로드
-
-추가 메모(2026-02-18):
-- 현재 canonical 스키마는 `settings_version = 3` 입니다.
+- `betting`은 legacy 파일 호환을 위해 병행 저장/로드
 - `settings_version < 3` 파일은 로드 시 v3 필드(`strategy_pack`, `feature_flags`, `execution_policy` 등)가 자동 보강됩니다.
 
 ### kiwoom_presets.json
@@ -737,7 +745,7 @@ MIT License
 
 - **작성자**: Kiwoom Pro Algo-Trader
 - **버전**: 4.5
-- **최종 업데이트**: 2026-02-18
+- **최종 업데이트**: 2026-02-19
 
 ---
 

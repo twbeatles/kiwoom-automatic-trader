@@ -23,8 +23,11 @@ hiddenimports = [
     'PyQt6.QtWidgets',
     
     # 네트워크 모듈
-    'websockets.legacy',
-    'websockets.legacy.client',
+    'websockets',
+    'websockets.asyncio',
+    'websockets.asyncio.client',
+    'websockets.client',
+    'websockets.exceptions',
     
     # 보안 모듈
     'keyring.backends',
@@ -52,6 +55,7 @@ hiddenimports = [
     'app.support',
     'app.support.widgets',
     'app.support.worker',
+    'app.support.execution_policy',
     'config',
     'strategy_manager',
     'sound_notifier',

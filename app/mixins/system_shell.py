@@ -148,6 +148,8 @@ class SystemShellMixin:
 
     def _on_timer(self):
         now = datetime.datetime.now()
+        if hasattr(self, "_rollover_daily_metrics"):
+            self._rollover_daily_metrics(now=now, reset_baseline=False)
         self.status_time.setText(now.strftime("%H:%M:%S"))
 
         badge_mode = "running" if self.is_running else "idle"
@@ -208,11 +210,16 @@ class SystemShellMixin:
                 self.time_liquidate_executed = True
                 self._time_liquidate()
 
-        if self.chk_use_risk.isChecked() and not self.daily_loss_triggered and self.initial_deposit > 0:
-            loss_rate = (self.total_realized_profit / self.initial_deposit) * 100
+        if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0 and int(getattr(self, "deposit", 0) or 0) > 0:
+            self.daily_initial_deposit = int(self.deposit)
+
+        if self.chk_use_risk.isChecked() and not self.daily_loss_triggered and self.daily_initial_deposit > 0:
+            loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
             if loss_rate <= -self.spin_max_loss.value():
                 self.daily_loss_triggered = True
-                self.log(f"일일 손실 한도 도달 ({loss_rate:.2f}%) - 매매 중지")
+                self.log(
+                    f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원) - 매매 중지"
+                )
                 self.stop_trading()
 
         if self._history_dirty:

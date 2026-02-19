@@ -75,6 +75,7 @@ Engine: `backtest/engine.py`
 ## 9. Acceptance Criteria
 - Historical baseline 9 unit tests remain green.
 - Current baseline (2026-02-18): `pytest -q tests/unit` => **15 passed, 2 warnings**.
+- Latest baseline (2026-02-19): `pytest -q tests/unit` => **37 passed, 1 warning**.
 - New tests validate:
   - strategy-pack behavior,
   - v2->v3 settings migration,
@@ -104,3 +105,9 @@ Engine: `backtest/engine.py`
   - `data/providers/dart_provider.py`
   - `data/providers/macro_provider.py`
   - `data/providers/csv_provider.py`
+
+## 12. Stability Addendum (2026-02-19)
+- Trading start now requires successful account-position snapshot sync after universe initialization.
+- Per-code position-sync fail-safe is active: repeated sync failure sets `status=sync_failed` and blocks that code's auto orders.
+- Daily loss governance now uses daily-scoped PnL baseline (`daily_realized_profit / daily_initial_deposit`).
+- Runtime/documentation baseline should assume WebSocket deprecation cleanup is applied (`websockets>=11.0,<16`).

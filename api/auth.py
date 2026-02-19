@@ -14,6 +14,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
 
+from config import Config
+
 
 class KiwoomAuth:
     """OAuth2 토큰 기반 인증 관리 클래스"""
@@ -47,7 +49,9 @@ class KiwoomAuth:
         self._expires_at: float = 0  # Unix timestamp
         
         # 罹먯떆 ?붾젆?좊━ ?ㅼ젙
-        self.cache_dir = Path(cache_dir) if cache_dir else Path.cwd()
+        base_dir = Path(getattr(Config, "BASE_DIR", Path.cwd()))
+        self.cache_dir = Path(cache_dir) if cache_dir else base_dir
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_path = self.cache_dir / self.TOKEN_CACHE_FILE
         
         # 罹먯떆???좏겙 濡쒕뱶 ?쒕룄

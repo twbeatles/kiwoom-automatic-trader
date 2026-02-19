@@ -11,6 +11,21 @@ from config import Config
 
 
 class OrderSyncMixin:
+    def _log_sync_fail_once(self, code: str, message: str):
+        cooldown_map = getattr(self, "_log_cooldown_map", None)
+        if cooldown_map is None:
+            cooldown_map = {}
+            self._log_cooldown_map = cooldown_map
+        cache_key = f"{code}:sync_failed"
+        now_ts = datetime.datetime.now().timestamp()
+        last_ts = float(cooldown_map.get(cache_key, 0.0))
+        if now_ts - last_ts >= float(getattr(Config, "LOG_DEDUP_SEC", 30)):
+            if hasattr(self, "log"):
+                self.log(message)
+            else:
+                self.logger.warning(message)
+            cooldown_map[cache_key] = now_ts
+
     def _on_realtime(self, data: ExecutionData):
         self.sig_execution.emit(data)
 
@@ -133,6 +148,10 @@ class OrderSyncMixin:
         self.threadpool.start(worker)
 
     def _on_position_sync_result(self, code: Iterable[str], positions):
+        if positions is None:
+            self._on_position_sync_error(code, RuntimeError("계좌 포지션 조회 결과가 비어 있습니다."))
+            return
+
         self._position_sync_pending.discard("__batch__")
         self._position_sync_retry_count = 0
 
@@ -151,6 +170,13 @@ class OrderSyncMixin:
             info = self.universe.get(code_item)
             if not info:
                 continue
+
+            sync_failed_codes = getattr(self, "_sync_failed_codes", set())
+            was_sync_failed = code_item in sync_failed_codes
+            if was_sync_failed and hasattr(self, "_sync_failed_codes"):
+                self._sync_failed_codes.discard(code_item)
+                if hasattr(self, "log"):
+                    self.log(f"[복구] {info.get('name', code_item)} 포지션 동기화가 정상 복구되었습니다.")
 
             prev_held = int(info.get("held", 0))
             prev_buy_price = int(info.get("buy_price", 0))
@@ -278,6 +304,11 @@ class OrderSyncMixin:
             self.sig_update_table.emit()
 
     def _on_position_sync_error(self, code: Iterable[str], error: Exception):
+        if isinstance(code, str):
+            failed_codes: Set[str] = {code} if code else set()
+        else:
+            failed_codes = {c for c in code if c}
+
         self._position_sync_pending.discard("__batch__")
         if isinstance(code, str):
             if code:
@@ -288,11 +319,40 @@ class OrderSyncMixin:
         max_retries = max(1, int(getattr(Config, "POSITION_SYNC_MAX_RETRIES", 5)))
 
         if self._position_sync_retry_count > max_retries:
-            dropped = len(self._position_sync_batch)
+            dropped_codes = set(self._position_sync_batch) or failed_codes
+            dropped = len(dropped_codes)
+            for code_item in dropped_codes:
+                if hasattr(self, "_pending_order_state"):
+                    self._clear_pending_order(code_item)
+                info = getattr(self, "universe", {}).get(code_item)
+                if info is None:
+                    continue
+                info["status"] = "sync_failed"
+                info["cooldown_until"] = None
+                if hasattr(self, "_sync_failed_codes"):
+                    self._sync_failed_codes.add(code_item)
+                if hasattr(self, "_dirty_codes"):
+                    self._dirty_codes.add(code_item)
+                self._log_sync_fail_once(
+                    code_item,
+                    f"[안전차단] {info.get('name', code_item)} 포지션 동기화 실패 누적으로 신규 자동주문이 차단되었습니다.",
+                )
+
             self._position_sync_batch.clear()
             self._position_sync_scheduled = False
             self._position_sync_retry_count = 0
             self.logger.warning(f"포지션 동기화 재시도 초과로 배치를 폐기합니다 ({dropped}개): {error}")
+            universe = getattr(self, "universe", {})
+            pending_state = getattr(self, "_pending_order_state", {})
+            held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
+            pending_buy = sum(
+                1
+                for c, state in pending_state.items()
+                if state.get("side") == "buy" and int(universe.get(c, {}).get("held", 0)) == 0
+            )
+            self._holding_or_pending_count = held_count + pending_buy
+            if hasattr(self, "sig_update_table") and not hasattr(self, "_ui_flush_timer"):
+                self.sig_update_table.emit()
             return
 
         backoff_cap_ms = max(

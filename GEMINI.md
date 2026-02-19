@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-02-18
+> **최종 업데이트**: 2026-02-19
 
 ---
 
@@ -14,6 +14,7 @@
 - 실구현 클래스: `app/main_window.py`의 `KiwoomProTrader`
 - 기능 모듈: `app/mixins/*.py`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
+- 주문 라우팅 지원: `app/support/execution_policy.py`
 
 ---
 
@@ -152,3 +153,26 @@ pytest -q tests/unit
 ```
 - 2026-02-18 실행 결과: **15 passed, 2 warnings**
 - 경고는 `websockets.legacy` deprecation 관련입니다.
+
+---
+
+## 2026-02-19 안정성 동기화 보강
+
+### 1) 매매 시작/동기화 정책
+- `start_trading()`은 유니버스 초기화 직후 `get_positions()` 스냅샷 동기화가 성공해야 시작됩니다.
+- 포지션 동기화 재시도 초과 시 종목 상태가 `sync_failed`로 전환되며 해당 종목 자동주문이 차단됩니다.
+
+### 2) 리스크/손익 기준
+- 일일 손실 제한은 누적 세션 손익이 아니라 `daily_realized_profit / daily_initial_deposit` 기준으로 계산됩니다.
+- 날짜 변경 시 일일 손익/기준 예수금이 롤오버됩니다.
+
+### 3) 경로/환경 정합성
+- `Config.BASE_DIR` 기반 절대경로로 설정/로그/거래내역/프리셋 파일 위치를 고정했습니다.
+- `KiwoomAuth` 토큰 캐시 기본 경로도 `BASE_DIR` 기준으로 동기화되었습니다.
+
+### 4) 최신 테스트 기준
+```bash
+pytest -q tests/unit
+```
+- 2026-02-19 실행 결과: **37 passed, 1 warning**
+- `websockets.legacy` deprecation 경고는 제거되었습니다.

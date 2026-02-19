@@ -1140,7 +1140,9 @@ class StrategyManager:
                 config=cfg,
                 portfolio_state={
                     "holding_or_pending_count": int(getattr(self.trader, "_holding_or_pending_count", 0)),
-                    "daily_realized_profit": float(getattr(self.trader, "total_realized_profit", 0)),
+                    "daily_realized_profit": float(
+                        getattr(self.trader, "daily_realized_profit", getattr(self.trader, "total_realized_profit", 0))
+                    ),
                 },
             )
             pack_result = self.pack_engine.evaluate(context)

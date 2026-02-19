@@ -1,5 +1,6 @@
 """Main window class assembled from mixins."""
 
+import datetime
 from typing import Any, Dict, Optional, Set
 
 from PyQt6.QtCore import *
@@ -53,8 +54,11 @@ class KiwoomProTrader(
         self.daily_loss_triggered = False
         self.time_liquidate_executed = False
         self.total_realized_profit = 0
+        self.daily_realized_profit = 0
+        self.daily_initial_deposit = 0
         self.trade_count = 0
         self.win_count = 0
+        self._trading_day = datetime.date.today()
         self._history_dirty = False
         self._position_sync_pending: Set[str] = set()
         self._position_sync_batch: Set[str] = set()
@@ -74,6 +78,7 @@ class KiwoomProTrader(
         self._last_connection_mode: Optional[str] = None
         self._log_cooldown_map: Dict[str, float] = {}
         self._holding_or_pending_count = 0
+        self._sync_failed_codes: Set[str] = set()
         
         # v4.3 신규 상태
         self.current_theme = Config.DEFAULT_THEME

@@ -61,6 +61,10 @@ class ExecutionEngineMixin:
         if pending_until and pending_until > now:
             return
 
+        sync_failed_codes = getattr(self, "_sync_failed_codes", set())
+        if status == "sync_failed" or code in sync_failed_codes:
+            return
+
         if status in {"buying", "selling", "buy_submitted", "sell_submitted"}:
             return
 

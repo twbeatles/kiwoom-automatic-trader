@@ -8,16 +8,23 @@ import json
 import logging
 import asyncio
 import threading
-from typing import Optional, Callable, Dict, List, Set
+from typing import Any, Optional, Callable, Dict, List, Set
 from dataclasses import dataclass
 
 try:
-    import websockets
-    from websockets.client import WebSocketClientProtocol
+    try:
+        from websockets.asyncio.client import connect as ws_connect
+    except ImportError:
+        try:
+            from websockets.client import connect as ws_connect
+        except ImportError:
+            from websockets import connect as ws_connect
+    from websockets.exceptions import ConnectionClosed
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
-    WebSocketClientProtocol = None
+    ws_connect = None
+    ConnectionClosed = Exception
 
 from .auth import KiwoomAuth
 from .models import StockQuote, ExecutionData
@@ -57,7 +64,7 @@ class KiwoomWebSocketClient:
         self.logger = logging.getLogger('KiwoomWebSocketClient')
         
         # 연결 상태
-        self._ws: Optional[WebSocketClientProtocol] = None
+        self._ws: Optional[Any] = None
         self._connected = False
         self._reconnecting = False
         
@@ -140,7 +147,7 @@ class KiwoomWebSocketClient:
                 # WebSocket 연결
                 headers = {"Authorization": f"bearer {token}"}
                 
-                async with websockets.connect(
+                async with ws_connect(
                     self.WS_URL,
                     extra_headers=headers,
                     ping_interval=30,
@@ -165,7 +172,7 @@ class KiwoomWebSocketClient:
                             break
                         await self._handle_message(message)
                 
-            except websockets.ConnectionClosed as e:
+            except ConnectionClosed as e:
                 self.logger.warning(f"WebSocket 연결 끊김: {e}")
                 self._connected = False
                 

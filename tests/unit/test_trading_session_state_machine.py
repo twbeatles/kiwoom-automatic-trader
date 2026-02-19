@@ -38,6 +38,7 @@ class _Harness(TradingSessionMixin):
         self.telegram = None
         self.logs = []
         self.init_called_with = None
+        self.snapshot_called_with = None
         self._init_result = init_result
 
     def log(self, msg):
@@ -50,6 +51,10 @@ class _Harness(TradingSessionMixin):
         self.init_called_with = list(codes)
         return list(self._init_result)
 
+    def _sync_positions_snapshot(self, codes):
+        self.snapshot_called_with = list(codes)
+        return True, ""
+
 
 class TestTradingSessionStateMachine(unittest.TestCase):
     @patch("app.mixins.trading_session.QMessageBox.critical")
@@ -60,6 +65,7 @@ class TestTradingSessionStateMachine(unittest.TestCase):
         trader.start_trading()
 
         self.assertEqual(trader.init_called_with, ["005930", "000660"])
+        self.assertEqual(trader.snapshot_called_with, ["005930", "000660"])
         self.assertTrue(trader.is_running)
         self.assertFalse(trader.btn_start.enabled)
         self.assertTrue(trader.btn_stop.enabled)

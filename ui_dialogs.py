@@ -110,6 +110,7 @@ class PresetDialog(QDialog):
     def _save_presets(self):
         user = {k: v for k, v in self.presets.items() if k not in Config.DEFAULT_PRESETS}
         try:
+            os.makedirs(os.path.dirname(Config.PRESETS_FILE), exist_ok=True)
             with open(Config.PRESETS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(user, f, ensure_ascii=False, indent=2)
         except (OSError, TypeError) as exc:

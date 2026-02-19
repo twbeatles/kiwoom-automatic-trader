@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-02-18
+> **최종 업데이트**: 2026-02-19
 
 ---
 
@@ -24,6 +24,7 @@
 │   │   ├── persistence_settings.py
 │   │   └── dialogs_profiles.py
 │   └── support/
+│       ├── execution_policy.py
 │       ├── widgets.py
 │       └── worker.py
 ├── api/
@@ -92,11 +93,13 @@
 3. 매매 시작:
 - `start_trading()`
 - 실거래(`is_mock=False`)는 `_confirm_live_trading_guard()` 통과 필요
+- 유니버스 초기화 직후 `get_positions()` 스냅샷 동기화 성공 시에만 시작
 
 4. 실시간 처리:
 - 체결: `_on_execution()`
 - 주문체결: `_on_order_execution()`
 - 매매 중지 상태(`is_running=False`)에서는 체결 기반 주문 진입 차단
+- 포지션 동기화 재시도 초과 시 종목 상태 `sync_failed`로 fail-safe 차단
 
 5. 종료:
 - `stop_trading()` -> 구독 해제/타이머 정리
@@ -115,10 +118,10 @@
   - `LIVE_GUARD_PHRASE`
   - `LIVE_GUARD_TIMEOUT_SEC`
 
-- 설정 스키마(v2):
-  - `settings_version: 2`
+- 설정 스키마(v3):
+  - `settings_version: 3` (canonical)
   - `betting_ratio`를 canonical로 사용
-  - `betting`은 구버전 호환용으로 병행 유지
+  - `betting`은 구버전(legacy) 호환용으로 병행 유지
 
 - 유니버스 표준 키:
   - `prev_high`, `prev_low`
@@ -184,10 +187,10 @@ pyinstaller KiwoomTrader.spec
 
 ---
 
-## 2026-02-18 추가 동기화 메모
+## 2026-02-19 추가 동기화 메모
 
 1. 설정 스키마 기준
-- 문서 내 v2 호환 설명과 별개로, 현재 canonical은 `settings_version = 3` 입니다.
+- 현재 canonical은 `settings_version = 3`이며, v2는 legacy 호환 대상으로만 유지됩니다.
 - `settings_version < 3` 로드 시 v3 키(`strategy_pack`, `strategy_params`, `portfolio_mode`, `short_enabled`, `asset_scope`, `backtest_config`, `feature_flags`, `execution_policy`)가 자동 보강됩니다.
 
 2. 누락되기 쉬운 실제 모듈
@@ -199,10 +202,17 @@ pyinstaller KiwoomTrader.spec
 
 3. 테스트 기준 업데이트
 - 실행 기준: `python -m pytest -q tests/unit`
-- 현재 결과(2026-02-18): **15 passed, 2 warnings**
-- 경고 2건은 `websockets.legacy` deprecation 관련이며 실패 케이스는 없음
+- 현재 결과(2026-02-19): **37 passed, 1 warning**
+- `websockets.legacy` deprecation 경고는 제거됨
+- 잔여 경고 1건은 테스트 외부 패키지(`langsmith`/`pydantic v1`) 호환 안내
 
 4. 추가 검증 커맨드
 ```bash
 python tools/perf_smoke.py
 ```
+
+5. 안정성/운영 동기화 포인트
+- `start_trading()`은 유니버스 초기화 후 계좌 포지션 스냅샷 동기화 성공 시에만 매매를 시작합니다.
+- 포지션 동기화 재시도 초과 시 종목 상태가 `sync_failed`로 전환되어 해당 종목 자동 주문이 차단됩니다.
+- 설정/로그/거래내역 파일 경로는 `Config.BASE_DIR` 기준 절대경로로 고정되었습니다.
+- 일일 손실 제한은 `daily_realized_profit / daily_initial_deposit` 기준으로 계산됩니다.

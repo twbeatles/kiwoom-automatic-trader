@@ -1,7 +1,7 @@
 """Trading session lifecycle mixin for KiwoomProTrader."""
 
 import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -12,6 +12,87 @@ from config import Config
 
 
 class TradingSessionMixin:
+    def _rollover_daily_metrics(self, now: Optional[datetime.datetime] = None, reset_baseline: bool = False):
+        now_dt = now or datetime.datetime.now()
+        today = now_dt.date()
+        current_day = getattr(self, "_trading_day", None)
+        if current_day != today:
+            self._trading_day = today
+            self.daily_realized_profit = 0
+            self.daily_initial_deposit = 0
+            self.daily_loss_triggered = False
+
+        if reset_baseline and int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
+            baseline = int(getattr(self, "deposit", 0) or 0) or int(getattr(self, "initial_deposit", 0) or 0)
+            if baseline > 0:
+                self.daily_initial_deposit = baseline
+
+    def _sync_positions_snapshot(self, codes: List[str]) -> Tuple[bool, str]:
+        """매매 시작 직후 계좌 포지션 스냅샷을 유니버스에 강제 반영한다."""
+        if not (self.rest_client and self.current_account):
+            return False, "계좌 동기화에 필요한 API/계좌 정보가 준비되지 않았습니다."
+
+        try:
+            positions = self.rest_client.get_positions(self.current_account)
+        except Exception as exc:
+            return False, f"계좌 포지션 조회 실패: {exc}"
+
+        if positions is None:
+            return False, "계좌 포지션 조회 실패: 응답이 비어 있습니다."
+
+        if hasattr(self, "strategy"):
+            self.strategy.reset_tracking()
+
+        positions_by_code = {getattr(pos, "code", ""): pos for pos in positions or []}
+        universe_codes = set(codes)
+        now = datetime.datetime.now()
+
+        for code in codes:
+            info = self.universe.get(code, {})
+            matched = positions_by_code.get(code)
+            if matched:
+                held = max(0, int(getattr(matched, "quantity", 0)))
+                buy_price = int(getattr(matched, "buy_price", 0))
+                invest_amount = int(getattr(matched, "buy_amount", 0))
+            else:
+                held = 0
+                buy_price = 0
+                invest_amount = 0
+
+            info["held"] = held
+            info["buy_price"] = buy_price
+            info["invest_amount"] = invest_amount
+
+            if held > 0:
+                info["status"] = "holding"
+                info["buy_time"] = now
+                info["cooldown_until"] = None
+                if hasattr(self, "strategy") and invest_amount > 0:
+                    self.strategy.update_market_investment(code, invest_amount, is_buy=True)
+                    self.strategy.update_sector_investment(code, invest_amount, is_buy=True)
+            else:
+                info["status"] = "watch"
+                info["buy_time"] = None
+                info["max_profit_rate"] = 0
+                info["partial_profit_levels"] = set()
+
+            if hasattr(self, "_sync_failed_codes"):
+                self._sync_failed_codes.discard(code)
+
+        external_codes = sorted(c for c in positions_by_code.keys() if c and c not in universe_codes)
+        if external_codes:
+            preview = ", ".join(external_codes[:5])
+            suffix = " ..." if len(external_codes) > 5 else ""
+            self.log(f"유니버스 외 보유 종목 감지(자동청산 제외): {preview}{suffix}")
+
+        self._holding_or_pending_count = sum(
+            1 for code in codes if int(self.universe.get(code, {}).get("held", 0)) > 0
+        )
+        self._dirty_codes.update(codes)
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+        return True, ""
+
     def start_trading(self):
         if self.is_running:
             self.log("자동매매가 이미 실행 중입니다.")
@@ -73,17 +154,23 @@ class TradingSessionMixin:
                 return
 
         try:
+            self._rollover_daily_metrics(reset_baseline=True)
             self.daily_loss_triggered = False
             self.time_liquidate_executed = False
             self.btn_start.setEnabled(False)
             self.btn_stop.setEnabled(True)
             self.btn_emergency.setEnabled(True)
+            if hasattr(self, "_sync_failed_codes"):
+                self._sync_failed_codes.clear()
 
             # 테스트 하네스(스레드풀 없음)에서는 기존 동기 경로 유지
             if not hasattr(self, "threadpool"):
                 initialized_codes = self._init_universe(valid_codes)
                 if not initialized_codes:
                     raise RuntimeError("유니버스 초기화에 성공한 종목이 없습니다.")
+                synced, reason = self._sync_positions_snapshot(initialized_codes)
+                if not synced:
+                    raise RuntimeError(reason)
                 if self.ws_client:
                     self.ws_client.connect()
                     self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
@@ -110,6 +197,10 @@ class TradingSessionMixin:
 
                     for code in initialized_codes:
                         self.universe[code]["target"] = self.strategy.calculate_target_price(code)
+
+                    synced, reason = self._sync_positions_snapshot(initialized_codes)
+                    if not synced:
+                        raise RuntimeError(reason)
 
                     self._dirty_codes.update(initialized_codes)
                     self.sig_update_table.emit()
