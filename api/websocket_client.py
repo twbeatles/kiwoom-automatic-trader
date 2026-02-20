@@ -10,6 +10,7 @@ import asyncio
 import threading
 from typing import Any, Optional, Callable, Dict, List, Set
 from dataclasses import dataclass
+from functools import partial as _partial
 
 try:
     try:
@@ -190,8 +191,13 @@ class KiwoomWebSocketClient:
             if not self._stop_event.is_set():
                 retry_count += 1
                 if retry_count > max_retries:
-                    self.logger.error("최대 재연결 시도 횟수 초과")
-                    break
+                    self.logger.warning(
+                        f"최대 재연결 시도 횟수 초과 ({max_retries}회), "
+                        "60초 대기 후 재시도 초기화"
+                    )
+                    await asyncio.sleep(60)
+                    retry_count = 0
+                    continue
                 
                 wait_time = min(2 ** retry_count, 60)
                 self.logger.info(f"{wait_time}초 후 재연결 시도 ({retry_count}/{max_retries})")
@@ -420,6 +426,22 @@ class KiwoomWebSocketClient:
         except Exception as e:
             self.logger.error(f"메시지 처리 오류: {e}")
     
+    def _invoke_on_main_thread(self, callback: Callable, *args):
+        """콜백을 메인 스레드에서 안전하게 실행한다.
+
+        PyQt의 QMetaObject.invokeMethod(Qt.QueuedConnection)를 사용하여
+        asyncio 스레드에서 호출된 콜백이 메인(GUI) 스레드에서 실행되도록 보장한다.
+        QMetaObject를 사용할 수 없는 환경(테스트 등)에서는 직접 호출한다.
+        """
+        try:
+            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
+            # QTimer.singleShot(0, fn)은 메인 이벤트 루프에 큐잉되므로 thread-safe
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(0, _partial(callback, *args))
+        except Exception:
+            # PyQt 불가 시 (테스트 등) 직접 호출
+            callback(*args)
+
     async def _handle_execution(self, body: dict):
         """체결 데이터 처리"""
         if not self._on_execution:
@@ -437,8 +459,8 @@ class KiwoomWebSocketClient:
             bid_price=abs(int(body.get("bid_prc", 0)))
         )
         
-        # 콜백은 메인 스레드에서 실행되도록 처리 필요
-        self._on_execution(exec_data)
+        # 콜백을 메인 스레드에서 실행
+        self._invoke_on_main_thread(self._on_execution, exec_data)
     
     async def _handle_hoga(self, body: dict):
         """호가 데이터 처리"""
@@ -446,14 +468,14 @@ class KiwoomWebSocketClient:
             return
         
         code = body.get("stk_cd", "")
-        self._on_hoga(code, body)
+        self._invoke_on_main_thread(self._on_hoga, code, body)
     
     async def _handle_order_exec(self, body: dict):
         """주문 체결 데이터 처리"""
         if not self._on_order_exec:
             return
         
-        self._on_order_exec(body)
+        self._invoke_on_main_thread(self._on_order_exec, body)
     
     # =========================================================================
     # 이벤트 콜백 설정

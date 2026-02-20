@@ -533,9 +533,20 @@ class StrategyManager:
         return True
     
     def _get_stock_sector(self, code) -> str:
-        """종목의 섹터 반환 (실제로는 API 조회 필요)"""
+        """종목의 섹터 반환.
+
+        universe에 API로부터 채워진 sector 값이 있으면 사용하고,
+        없거나 '기타'이면 market_type 기반 폴백을 적용합니다.
+        """
         info = self.trader.universe.get(code, {})
-        return info.get('sector', '기타')
+        sector = info.get('sector', '')
+        if sector and sector != '기타':
+            return sector
+        # 폴백: market_type이라도 구분하여 완전 동일 섹터로 묶이는 것을 방지
+        market_type = info.get('market_type', '')
+        if market_type:
+            return f"기타({market_type})"
+        return '기타'
     
     def update_sector_investment(self, code, amount, is_buy=True):
         """섹터별 투자금 업데이트"""

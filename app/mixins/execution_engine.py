@@ -137,6 +137,10 @@ class ExecutionEngineMixin:
                         return
 
         elif held == 0 and target > 0 and not no_buy:
+            # 일일 손실 한도 가드: 타이머 주기 사이 매수 차단
+            if getattr(self, "daily_loss_triggered", False):
+                return
+
             max_holdings = int(
                 cfg_value(
                     "max_holdings",

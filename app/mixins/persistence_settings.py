@@ -326,7 +326,10 @@ class PersistenceSettingsMixin:
                 json.dump(settings, file, ensure_ascii=False, indent=2)
 
             self._set_auto_start(self.chk_auto_start.isChecked())
-            self.log("✅ 설정 저장 완료 (Keyring 암호화)")
+            if KEYRING_AVAILABLE:
+                self.log("✅ 설정 저장 완료 (Keyring 암호화)")
+            else:
+                self.log("✅ 설정 저장 완료 (⚠️ Keyring 미사용 - 평문 저장)")
         except Exception as exc:
             self.log(f"❌ 저장 실패: {exc}")
 

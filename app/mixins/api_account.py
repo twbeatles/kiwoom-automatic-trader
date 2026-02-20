@@ -211,8 +211,11 @@ class APIAccountMixin:
 
         self.deposit = info.available_amount
         self.initial_deposit = self.initial_deposit or self.deposit
-        if getattr(self, "is_running", False) and int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
+        
+        # 일일 기준 예수금이 비어 있으면 즉시 확보 (start_trading 시점 정합성 보장)
+        if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
             self.daily_initial_deposit = int(self.deposit)
+            
         self.lbl_deposit.setText(f"예수금 {self.deposit:,} 원")
 
         profit = info.total_profit
