@@ -175,13 +175,34 @@ class PersistenceSettingsMixin:
             self.logger.warning(f"거래 내역 로드 실패: {exc}")
 
     def _save_trade_history(self):
-        """거래 내역 저장."""
+        """거래 내역 저장 (비동기 처리)."""
+        if not hasattr(self, "threadpool"):
+            # 테스트/동기 환경 대응
+            self._save_trade_history_sync()
+            return
+
+        # 현재 히스토리를 얕은 복사하여 백그라운드 스레드로 넘김
+        history_snapshot = list(self.trade_history)
+        worker = Worker(self._save_trade_history_worker, history_snapshot)
+        self.threadpool.start(worker)
+
+    def _save_trade_history_worker(self, history: list):
+        """실제 파일 IO 수행 워커"""
+        try:
+            Path(Config.TRADE_HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
+            with open(Config.TRADE_HISTORY_FILE, "w", encoding="utf-8") as file:
+                json.dump(history, file, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            self.logger.error(f"거래 내역 저장 실패: {exc}")
+
+    def _save_trade_history_sync(self):
+        """동기 거래 내역 저장 (테스트용)"""
         try:
             Path(Config.TRADE_HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.TRADE_HISTORY_FILE, "w", encoding="utf-8") as file:
                 json.dump(self.trade_history, file, ensure_ascii=False, indent=2)
         except OSError as exc:
-            self.logger.error(f"거래 내역 저장 실패: {exc}")
+            self.logger.error(f"거래 내역 동기 저장 실패: {exc}")
 
     def _save_settings(self):
         settings = {
@@ -317,9 +338,17 @@ class PersistenceSettingsMixin:
 
         try:
             if app_key:
-                keyring.set_password("KiwoomTrader", "app_key", app_key)
+                try:
+                    keyring.set_password("KiwoomTrader", "app_key", app_key)
+                except Exception as e:
+                    self.logger.warning(f"Keyring app_key 저장 실패 (OS 환경 이슈일 수 있음): {e}")
+                    settings["app_key"] = app_key
             if secret_key:
-                keyring.set_password("KiwoomTrader", "secret_key", secret_key)
+                try:
+                    keyring.set_password("KiwoomTrader", "secret_key", secret_key)
+                except Exception as e:
+                    self.logger.warning(f"Keyring secret_key 저장 실패 (OS 환경 이슈일 수 있음): {e}")
+                    settings["secret_key"] = secret_key
 
             Path(Config.SETTINGS_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.SETTINGS_FILE, "w", encoding="utf-8") as file:

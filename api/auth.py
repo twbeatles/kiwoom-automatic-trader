@@ -1,7 +1,7 @@
 ﻿"""
-?ㅼ?利앷텒 REST API OAuth2 ?몄쬆 紐⑤뱢
+키움증권 REST API OAuth2 인증 모듈
 
-?좏겙 諛쒓툒, 媛깆떊 諛??먭꺽利앸챸 愿由щ? ?대떦?⑸땲??
+토큰 발급, 갱신 및 자격증명 관리를 담당합니다.
 """
 
 import os
@@ -20,74 +20,74 @@ from config import Config
 class KiwoomAuth:
     """OAuth2 토큰 기반 인증 관리 클래스"""
     
-    # ?ㅼ? REST API ?붾뱶?ъ씤??
+    # 키움증권 REST API 엔드포인트
     BASE_URL = "https://api.kiwoom.com"
     TOKEN_ENDPOINT = "/oauth2/token"
     
-    # ?좏겙 罹먯떆 ?뚯씪
+    # 토큰 캐시 파일
     TOKEN_CACHE_FILE = "kiwoom_token_cache.json"
     
     def __init__(self, app_key: str = "", secret_key: str = "", 
                  is_mock: bool = False, cache_dir: Optional[str] = None):
         """
         Args:
-            app_key: ?ㅼ? REST API App Key
-            secret_key: ?ㅼ? REST API Secret Key
-            is_mock: 紐⑥쓽?ъ옄 ?щ? (True: 紐⑥쓽?ъ옄, False: ?ㅺ굅??
-            cache_dir: ?좏겙 罹먯떆 ????붾젆?좊━ (湲곕낯: ?꾩옱 ?붾젆?좊━)
+            app_key: 키움증권 REST API App Key
+            secret_key: 키움증권 REST API Secret Key
+            is_mock: 모의투자 여부 (True: 모의투자, False: 실거래)
+            cache_dir: 토큰 캐시 저장 디렉토리 (기본값: 현재 디렉토리)
         """
         self.app_key = app_key
         self.secret_key = secret_key
         self.is_mock = is_mock
         
-        # 濡쒓굅 ?ㅼ젙
+        # 로거 설정
         self.logger = logging.getLogger('KiwoomAuth')
         
-        # ?좏겙 ??μ냼
+        # 토큰 저장소
         self._access_token: Optional[str] = None
         self._token_type: str = "bearer"
         self._expires_at: float = 0  # Unix timestamp
         
-        # 罹먯떆 ?붾젆?좊━ ?ㅼ젙
+        # 캐시 디렉토리 설정
         base_dir = Path(getattr(Config, "BASE_DIR", Path.cwd()))
         self.cache_dir = Path(cache_dir) if cache_dir else base_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_path = self.cache_dir / self.TOKEN_CACHE_FILE
         
-        # 罹먯떆???좏겙 濡쒕뱶 ?쒕룄
+        # 캐싱된 토큰 로드 시도
         self._load_cached_token()
     
     def set_credentials(self, app_key: str, secret_key: str, is_mock: bool = False):
-        """?먭꺽利앸챸 ?ㅼ젙/?낅뜲?댄듃"""
+        """자격증명 설정/업데이트"""
         self.app_key = app_key
         self.secret_key = secret_key
         self.is_mock = is_mock
-        # ?먭꺽利앸챸 蹂寃????좏겙 珥덇린??
+        # 자격증명 변경 시 토큰 초기화
         self._access_token = None
         self._expires_at = 0
     
     def get_token(self, force_refresh: bool = False) -> Optional[str]:
         """
-        ?좏슚???≪꽭???좏겙??諛섑솚?⑸땲??
-        留뚮즺??寃쎌슦 ?먮룞?쇰줈 媛깆떊?⑸땲??
+        유효한 액세스 토큰을 반환합니다.
+        만료된 경우 자동으로 갱신합니다.
         
         Args:
-            force_refresh: True硫?媛뺤젣濡????좏겙 諛쒓툒
+            force_refresh: True면 강제로 새 토큰 발급
             
         Returns:
-            ?≪꽭???좏겙 臾몄옄?? ?ㅽ뙣 ??None
+            액세스 토큰 문자열, 실패 시 None
         """
-        # ?좏겙???좏슚?쒖? ?뺤씤 (留뚮즺 5遺??꾩뿉 媛깆떊)
+        # 토큰 갱신 시점 확인 (만료 5분 전에 갱신)
         if not force_refresh and self._access_token and time.time() < (self._expires_at - 300):
             return self._access_token
         
-        # ???좏겙 諛쒓툒
+        # 새 토큰 발급
         return self._request_new_token()
     
     def _request_new_token(self) -> Optional[str]:
-        """???≪꽭???좏겙???붿껌?⑸땲??"""
+        """새 엑세스 토큰을 요청합니다."""
         if not self.app_key or not self.secret_key:
-            self.logger.error("App Key ?먮뒗 Secret Key媛 ?ㅼ젙?섏? ?딆븯?듬땲??")
+            self.logger.error("App Key 또는 Secret Key가 설정되지 않았습니다.")
             return None
         
         try:
@@ -103,61 +103,61 @@ class KiwoomAuth:
                 "Content-Type": "application/json"
             }
             
-            self.logger.info("?좏겙 諛쒓툒 ?붿껌 以?..")
+            self.logger.info("토큰 발급 요청 중...")
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 
-                # ?묐떟 ?뺤떇:
+                # 응답 형식:
                 # {
                 #   "token": "...",
                 #   "token_type": "bearer",
                 #   "expires_dt": "20261108083713",
                 #   "return_code": 0,
-                #   "return_msg": "?뺤긽?곸쑝濡?泥섎━?섏뿀?듬땲??
+                #   "return_msg": "정상적으로 처리되었습니다."
                 # }
                 
                 if data.get("return_code") == 0:
                     self._access_token = data.get("token")
                     self._token_type = data.get("token_type", "bearer")
                     
-                    # 留뚮즺 ?쒓컙 ?뚯떛 (YYYYMMDDHHMMSS ?뺤떇)
+                    # 만료 시간 파싱 (YYYYMMDDHHMMSS 형식)
                     expires_dt = data.get("expires_dt", "")
                     if expires_dt:
                         try:
                             dt = datetime.strptime(expires_dt, "%Y%m%d%H%M%S")
                             self._expires_at = dt.timestamp()
                         except ValueError:
-                            # ?뚯떛 ?ㅽ뙣 ??24?쒓컙 ?꾨줈 ?ㅼ젙
+                            # 파싱 실패 시 24시간 후로 설정
                             self._expires_at = time.time() + 86400
                     
-                    # 罹먯떆?????
+                    # 캐시에 저장
                     self._save_token_cache()
                     
-                    self.logger.info(f"?좏겙 諛쒓툒 ?깃났 (留뚮즺: {expires_dt})")
+                    self.logger.info(f"토큰 발급 성공 (만료: {expires_dt})")
                     return self._access_token
                 else:
-                    error_msg = data.get("return_msg", "?????녿뒗 ?ㅻ쪟")
-                    self.logger.error(f"?좏겙 諛쒓툒 ?ㅽ뙣: {error_msg}")
+                    error_msg = data.get("return_msg", "알 수 없는 오류")
+                    self.logger.error(f"토큰 발급 실패: {error_msg}")
                     return None
             else:
-                self.logger.error(f"?좏겙 ?붿껌 HTTP ?ㅻ쪟: {response.status_code}")
+                self.logger.error(f"토큰 요청 HTTP 오류: {response.status_code}")
                 return None
                 
         except requests.RequestException as e:
-            self.logger.error(f"?좏겙 ?붿껌 ?ㅽ듃?뚰겕 ?ㅻ쪟: {e}")
+            self.logger.error(f"토큰 요청 네트워크 오류: {e}")
             return None
         except Exception as e:
-            self.logger.error(f"?좏겙 ?붿껌 ?덉쇅: {e}")
+            self.logger.error(f"토큰 요청 예외: {e}")
             return None
     
     def get_auth_header(self) -> Dict[str, str]:
         """
-        API ?붿껌???ъ슜???몄쬆 ?ㅻ뜑瑜?諛섑솚?⑸땲??
+        API 요청에 사용할 인증 헤더를 반환합니다.
         
         Returns:
-            {"Authorization": "bearer TOKEN"} ?뺥깭???뺤뀛?덈━
+            {"Authorization": "bearer TOKEN"} 형태의 딕셔너리
         """
         token = self.get_token()
         if token:
@@ -165,15 +165,15 @@ class KiwoomAuth:
         return {}
     
     def is_authenticated(self) -> bool:
-        """?꾩옱 ?좏슚???좏겙???덈뒗吏 ?뺤씤?⑸땲??"""
+        """현재 유효한 토큰이 있는지 확인합니다."""
         return self._access_token is not None and time.time() < self._expires_at
     
     def invalidate_token(self):
-        """?꾩옱 ?좏겙??臾댄슚?뷀빀?덈떎 (濡쒓렇?꾩썐)."""
+        """현재 토큰을 무효화합니다 (로그아웃)."""
         self._access_token = None
         self._expires_at = 0
         
-        # 罹먯떆 ?뚯씪 ??젣
+        # 캐시 파일 삭제
         if self.cache_path.exists():
             try:
                 self.cache_path.unlink()
@@ -181,23 +181,23 @@ class KiwoomAuth:
                 pass
     
     def _save_token_cache(self):
-        """?좏겙??罹먯떆 ?뚯씪????ν빀?덈떎."""
+        """토큰을 캐시 파일에 저장합니다."""
         try:
             cache_data = {
                 "access_token": self._access_token,
                 "token_type": self._token_type,
                 "expires_at": self._expires_at,
-                "app_key_hash": self._app_key_hash()  # ??蹂寃?媛먯???
+                "app_key_hash": self._app_key_hash()  # 키 변경 감지용
             }
             
             with open(self.cache_path, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f)
                 
         except Exception as e:
-            self.logger.warning(f"?좏겙 罹먯떆 ????ㅽ뙣: {e}")
+            self.logger.warning(f"토큰 캐시 저장 실패: {e}")
     
     def _load_cached_token(self):
-        """罹먯떆???좏겙??濡쒕뱶?⑸땲??"""
+        """캐시된 토큰을 로드합니다."""
         if not self.cache_path.exists():
             return
         
@@ -205,35 +205,35 @@ class KiwoomAuth:
             with open(self.cache_path, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
             
-            # ?숈씪??App Key濡?諛쒓툒???좏겙?몄? ?뺤씤
+            # 동일한 App Key로 발급된 토큰인지 확인
             if cache_data.get("app_key_hash") != self._app_key_hash():
                 self.logger.info("App Key changed, cached token invalidated")
                 return
             
-            # ?좏겙???꾩쭅 ?좏슚?쒖? ?뺤씤
+            # 토큰이 아직 유효한지 확인
             expires_at = cache_data.get("expires_at", 0)
-            if time.time() < expires_at - 300:  # 5遺??ъ쑀
+            if time.time() < expires_at - 300:  # 5분 여유
                 self._access_token = cache_data.get("access_token")
                 self._token_type = cache_data.get("token_type", "bearer")
                 self._expires_at = expires_at
-                self.logger.info("罹먯떆???좏겙 濡쒕뱶 ?꾨즺")
+                self.logger.info("캐시된 토큰 로드 완료")
                 
         except Exception as e:
-            self.logger.warning(f"?좏겙 罹먯떆 濡쒕뱶 ?ㅽ뙣: {e}")
+            self.logger.warning(f"토큰 캐시 로드 실패: {e}")
 
     def _app_key_hash(self) -> str:
-        """App Key 식별자"""
+        """App Key 식별자 해시"""
         return hashlib.sha256(self.app_key.encode('utf-8')).hexdigest()
 
     def test_connection(self) -> Dict[str, Any]:
         """
-        ?곌껐 ?뚯뒪?몃? ?섑뻾?⑸땲??
+        연결 테스트를 수행합니다.
         
         Returns:
             {
                 "success": bool,
                 "message": str,
-                "token_expires": str (留뚮즺 ?쒓컙)
+                "token_expires": str (만료 시간)
             }
         """
         token = self.get_token(force_refresh=True)
@@ -242,13 +242,12 @@ class KiwoomAuth:
             expires_str = datetime.fromtimestamp(self._expires_at).strftime("%Y-%m-%d %H:%M:%S")
             return {
                 "success": True,
-                "message": "?좏겙 諛쒓툒 ?깃났",
+                "message": "토큰 발급 성공",
                 "token_expires": expires_str
             }
         else:
             return {
                 "success": False,
-                "message": "?좏겙 諛쒓툒 ?ㅽ뙣 - App Key/Secret Key瑜??뺤씤?댁＜?몄슂.",
+                "message": "토큰 발급 실패 - App Key/Secret Key를 확인해주세요.",
                 "token_expires": None
             }
-

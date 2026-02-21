@@ -235,10 +235,11 @@ class ExecutionEngineMixin:
 
         current_price = int(price) if int(price) > 0 else int(info.get("current", 0) or 0)
         required_cash = int(quantity) * current_price if current_price > 0 else 0
-        available_cash = int(getattr(self, "deposit", 0) or 0)
+        available_cash = getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
+
         if required_cash > 0 and available_cash > 0 and required_cash > available_cash:
             self.log(
-                f"BUY skipped [{name}]: required={required_cash:,} available={available_cash:,}"
+                f"BUY skipped [{name}]: required={required_cash:,} available(V)={available_cash:,}"
             )
             seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
             info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
@@ -248,6 +249,9 @@ class ExecutionEngineMixin:
             if not hasattr(self, "_ui_flush_timer"):
                 self.sig_update_table.emit()
             return
+            
+        # 가상 예수금 즉시 선차감(Pre-deduct)하여 오버커밋 방지
+        self.virtual_deposit = getattr(self, "virtual_deposit", available_cash) - required_cash
 
         if info.get("held", 0) <= 0:
             self._holding_or_pending_count += 1
@@ -273,6 +277,15 @@ class ExecutionEngineMixin:
             info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
             info["status"] = "cooldown"
             self.log(f"BUY cooldown [{name}] {seconds}s (BUY_ERROR)")
+            
+            # 가상 예수금 복구 (주문 거부/에러 시 즉시 복구)
+            # _execute_buy 당시 차감된 금액을 정확도 높게 복원하기 위해 입력받은 quantity, price(또는 current_price) 활용
+            if hasattr(self, "virtual_deposit"):
+                # buy_fn 에 넘겼던 정확한 quantity 와 price가 인자로 들어오지 않으나,
+                # 이 시점에 에러가 발생한 종목_execute_buy 시의 차감액을 근사 복원.
+                # 확실한 보정은 _sync_positions_snapshot 계좌 동기화 시 이루어진다.
+                req_cash = int(info.get("current", 0)) * self.strategy._default_position_size(code)
+                self.virtual_deposit += req_cash 
         held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
         pending_buy = sum(
             1
@@ -302,6 +315,14 @@ class ExecutionEngineMixin:
                 info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
                 info["status"] = "cooldown"
                 self.log(f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED)")
+                
+                # 가상 예수금 복구 (주문 거부 시 즉시 복구)
+                # quantity, price 인자를 통해 _execute_buy 시 차감했던 정확한 금액을 복원
+                req_cash = quantity * price if price > 0 else quantity * int(info.get("current", 0))
+                if hasattr(self, "virtual_deposit"):
+                    self.virtual_deposit += req_cash
+                    self.log(f"가상 예수금 복원 [{name}]: +{req_cash:,} 원 (현재: {self.virtual_deposit:,})")
+
             self._clear_pending_order(code)
             held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
             pending_buy = sum(

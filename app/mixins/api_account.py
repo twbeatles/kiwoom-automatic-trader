@@ -212,11 +212,23 @@ class APIAccountMixin:
         self.deposit = info.available_amount
         self.initial_deposit = self.initial_deposit or self.deposit
         
+        # 가상 예수금(virtual_deposit) 관리
+        if not hasattr(self, "virtual_deposit"):
+             self.virtual_deposit = self.deposit
+        else:
+             # 가상 예수금이 실제 예수금보다 크거나 같으면 (정상 동기화 상태/환불 등) 실제 예수금으로 리셋.
+             # 단, 매수가 현재 pending 중이어서 virtual_deposit이 작아진 상태라면 그대로 유지
+             if self.virtual_deposit >= self.deposit:
+                 self.virtual_deposit = self.deposit
+             elif getattr(self, "_holding_or_pending_count", 0) == sum(1 for v in getattr(self, "universe", {}).values() if int(v.get("held", 0)) > 0):
+                 # pending 매수가 없으면 실제 예수금으로 강제 정렬
+                 self.virtual_deposit = self.deposit
+
         # 일일 기준 예수금이 비어 있으면 즉시 확보 (start_trading 시점 정합성 보장)
         if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
             self.daily_initial_deposit = int(self.deposit)
             
-        self.lbl_deposit.setText(f"예수금 {self.deposit:,} 원")
+        self.lbl_deposit.setText(f"예수금(V) {self.virtual_deposit:,} 원 / (실) {self.deposit:,} 원")
 
         profit = info.total_profit
         self.lbl_profit.setText(f"손익: {profit:+,} 원")
