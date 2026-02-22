@@ -215,7 +215,9 @@ class SystemShellMixin:
 
         if self.chk_use_risk.isChecked() and not self.daily_loss_triggered and self.daily_initial_deposit > 0:
             loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
-            if loss_rate <= -self.spin_max_loss.value():
+            cfg = getattr(self, "config", None)
+            max_loss = float(getattr(cfg, "max_daily_loss", self.spin_max_loss.value()))
+            if loss_rate <= -max_loss:
                 self.daily_loss_triggered = True
                 self.log(
                     f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원) - 매매 중지"

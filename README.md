@@ -410,7 +410,7 @@ pyinstaller KiwoomTrader.spec
 
 ```bash
 # 기준선 생성 (최초 1회)
-python tools/refactor_manifest.py --source "키움증권 자동매매.py" --output docs/refactor/baseline_manifest.json
+python tools/refactor_manifest.py --source "app/main_window.py" --output docs/refactor/baseline_manifest.json
 
 # 현재 구조 동등성 검증
 python tools/refactor_verify.py
@@ -451,11 +451,9 @@ python tools/refactor_verify.py
 
 ```bash
 python -m pytest -q tests/unit
-# 37 passed, 1 warning
 ```
 
-- `websockets.legacy` deprecation 경고는 제거되었습니다.
-- 현재 경고 1건은 테스트 외부 패키지(`langsmith`/`pydantic v1`) 호환 안내입니다.
+- 테스트 결과는 실행 환경/의존성 버전에 따라 달라질 수 있으므로 위 커맨드로 실시간 확인합니다.
 
 ---
 

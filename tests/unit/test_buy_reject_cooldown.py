@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin
@@ -40,11 +40,13 @@ class _Harness(ExecutionEngineMixin):
             }
         }
         self._pending_order_state = {}
+        self._reserved_cash_by_code = {}
         self._dirty_codes = set()
         self._holding_or_pending_count = 0
         self.rest_client = _DummyREST()
         self.current_account = "12345678"
         self.deposit = 50000
+        self.virtual_deposit = self.deposit
         self.threadpool = _DummyThreadPool()
         self.sig_update_table = _DummySignal()
         self.logs = []
@@ -73,15 +75,24 @@ class TestBuyRejectCooldown(unittest.TestCase):
         self.assertEqual(info["status"], "cooldown")
         self.assertIsNotNone(info.get("cooldown_until"))
         self.assertTrue(any("required=" in msg for msg in trader.logs))
+        self.assertEqual(trader._reserved_cash_by_code, {})
+        self.assertEqual(trader.virtual_deposit, trader.deposit)
 
     def test_buy_reject_sets_retry_cooldown(self):
         trader = _Harness()
+        trader._execute_buy("005930", quantity=1, price=10000)
+        self.assertEqual(trader._reserved_cash_by_code.get("005930"), 10000)
+        self.assertEqual(trader.virtual_deposit, 40000)
+
         trader._on_buy_result(_DummyResult(False, "rejected"), "005930", "삼성전자", 1, 10000)
 
         info = trader.universe["005930"]
         self.assertEqual(info["status"], "cooldown")
         self.assertGreater(info["cooldown_until"], datetime.datetime.now())
+        self.assertNotIn("005930", trader._reserved_cash_by_code)
+        self.assertEqual(trader.virtual_deposit, trader.deposit)
 
 
 if __name__ == "__main__":
     unittest.main()
+

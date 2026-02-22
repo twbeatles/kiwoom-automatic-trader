@@ -43,6 +43,7 @@ class TradingConfig:
     # 리스크 관리
     max_holdings: int = 5
     use_risk_mgmt: bool = True
+    max_daily_loss: float = 3.0
     
     # v4.3 신규 전략
     use_mtf: bool = False

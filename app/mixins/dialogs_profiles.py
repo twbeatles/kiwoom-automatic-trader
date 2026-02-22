@@ -184,6 +184,7 @@ class DialogsProfilesMixin:
             "loss_cut": self.spin_loss.value(),
             "max_holdings": self.spin_max_holdings.value(),
             "max_loss": self.spin_max_loss.value(),
+            "max_daily_loss": self.spin_max_loss.value(),
             "use_rsi": self.chk_use_rsi.isChecked(),
             "rsi_upper": self.spin_rsi_upper.value(),
             "rsi_period": self.spin_rsi_period.value(),
@@ -267,6 +268,8 @@ class DialogsProfilesMixin:
             self.spin_max_holdings.setValue(settings['max_holdings'])
         if 'max_loss' in settings:
             self.spin_max_loss.setValue(settings['max_loss'])
+        elif 'max_daily_loss' in settings:
+            self.spin_max_loss.setValue(settings['max_daily_loss'])
         if 'codes' in settings:
             self.input_codes.setText(settings['codes'])
         if 'use_rsi' in settings:

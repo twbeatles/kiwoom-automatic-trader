@@ -1,4 +1,4 @@
-"""Persistence/settings mixin for KiwoomProTrader."""
+﻿"""Persistence/settings mixin for KiwoomProTrader."""
 
 import csv
 import datetime
@@ -19,6 +19,10 @@ except ModuleNotFoundError:
 
         @staticmethod
         def get_password(service_name, username):
+            return None
+
+        @staticmethod
+        def delete_password(service_name, username):
             return None
 
     keyring = _NoopKeyring()
@@ -228,6 +232,7 @@ class PersistenceSettingsMixin:
             "volume_mult": self.spin_volume_mult.value(),
             "use_risk": self.chk_use_risk.isChecked(),
             "max_loss": self.spin_max_loss.value(),
+            "max_daily_loss": self.spin_max_loss.value(),
             "max_holdings": self.spin_max_holdings.value(),
             "tg_token": self.input_tg_token.text(),
             "tg_chat": self.input_tg_chat.text(),
@@ -330,12 +335,18 @@ class PersistenceSettingsMixin:
         app_key = self.input_app_key.text().strip()
         secret_key = self.input_secret.text().strip()
 
-        if not KEYRING_AVAILABLE:
+        if KEYRING_AVAILABLE:
+            settings.pop("app_key", None)
+            settings.pop("secret_key", None)
+        else:
             if app_key:
                 settings["app_key"] = app_key
+            else:
+                settings.pop("app_key", None)
             if secret_key:
                 settings["secret_key"] = secret_key
-
+            else:
+                settings.pop("secret_key", None)
         try:
             if app_key:
                 try:
@@ -343,12 +354,22 @@ class PersistenceSettingsMixin:
                 except Exception as e:
                     self.logger.warning(f"Keyring app_key 저장 실패 (OS 환경 이슈일 수 있음): {e}")
                     settings["app_key"] = app_key
+            else:
+                try:
+                    keyring.delete_password("KiwoomTrader", "app_key")
+                except Exception as e:
+                    self.logger.warning(f"Keyring app_key 삭제 실패 (무시 가능): {e}")
             if secret_key:
                 try:
                     keyring.set_password("KiwoomTrader", "secret_key", secret_key)
                 except Exception as e:
                     self.logger.warning(f"Keyring secret_key 저장 실패 (OS 환경 이슈일 수 있음): {e}")
                     settings["secret_key"] = secret_key
+            else:
+                try:
+                    keyring.delete_password("KiwoomTrader", "secret_key")
+                except Exception as e:
+                    self.logger.warning(f"Keyring secret_key 삭제 실패 (무시 가능): {e}")
 
             Path(Config.SETTINGS_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.SETTINGS_FILE, "w", encoding="utf-8") as file:
@@ -379,6 +400,7 @@ class PersistenceSettingsMixin:
                 settings.setdefault("backtest_config", dict(getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})))
                 settings.setdefault("feature_flags", dict(getattr(Config, "FEATURE_FLAGS", {})))
                 settings.setdefault("execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
+                settings.setdefault("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
 
 
             app_key = ""
@@ -419,7 +441,9 @@ class PersistenceSettingsMixin:
             self.chk_use_volume.setChecked(settings.get("use_volume", True))
             self.spin_volume_mult.setValue(settings.get("volume_mult", 1.5))
             self.chk_use_risk.setChecked(settings.get("use_risk", True))
-            self.spin_max_loss.setValue(settings.get("max_loss", 3.0))
+            self.spin_max_loss.setValue(
+                settings.get("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
+            )
             self.spin_max_holdings.setValue(settings.get("max_holdings", 5))
             self.input_tg_token.setText(settings.get("tg_token", ""))
             self.input_tg_chat.setText(settings.get("tg_chat", ""))
@@ -549,7 +573,11 @@ class PersistenceSettingsMixin:
                 cfg.backtest_config = dict(settings.get("backtest_config", getattr(cfg, "backtest_config", {})))
                 cfg.feature_flags = dict(settings.get("feature_flags", getattr(cfg, "feature_flags", {})))
                 cfg.execution_policy = str(settings.get("execution_policy", getattr(cfg, "execution_policy", "market")))
+                cfg.max_daily_loss = float(
+                    settings.get("max_daily_loss", settings.get("max_loss", getattr(cfg, "max_daily_loss", 3.0)))
+                )
 
             self.log("📂 설정 불러옴")
         except (json.JSONDecodeError, FileNotFoundError, OSError) as exc:
             self.logger.warning(f"설정 로드 실패: {exc}")
+

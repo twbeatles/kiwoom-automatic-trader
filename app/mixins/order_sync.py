@@ -26,15 +26,39 @@ class OrderSyncMixin:
                 self.logger.warning(message)
             cooldown_map[cache_key] = now_ts
 
+    def _diag_touch_safe(self, code: str, **fields):
+        fn = getattr(self, "_diag_touch", None)
+        if callable(fn):
+            fn(code, **fields)
+
+    def _diag_clear_pending_safe(self, code: str):
+        fn = getattr(self, "_diag_clear_pending", None)
+        if callable(fn):
+            fn(code)
+
+    def _release_reserved_cash_safe(self, code: str, reason: str, refund: bool):
+        fn = getattr(self, "_release_reserved_cash", None)
+        if callable(fn):
+            return int(fn(code, reason=reason, refund=refund) or 0)
+
+        # Fallback for tests that do not include ExecutionEngineMixin.
+        mapping = getattr(self, "_reserved_cash_by_code", None)
+        if not isinstance(mapping, dict):
+            return 0
+        amount = int(mapping.pop(code, 0) or 0)
+        if amount > 0 and refund and hasattr(self, "virtual_deposit"):
+            self.virtual_deposit = max(0, int(getattr(self, "virtual_deposit", 0) or 0) + amount)
+        return amount
+
     def _on_realtime(self, data: ExecutionData):
         self.sig_execution.emit(data)
 
     def _on_order_realtime(self, data):
-        """주문 체결 실시간 데이터 수신(WebSocket Thread -> Main Thread)."""
+        """WebSocket thread -> main thread bridge."""
         self.sig_order_execution.emit(data)
 
     def _on_order_execution(self, data):
-        """주문 체결/접수/확인 처리(Main Thread)."""
+        """Handle realtime order/execution notifications in main thread."""
         try:
             code = str(data.get("code") or data.get("stk_cd") or "").strip()
             info = self.universe.get(code, {}) if code else {}
@@ -64,9 +88,10 @@ class OrderSyncMixin:
             self.log(msg)
 
             side = ""
-            if "매수" in order_type:
+            lower_type = order_type.lower()
+            if "매수" in order_type or "buy" in lower_type:
                 side = "buy"
-            elif "매도" in order_type:
+            elif "매도" in order_type or "sell" in lower_type:
                 side = "sell"
 
             if code and qty > 0 and side:
@@ -78,20 +103,34 @@ class OrderSyncMixin:
                 }
                 self._position_sync_batch.add(code)
 
-            if code and ("체결" in order_status or qty > 0):
+            if code and ("체결" in order_status or "fill" in order_status.lower() or qty > 0):
                 self._sync_position_from_account(code)
 
-            if code and any(x in order_status for x in ["취소", "거부", "실패"]):
+            status_lower = order_status.lower()
+            cancel_like = any(token in order_status for token in ["취소", "거부", "실패"]) or any(
+                token in status_lower for token in ["cancel", "reject", "fail"]
+            )
+            if code and cancel_like:
+                pending = self._pending_order_state.get(code, {})
+                pending_side = str(pending.get("side", ""))
                 self._clear_pending_order(code)
+                if pending_side == "buy":
+                    self._release_reserved_cash_safe(code, reason="ORDER_CANCEL_OR_REJECT", refund=True)
                 if code in self.universe:
-                    self.universe[code]["status"] = "holding" if self.universe[code].get("held", 0) > 0 else "watch"
+                    held = int(self.universe[code].get("held", 0))
+                    self.universe[code]["status"] = "holding" if held > 0 else "watch"
+                    self._diag_touch_safe(
+                        code,
+                        sync_status=self.universe[code]["status"],
+                        retry_count=0,
+                    )
                 self._dirty_codes.add(code)
         except Exception as e:
             self.logger.error(f"주문 체결 처리 오류: {e}")
 
     @staticmethod
     def _to_int(value, default=0) -> int:
-        """숫자/문자열 값을 안전하게 int로 변환."""
+        """Safely convert common payload values to int."""
         try:
             if value is None:
                 return default
@@ -105,17 +144,25 @@ class OrderSyncMixin:
     def _set_pending_order(self, code: str, side: str, reason: str):
         if not code:
             return
+        pending_until = datetime.datetime.now() + datetime.timedelta(seconds=5)
         self._pending_order_state[code] = {
             "side": side,
             "reason": reason,
-            "until": datetime.datetime.now() + datetime.timedelta(seconds=5),
+            "until": pending_until,
         }
+        self._diag_touch_safe(
+            code,
+            pending_side=side,
+            pending_reason=reason,
+            pending_until=pending_until,
+        )
 
     def _clear_pending_order(self, code: str):
         self._pending_order_state.pop(code, None)
+        self._diag_clear_pending_safe(code)
 
     def _sync_position_from_account(self, code: str):
-        """주문/체결 이벤트를 계좌기반 동기화로 반영한다 (디바운스 배치)."""
+        """Sync positions from account API with debounce/batch."""
         if code and code in self.universe:
             self._position_sync_batch.add(code)
 
@@ -218,6 +265,8 @@ class OrderSyncMixin:
                 self.strategy.update_sector_investment(code_item, amount, is_buy=True)
                 if self.sound:
                     self.sound.play_buy()
+                # Filled amount is now reflected in real deposit; release reservation without refund.
+                self._release_reserved_cash_safe(code_item, reason="BUY_FILLED", refund=False)
 
             elif delta < 0:
                 sell_qty = -delta
@@ -285,6 +334,12 @@ class OrderSyncMixin:
             if delta != 0:
                 self._last_exec_event.pop(code_item, None)
 
+            self._diag_touch_safe(
+                code_item,
+                sync_status=str(info.get("status", "")),
+                retry_count=0,
+                last_sync_error="",
+            )
             self._dirty_codes.add(code_item)
 
         held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
@@ -318,12 +373,25 @@ class OrderSyncMixin:
         self._position_sync_retry_count = int(getattr(self, "_position_sync_retry_count", 0)) + 1
         max_retries = max(1, int(getattr(Config, "POSITION_SYNC_MAX_RETRIES", 5)))
 
+        for code_item in failed_codes:
+            info = getattr(self, "universe", {}).get(code_item, {})
+            self._diag_touch_safe(
+                code_item,
+                sync_status=str(info.get("status", "")),
+                retry_count=self._position_sync_retry_count,
+                last_sync_error=str(error),
+            )
+
         if self._position_sync_retry_count > max_retries:
             dropped_codes = set(self._position_sync_batch) or failed_codes
             dropped = len(dropped_codes)
             for code_item in dropped_codes:
+                pending = getattr(self, "_pending_order_state", {}).get(code_item, {})
+                side = str(pending.get("side", ""))
                 if hasattr(self, "_pending_order_state"):
                     self._clear_pending_order(code_item)
+                if side == "buy":
+                    self._release_reserved_cash_safe(code_item, reason="SYNC_FAILED", refund=True)
                 info = getattr(self, "universe", {}).get(code_item)
                 if info is None:
                     continue
@@ -333,15 +401,21 @@ class OrderSyncMixin:
                     self._sync_failed_codes.add(code_item)
                 if hasattr(self, "_dirty_codes"):
                     self._dirty_codes.add(code_item)
+                self._diag_touch_safe(
+                    code_item,
+                    sync_status="sync_failed",
+                    retry_count=0,
+                    last_sync_error=str(error),
+                )
                 self._log_sync_fail_once(
                     code_item,
-                    f"[안전차단] {info.get('name', code_item)} 포지션 동기화 실패 누적으로 신규 자동주문이 차단되었습니다.",
+                    f"[안전차단] {info.get('name', code_item)} 포지션 동기화 실패 누적으로 자동주문을 차단했습니다.",
                 )
 
             self._position_sync_batch.clear()
             self._position_sync_scheduled = False
             self._position_sync_retry_count = 0
-            self.logger.warning(f"포지션 동기화 재시도 초과로 배치를 폐기합니다 ({dropped}개): {error}")
+            self.logger.warning(f"포지션동기화 재시도 초과로 배치를 폐기합니다. ({dropped}건: {error})")
             universe = getattr(self, "universe", {})
             pending_state = getattr(self, "_pending_order_state", {})
             held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
@@ -364,7 +438,7 @@ class OrderSyncMixin:
             backoff_cap_ms,
         )
         self.logger.warning(
-            f"포지션 동기화 실패({self._position_sync_retry_count}/{max_retries}), {delay_ms}ms 후 재시도: {error}"
+            f"포지션동기화 실패({self._position_sync_retry_count}/{max_retries}), {delay_ms}ms 후 재시도: {error}"
         )
         if self._position_sync_batch and not self._position_sync_scheduled:
             self._position_sync_scheduled = True

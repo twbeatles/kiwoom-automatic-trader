@@ -66,6 +66,9 @@ class KiwoomProTrader(
         self._position_sync_retry_count = 0
         self._pending_order_state: Dict[str, Dict[str, Any]] = {}
         self._last_exec_event: Dict[str, Dict[str, Any]] = {}
+        self._reserved_cash_by_code: Dict[str, int] = {}
+        self._diagnostics_by_code: Dict[str, Dict[str, Any]] = {}
+        self._diagnostics_dirty_codes: Set[str] = set()
         self._account_refresh_pending = False
         self._last_account_refresh_ts = 0.0
         self._force_quit_requested = False
@@ -112,6 +115,7 @@ class KiwoomProTrader(
         self.sig_execution.connect(self._on_execution)
         self.sig_order_execution.connect(self._on_order_execution)
         self.sig_update_table.connect(self._refresh_table)
+        self.sig_update_table.connect(self._refresh_diagnostics)
         
         # 전략 매니저 (Config 전달)
         self.strategy = StrategyManager(self, self.config)
@@ -164,6 +168,7 @@ class KiwoomProTrader(
         
         # 리스크
         self.chk_use_risk.toggled.connect(lambda v: setattr(self.config, 'use_risk_mgmt', v))
+        self.spin_max_loss.valueChanged.connect(lambda v: setattr(self.config, 'max_daily_loss', float(v)))
         self.spin_max_holdings.valueChanged.connect(lambda v: setattr(self.config, 'max_holdings', v))
         
         # 신규 전략들
@@ -288,6 +293,7 @@ class KiwoomProTrader(
         self.config.bb_k = self.spin_bb_k.value()
         self.config.use_volume = self.chk_use_volume.isChecked()
         self.config.volume_mult = self.spin_volume_mult.value()
+        self.config.max_daily_loss = float(self.spin_max_loss.value())
         self.config.max_holdings = self.spin_max_holdings.value()
         self.config.use_risk_mgmt = self.chk_use_risk.isChecked()
         self.config.use_stoch_rsi = self.chk_use_stoch_rsi.isChecked()
@@ -358,4 +364,82 @@ class KiwoomProTrader(
             self.config.feature_flags["enable_backtest"] = bool(self.chk_feature_backtest.isChecked())
         if hasattr(self, "chk_feature_external_data"):
             self.config.feature_flags["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
+
+    def _diag_touch(self, code: str, **fields: Any):
+        if not code:
+            return
+        diag = self._diagnostics_by_code.get(code, {})
+        if not diag:
+            diag = {
+                "pending_side": "",
+                "pending_reason": "",
+                "pending_until": None,
+                "sync_status": "",
+                "retry_count": 0,
+                "last_sync_error": "",
+                "last_update": datetime.datetime.now(),
+            }
+            self._diagnostics_by_code[code] = diag
+
+        for key, value in fields.items():
+            if key in {"last_update"} and value is None:
+                continue
+            diag[key] = value
+        diag["last_update"] = fields.get("last_update", datetime.datetime.now())
+        self._diagnostics_dirty_codes.add(code)
+
+    def _diag_clear_pending(self, code: str):
+        if not code:
+            return
+        self._diag_touch(code, pending_side="", pending_reason="", pending_until=None)
+
+    @staticmethod
+    def _diag_fmt_dt(value: Any) -> str:
+        if isinstance(value, datetime.datetime):
+            return value.strftime("%H:%M:%S")
+        return ""
+
+    def _refresh_diagnostics(self):
+        if not hasattr(self, "diagnostic_table"):
+            return
+
+        if not self._diagnostics_dirty_codes and self.diagnostic_table.rowCount() == len(self.universe):
+            return
+
+        codes = list(self.universe.keys())
+        self.diagnostic_table.setUpdatesEnabled(False)
+        try:
+            self.diagnostic_table.setRowCount(len(codes))
+            for row, code in enumerate(codes):
+                info = self.universe.get(code, {})
+                diag = self._diagnostics_by_code.get(code, {})
+                pending = self._pending_order_state.get(code, {})
+                sync_status = str(info.get("status", ""))
+                if sync_status == "sync_failed":
+                    sync_status = "sync_failed"
+
+                values = [
+                    code,
+                    str(info.get("name", code)),
+                    str(diag.get("pending_side") or pending.get("side") or ""),
+                    str(diag.get("pending_reason") or pending.get("reason") or ""),
+                    self._diag_fmt_dt(diag.get("pending_until") or pending.get("until")),
+                    sync_status,
+                    str(diag.get("retry_count", 0)),
+                    str(diag.get("last_sync_error", "")),
+                    self._diag_fmt_dt(diag.get("last_update")),
+                ]
+
+                for col, text in enumerate(values):
+                    item = self.diagnostic_table.item(row, col)
+                    if item is None:
+                        item = QTableWidgetItem(str(text))
+                        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                        self.diagnostic_table.setItem(row, col, item)
+                    elif item.text() != str(text):
+                        item.setText(str(text))
+        finally:
+            self.diagnostic_table.setUpdatesEnabled(True)
+
+        self._diagnostics_dirty_codes.clear()
 

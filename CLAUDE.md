@@ -202,9 +202,7 @@ pyinstaller KiwoomTrader.spec
 
 3. 테스트 기준 업데이트
 - 실행 기준: `python -m pytest -q tests/unit`
-- 현재 결과(2026-02-19): **37 passed, 1 warning**
-- `websockets.legacy` deprecation 경고는 제거됨
-- 잔여 경고 1건은 테스트 외부 패키지(`langsmith`/`pydantic v1`) 호환 안내
+- 테스트 결과는 로컬 의존성 버전에 따라 달라질 수 있으므로 실행 커맨드 기준으로 판단
 
 4. 추가 검증 커맨드
 ```bash

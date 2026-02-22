@@ -254,12 +254,24 @@ class StrategyPackEngine:
             trader = self.manager.trader
             if not getattr(cfg, "use_risk_mgmt", True):
                 return True
-            initial = float(getattr(trader, "initial_deposit", 0) or 0)
-            realized = float(getattr(trader, "total_realized_profit", 0) or 0)
+            initial = float(
+                context.portfolio_state.get(
+                    "daily_initial_deposit",
+                    getattr(trader, "daily_initial_deposit", getattr(trader, "initial_deposit", 0)),
+                )
+                or 0
+            )
+            realized = float(
+                context.portfolio_state.get(
+                    "daily_realized_profit",
+                    getattr(trader, "daily_realized_profit", getattr(trader, "total_realized_profit", 0)),
+                )
+                or 0
+            )
             if initial <= 0:
                 return True
             loss_rate = (realized / initial) * 100.0
-            max_loss = float(getattr(trader, "spin_max_loss", None).value()) if hasattr(trader, "spin_max_loss") else 3.0
+            max_loss = float(getattr(cfg, "max_daily_loss", 3.0))
             return loss_rate > -max_loss
 
         return True

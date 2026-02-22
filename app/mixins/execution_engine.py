@@ -9,6 +9,49 @@ from config import Config
 
 
 class ExecutionEngineMixin:
+    def _reserved_cash_map(self):
+        mapping = getattr(self, "_reserved_cash_by_code", None)
+        if not isinstance(mapping, dict):
+            mapping = {}
+            self._reserved_cash_by_code = mapping
+        return mapping
+
+    def _reserve_cash_for_buy(self, code: str, amount: int):
+        amount = max(0, int(amount or 0))
+        if not code or amount <= 0:
+            return 0
+        mapping = self._reserved_cash_map()
+        mapping[code] = int(mapping.get(code, 0)) + amount
+        current_v = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+        self.virtual_deposit = max(0, current_v - amount)
+        return amount
+
+    def _release_reserved_cash(self, code: str, reason: str = "", refund: bool = True) -> int:
+        if not code:
+            return 0
+        mapping = self._reserved_cash_map()
+        amount = int(mapping.pop(code, 0) or 0)
+        if amount <= 0:
+            return 0
+
+        if refund:
+            base = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+            self.virtual_deposit = max(0, base + amount)
+
+        if reason and hasattr(self, "log"):
+            action = "refunded" if refund else "released"
+            self.log(f"Reserved cash {action} [{code}]: {amount:,} ({reason})")
+        return amount
+
+    def _release_all_reserved_cash(self, reason: str = "STOP_TRADING") -> int:
+        mapping = self._reserved_cash_map()
+        if not mapping:
+            return 0
+        total = 0
+        for code in list(mapping.keys()):
+            total += self._release_reserved_cash(code, reason=reason, refund=True)
+        return total
+
     def _on_execution(self, data: ExecutionData):
         """Handle realtime execution tick and evaluate buy/sell conditions."""
         if not self.is_running:
@@ -249,14 +292,17 @@ class ExecutionEngineMixin:
             if not hasattr(self, "_ui_flush_timer"):
                 self.sig_update_table.emit()
             return
-            
-        # 가상 예수금 즉시 선차감(Pre-deduct)하여 오버커밋 방지
-        self.virtual_deposit = getattr(self, "virtual_deposit", available_cash) - required_cash
+
+        # Reserve virtual cash before submit to prevent over-commit.
+        self._reserve_cash_for_buy(code, required_cash)
 
         if info.get("held", 0) <= 0:
             self._holding_or_pending_count += 1
 
         info["status"] = "buying"
+        diag_touch = getattr(self, "_diag_touch", None)
+        if callable(diag_touch):
+            diag_touch(code, pending_side="buy", pending_reason="SUBMITTING", sync_status="buying")
         self._dirty_codes.add(code)
 
         cfg = getattr(self, "config", None)
@@ -270,6 +316,7 @@ class ExecutionEngineMixin:
     def _on_buy_error(self, e, code, name):
         """Handle buy error."""
         self.log(f"BUY error [{name}]: {e}")
+        self._release_reserved_cash(code, reason="BUY_ERROR", refund=True)
         self._clear_pending_order(code)
         if code in self.universe:
             info = self.universe[code]
@@ -277,15 +324,9 @@ class ExecutionEngineMixin:
             info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
             info["status"] = "cooldown"
             self.log(f"BUY cooldown [{name}] {seconds}s (BUY_ERROR)")
-            
-            # 가상 예수금 복구 (주문 거부/에러 시 즉시 복구)
-            # _execute_buy 당시 차감된 금액을 정확도 높게 복원하기 위해 입력받은 quantity, price(또는 current_price) 활용
-            if hasattr(self, "virtual_deposit"):
-                # buy_fn 에 넘겼던 정확한 quantity 와 price가 인자로 들어오지 않으나,
-                # 이 시점에 에러가 발생한 종목_execute_buy 시의 차감액을 근사 복원.
-                # 확실한 보정은 _sync_positions_snapshot 계좌 동기화 시 이루어진다.
-                req_cash = int(info.get("current", 0)) * self.strategy._default_position_size(code)
-                self.virtual_deposit += req_cash 
+            diag_touch = getattr(self, "_diag_touch", None)
+            if callable(diag_touch):
+                diag_touch(code, sync_status="cooldown")
         held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
         pending_buy = sum(
             1
@@ -309,19 +350,16 @@ class ExecutionEngineMixin:
             self._sync_position_from_account(code)
         else:
             self.log(f"BUY rejected [{name}]: {result.message}")
+            self._release_reserved_cash(code, reason="BUY_REJECTED", refund=True)
             if code in self.universe:
                 info = self.universe[code]
                 seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
                 info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
                 info["status"] = "cooldown"
                 self.log(f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED)")
-                
-                # 가상 예수금 복구 (주문 거부 시 즉시 복구)
-                # quantity, price 인자를 통해 _execute_buy 시 차감했던 정확한 금액을 복원
-                req_cash = quantity * price if price > 0 else quantity * int(info.get("current", 0))
-                if hasattr(self, "virtual_deposit"):
-                    self.virtual_deposit += req_cash
-                    self.log(f"가상 예수금 복원 [{name}]: +{req_cash:,} 원 (현재: {self.virtual_deposit:,})")
+                diag_touch = getattr(self, "_diag_touch", None)
+                if callable(diag_touch):
+                    diag_touch(code, sync_status="cooldown")
 
             self._clear_pending_order(code)
             held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
@@ -359,6 +397,9 @@ class ExecutionEngineMixin:
             return
 
         info["status"] = "selling"
+        diag_touch = getattr(self, "_diag_touch", None)
+        if callable(diag_touch):
+            diag_touch(code, pending_side="sell", pending_reason=reason, sync_status="selling")
         self._dirty_codes.add(code)
 
         cfg = getattr(self, "config", None)

@@ -1154,6 +1154,9 @@ class StrategyManager:
                     "daily_realized_profit": float(
                         getattr(self.trader, "daily_realized_profit", getattr(self.trader, "total_realized_profit", 0))
                     ),
+                    "daily_initial_deposit": float(
+                        getattr(self.trader, "daily_initial_deposit", getattr(self.trader, "initial_deposit", 0))
+                    ),
                 },
             )
             pack_result = self.pack_engine.evaluate(context)

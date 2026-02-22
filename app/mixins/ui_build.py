@@ -1,4 +1,4 @@
-"""UI construction mixin for KiwoomProTrader."""
+﻿"""UI construction mixin for KiwoomProTrader."""
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import *
@@ -170,6 +170,7 @@ class UIBuildMixin:
         tabs.addTab(self._create_ranking_tab(), "🏆 순위")
         tabs.addTab(self._create_stats_tab(), "📊 통계")
         tabs.addTab(self._create_history_tab(), "📝 내역")
+        tabs.addTab(self._create_diagnostics_tab(), "🩺 진단")
         tabs.addTab(self._create_api_tab(), "🔑 API")
         return tabs
 
@@ -892,6 +893,34 @@ class UIBuildMixin:
         self._refresh_history_table()
         return widget
 
+    def _create_diagnostics_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self.diagnostic_table = QTableWidget()
+        cols = [
+            "코드",
+            "종목명",
+            "pending side",
+            "pending reason",
+            "pending until",
+            "sync status",
+            "retry count",
+            "last sync error",
+            "last update",
+        ]
+        self.diagnostic_table.setColumnCount(len(cols))
+        self.diagnostic_table.setHorizontalHeaderLabels(cols)
+        self.diagnostic_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.diagnostic_table.verticalHeader().setVisible(False)
+        self.diagnostic_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        layout.addWidget(self.diagnostic_table)
+
+        info = QLabel("주문/동기화 상태를 실시간으로 진단합니다. (읽기 전용)")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        return widget
+
     def _create_api_tab(self):
         """API 설정 탭 (스크롤 적용)"""
         tab_widget = QWidget()
@@ -1000,4 +1029,5 @@ class UIBuildMixin:
         self.statusBar().addWidget(QLabel("  "))  # 간격
         self.statusBar().addWidget(self.status_trading)
         self.statusBar().addPermanentWidget(QLabel("v4.3 REST API"))
+
 

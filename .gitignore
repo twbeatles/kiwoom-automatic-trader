@@ -49,6 +49,9 @@ log/
 *.sqlite
 *.sqlite3
 *.db-journal
+!requirements.txt
+!docs/refactor/baseline_manifest.json
+!docs/refactor/post_refactor_manifest.json
 
 # Data / local artifacts
 data/*.db

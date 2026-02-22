@@ -31,6 +31,8 @@ class _DummyTrader:
         self._log_cooldown_map = {}
         self.deposit = 100_000_000
         self.initial_deposit = 100_000_000
+        self.daily_initial_deposit = 100_000_000
+        self.daily_realized_profit = 0
         self.total_realized_profit = 0
         self._holding_or_pending_count = 0
 
@@ -79,6 +81,37 @@ class TestStrategyPackEngine(unittest.TestCase):
 
         self.assertIn("rsi", conditions)
         self.assertIsInstance(passed, bool)
+
+    def test_daily_loss_overlay_uses_daily_realized_metrics(self):
+        trader = _DummyTrader()
+        trader.daily_realized_profit = -4_000_000  # -4.0%
+        cfg = TradingConfig(
+            use_rsi=False,
+            use_volume=False,
+            use_liquidity=False,
+            use_spread=False,
+            use_macd=False,
+            use_bb=False,
+            use_dmi=False,
+            use_stoch_rsi=False,
+            use_mtf=False,
+            use_gap=False,
+            use_entry_scoring=False,
+            max_daily_loss=3.0,
+        )
+        cfg.strategy_pack = {
+            "primary_strategy": "volatility_breakout",
+            "entry_filters": [],
+            "risk_overlays": ["daily_loss_limit"],
+            "exit_overlays": [],
+        }
+        cfg.feature_flags["use_modular_strategy_pack"] = True
+        sm = StrategyManager(trader, cfg)
+
+        passed, conditions, _ = sm.evaluate_buy_conditions("005930", now_ts=3000.0)
+
+        self.assertFalse(passed)
+        self.assertFalse(conditions["risk:daily_loss_limit"])
 
 
 if __name__ == "__main__":

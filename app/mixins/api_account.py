@@ -63,11 +63,13 @@ class APIAccountMixin:
         rest_client = KiwoomRESTClient(auth)
         ws_client = KiwoomWebSocketClient(auth)
         accounts = rest_client.get_account_list()
+        if not accounts:
+            raise RuntimeError("계좌 목록이 비어 있습니다. 계좌 권한/연결 상태를 확인해주세요.")
         return {
             "auth": auth,
             "rest_client": rest_client,
             "ws_client": ws_client,
-            "accounts": accounts if accounts else ["테스트계좌"],
+            "accounts": accounts,
         }
 
     def _finalize_connect_ui(self):
@@ -114,6 +116,8 @@ class APIAccountMixin:
 
         if any(token in lower_message for token in ("401", "403", "invalid", "unauthorized", "forbidden", "auth")):
             user_guide = "인증에 실패했습니다. App Key/Secret Key를 다시 확인해주세요."
+        elif any(token in lower_message for token in ("계좌 목록", "accounts", "empty account")):
+            user_guide = "계좌 목록을 가져오지 못했습니다. API 계좌 권한/상품 신청 상태를 확인해주세요."
         elif any(token in lower_message for token in ("timeout", "network", "connection", "dns", "timed out")):
             user_guide = "네트워크 연결에 실패했습니다. 인터넷/방화벽 상태를 확인해주세요."
         else:
@@ -177,6 +181,12 @@ class APIAccountMixin:
         self._connect_inflight = False
         self._last_connection_mode = None
         self._last_profit_sign = None
+        if hasattr(self, "_reserved_cash_by_code"):
+            self._reserved_cash_by_code.clear()
+        if hasattr(self, "_diagnostics_by_code"):
+            self._diagnostics_by_code.clear()
+        if hasattr(self, "_diagnostics_dirty_codes"):
+            self._diagnostics_dirty_codes.clear()
         if hasattr(self, "btn_connect"):
             self.btn_connect.setEnabled(True)
             self.btn_connect.setText("API 연결")
@@ -211,18 +221,13 @@ class APIAccountMixin:
 
         self.deposit = info.available_amount
         self.initial_deposit = self.initial_deposit or self.deposit
-        
-        # 가상 예수금(virtual_deposit) 관리
-        if not hasattr(self, "virtual_deposit"):
-             self.virtual_deposit = self.deposit
-        else:
-             # 가상 예수금이 실제 예수금보다 크거나 같으면 (정상 동기화 상태/환불 등) 실제 예수금으로 리셋.
-             # 단, 매수가 현재 pending 중이어서 virtual_deposit이 작아진 상태라면 그대로 유지
-             if self.virtual_deposit >= self.deposit:
-                 self.virtual_deposit = self.deposit
-             elif getattr(self, "_holding_or_pending_count", 0) == sum(1 for v in getattr(self, "universe", {}).values() if int(v.get("held", 0)) > 0):
-                 # pending 매수가 없으면 실제 예수금으로 강제 정렬
-                 self.virtual_deposit = self.deposit
+
+        # Virtual deposit is always real deposit minus active reserved cash.
+        reserved_map = getattr(self, "_reserved_cash_by_code", {})
+        reserved_total = 0
+        if isinstance(reserved_map, dict):
+            reserved_total = sum(max(0, int(v or 0)) for v in reserved_map.values())
+        self.virtual_deposit = max(0, int(self.deposit) - int(reserved_total))
 
         # 일일 기준 예수금이 비어 있으면 즉시 확보 (start_trading 시점 정합성 보장)
         if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:

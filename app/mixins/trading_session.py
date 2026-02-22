@@ -78,6 +78,9 @@ class TradingSessionMixin:
 
             if hasattr(self, "_sync_failed_codes"):
                 self._sync_failed_codes.discard(code)
+            diag_touch = getattr(self, "_diag_touch", None)
+            if callable(diag_touch):
+                diag_touch(code, sync_status=str(info.get("status", "")), retry_count=0, last_sync_error="")
 
         external_codes = sorted(c for c in positions_by_code.keys() if c and c not in universe_codes)
         if external_codes:
@@ -251,6 +254,11 @@ class TradingSessionMixin:
             self._position_sync_retry_count = 0
         self._pending_order_state.clear()
         self._last_exec_event.clear()
+        release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
+        if callable(release_all_reserved):
+            released_total = int(release_all_reserved(reason="STOP_TRADING") or 0)
+            if released_total > 0 and hasattr(self, "log"):
+                self.log(f"Reserved cash reconciled on stop: +{released_total:,}")
 
         try:
             if self.ws_client:
@@ -374,6 +382,9 @@ class TradingSessionMixin:
                     "buy_time": None,
                     "partial_profit_levels": set(),
                 }
+                diag_touch = getattr(self, "_diag_touch", None)
+                if callable(diag_touch):
+                    diag_touch(code, sync_status="watch", retry_count=0, last_sync_error="")
 
                 if not background:
                     self.universe = target_universe
