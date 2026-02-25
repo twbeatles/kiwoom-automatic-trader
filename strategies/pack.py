@@ -6,7 +6,10 @@ This engine is intentionally lightweight and delegates indicator math to
 
 from __future__ import annotations
 
+import datetime
 from typing import Any, Dict, List, Optional, Tuple
+
+from config import Config
 
 from .types import Signal, SignalDirection, StrategyContext, StrategyResult
 
@@ -26,16 +29,70 @@ class StrategyPackEngine:
         primary = str(pack.get("primary_strategy", "volatility_breakout"))
         entry_filters = list(pack.get("entry_filters", []))
         risk_overlays = list(pack.get("risk_overlays", []))
+        capabilities = getattr(Config, "STRATEGY_CAPABILITIES", {})
+        capability = capabilities.get(primary, {}) if isinstance(capabilities, dict) else {}
+        requires_external = bool(isinstance(capability, dict) and capability.get("requires_external_data", False))
+        flags = getattr(cfg, "feature_flags", {}) if cfg is not None else {}
+        if not isinstance(flags, dict):
+            flags = {}
+        external_enabled_flag = bool(flags.get("enable_external_data", True))
+        external_updated_at = info.get("external_updated_at")
+        external_status = str(info.get("external_status", "") or "").lower()
+        reference_now_ts = float(context.now_ts)
+        if reference_now_ts < 1_000_000_000:
+            reference_now_ts = datetime.datetime.now().timestamp()
+        if isinstance(external_updated_at, datetime.datetime):
+            external_age_sec = max(0.0, reference_now_ts - external_updated_at.timestamp())
+        else:
+            external_age_sec = -1.0
+        stale_limit = float(getattr(Config, "EXTERNAL_FLOW_STALE_SEC", 30))
+        external_fresh = (
+            external_age_sec >= 0.0
+            and external_age_sec <= stale_limit
+            and external_status not in {"error", "disabled"}
+        )
 
         conditions: Dict[str, bool] = {}
         metrics: Dict[str, float] = {
             "current": current,
             "target": target,
             "entry_score": 100.0,
+            "external_data_enabled": 1.0 if external_enabled_flag else 0.0,
+            "external_data_fresh": 1.0 if external_fresh else 0.0,
+            "external_age_sec": external_age_sec,
         }
         signals: List[Signal] = []
 
-        primary_passed, primary_dir, primary_strength = self._evaluate_primary(primary, context)
+        if requires_external:
+            conditions["external_data_enabled"] = external_enabled_flag
+            conditions["external_data_fresh"] = external_enabled_flag and external_fresh
+            if not external_enabled_flag:
+                if hasattr(self.manager, "log_dedup"):
+                    self.manager.log_dedup(
+                        context.code,
+                        "external_disabled",
+                        f"[전략차단] {context.code} 외부데이터 비활성화로 `{primary}` 평가를 중단합니다.",
+                        now_ts=context.now_ts,
+                    )
+            elif not external_fresh:
+                request_refresh = getattr(self.manager.trader, "_request_external_refresh", None)
+                if callable(request_refresh):
+                    request_refresh(context.code, reason="stale_guard", force=False)
+                if hasattr(self.manager, "log_dedup"):
+                    self.manager.log_dedup(
+                        context.code,
+                        "external_stale",
+                        f"[전략대기] {context.code} 외부데이터 신선도 부족(age={external_age_sec:.0f}s)으로 `{primary}` 진입을 보류합니다.",
+                        now_ts=context.now_ts,
+                    )
+        else:
+            conditions["external_data_enabled"] = True
+            conditions["external_data_fresh"] = True
+
+        if conditions["external_data_enabled"] and conditions["external_data_fresh"]:
+            primary_passed, primary_dir, primary_strength = self._evaluate_primary(primary, context)
+        else:
+            primary_passed, primary_dir, primary_strength = False, SignalDirection.FLAT, 0.0
         conditions[f"primary:{primary}"] = primary_passed
         signals.append(
             Signal(

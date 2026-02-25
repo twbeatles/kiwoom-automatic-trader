@@ -1,9 +1,10 @@
 """Trading session lifecycle mixin for KiwoomProTrader."""
 
 import datetime
+import time
 from typing import Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
 
@@ -23,9 +24,293 @@ class TradingSessionMixin:
             self.daily_loss_triggered = False
 
         if reset_baseline and int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
-            baseline = int(getattr(self, "deposit", 0) or 0) or int(getattr(self, "initial_deposit", 0) or 0)
+            cfg = getattr(self, "config", None)
+            basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+            if basis == "total_equity":
+                baseline = int(getattr(self, "total_equity", 0) or 0) or int(getattr(self, "deposit", 0) or 0)
+            else:
+                baseline = int(getattr(self, "deposit", 0) or 0)
+            if baseline <= 0:
+                baseline = int(getattr(self, "initial_deposit", 0) or 0)
             if baseline > 0:
                 self.daily_initial_deposit = baseline
+
+    def _strategy_primary_id(self) -> str:
+        cfg = getattr(self, "config", None)
+        pack = getattr(cfg, "strategy_pack", {}) if cfg is not None else {}
+        if isinstance(pack, dict):
+            return str(pack.get("primary_strategy", "volatility_breakout"))
+        return "volatility_breakout"
+
+    def _external_data_enabled(self) -> bool:
+        cfg = getattr(self, "config", None)
+        flags = getattr(cfg, "feature_flags", {}) if cfg is not None else {}
+        if not isinstance(flags, dict):
+            flags = {}
+        return bool(flags.get("enable_external_data", True))
+
+    def _log_once(self, key: str, message: str):
+        cooldown_map = getattr(self, "_log_cooldown_map", None)
+        if cooldown_map is None:
+            cooldown_map = {}
+            self._log_cooldown_map = cooldown_map
+        now_ts = time.time()
+        last_ts = float(cooldown_map.get(key, 0.0))
+        if now_ts - last_ts >= float(getattr(Config, "LOG_DEDUP_SEC", 30)):
+            self.log(message)
+            cooldown_map[key] = now_ts
+
+    def _set_external_disabled_state(self, codes: List[str]):
+        for code in codes:
+            info = self.universe.get(code)
+            if not info:
+                continue
+            info["external_status"] = "disabled"
+            info["external_error"] = "external_data_disabled"
+            self._dirty_codes.add(code)
+        if codes and not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+
+    @staticmethod
+    def _to_int_safe(value, default: int = 0) -> int:
+        try:
+            if value is None:
+                return default
+            text = str(value).strip().replace(",", "")
+            if not text:
+                return default
+            return int(float(text))
+        except (ValueError, TypeError):
+            return default
+
+    def _is_external_data_fresh(self, code: str, now_ts: Optional[float] = None) -> bool:
+        if not code or code not in self.universe:
+            return False
+        info = self.universe.get(code, {})
+        updated_at = info.get("external_updated_at")
+        if not isinstance(updated_at, datetime.datetime):
+            return False
+        if str(info.get("external_status", "")).lower() == "error":
+            return False
+        ts = now_ts if now_ts is not None else time.time()
+        age_sec = ts - updated_at.timestamp()
+        return age_sec <= float(getattr(Config, "EXTERNAL_FLOW_STALE_SEC", 30))
+
+    def _request_external_refresh(self, code: str, reason: str = "on_demand", force: bool = False) -> bool:
+        if not code:
+            return False
+        return self._request_external_refresh_batch([code], reason=reason, force=force)
+
+    def _request_external_refresh_batch(
+        self, codes: List[str], reason: str = "periodic", force: bool = False
+    ) -> bool:
+        if not codes:
+            return False
+        rest_client = getattr(self, "rest_client", None)
+        current_account = getattr(self, "current_account", "")
+        if not (rest_client and current_account):
+            return False
+        if not self._external_data_enabled():
+            self._set_external_disabled_state([c for c in codes if c in self.universe])
+            return False
+
+        now_ts = time.time()
+        debounce_sec = float(getattr(Config, "EXTERNAL_FLOW_ON_DEMAND_DEBOUNCE_SEC", 5))
+        inflight = getattr(self, "_external_refresh_inflight", set())
+        selected_codes: List[str] = []
+        for code in codes:
+            if code not in self.universe:
+                continue
+            if code in inflight:
+                continue
+            last_ts = float(getattr(self, "_external_last_fetch_ts", {}).get(code, 0.0))
+            if not force and (now_ts - last_ts) < debounce_sec:
+                continue
+            selected_codes.append(code)
+
+        if not selected_codes:
+            return False
+
+        for code in selected_codes:
+            inflight.add(code)
+            info = self.universe.get(code, {})
+            if info.get("external_status") != "fresh":
+                info["external_status"] = "refreshing"
+                self._dirty_codes.add(code)
+
+        if not hasattr(self, "_external_refresh_inflight"):
+            self._external_refresh_inflight = set(inflight)
+        if not hasattr(self, "_external_last_fetch_ts") or not isinstance(self._external_last_fetch_ts, dict):
+            self._external_last_fetch_ts = {}
+
+        if not hasattr(self, "threadpool"):
+            try:
+                payload = self._fetch_external_flow_worker(selected_codes)
+                self._on_external_flow_result(selected_codes, payload)
+            except Exception as exc:
+                self._on_external_flow_error(selected_codes, exc)
+            return True
+
+        worker = Worker(self._fetch_external_flow_worker, selected_codes)
+        worker.signals.result.connect(
+            lambda payload, requested=selected_codes: self._on_external_flow_result(requested, payload)
+        )
+        worker.signals.error.connect(
+            lambda error, requested=selected_codes: self._on_external_flow_error(requested, error)
+        )
+        self.threadpool.start(worker)
+        return True
+
+    def _fetch_external_flow_worker(self, codes: List[str]) -> Dict[str, Dict]:
+        payload: Dict[str, Dict] = {}
+        for code in codes:
+            investor = {}
+            program = {}
+            errors: List[str] = []
+            try:
+                investor = self.rest_client.get_investor_trading(code) or {}
+            except Exception as exc:
+                errors.append(f"investor:{exc}")
+            try:
+                program = self.rest_client.get_program_trading(code) or {}
+            except Exception as exc:
+                errors.append(f"program:{exc}")
+            payload[code] = {
+                "investor": investor if isinstance(investor, dict) else {},
+                "program": program if isinstance(program, dict) else {},
+                "error": "; ".join(errors),
+            }
+        return payload
+
+    def _on_external_flow_result(self, requested_codes: List[str], payload: Dict[str, Dict]):
+        now_dt = datetime.datetime.now()
+        now_ts = now_dt.timestamp()
+        inflight = getattr(self, "_external_refresh_inflight", set())
+        fetch_ts = getattr(self, "_external_last_fetch_ts", {})
+        for code in requested_codes:
+            inflight.discard(code)
+            info = self.universe.get(code)
+            if not info:
+                continue
+            row = payload.get(code, {}) if isinstance(payload, dict) else {}
+            investor = row.get("investor", {}) if isinstance(row, dict) else {}
+            program = row.get("program", {}) if isinstance(row, dict) else {}
+            error = str(row.get("error", "") or "") if isinstance(row, dict) else ""
+            if error or (not investor and not program):
+                info["external_status"] = "error"
+                info["external_error"] = error or "empty_external_response"
+                if isinstance(fetch_ts, dict):
+                    fetch_ts[code] = now_ts
+                self._log_once(
+                    f"external_error:{code}",
+                    f"[외부데이터] {info.get('name', code)} 수집 실패: {info['external_error']}",
+                )
+            else:
+                investor_net = (
+                    self._to_int_safe(investor.get("individual_net", 0))
+                    + self._to_int_safe(investor.get("foreign_net", 0))
+                    + self._to_int_safe(investor.get("institution_net", 0))
+                )
+                program_net = self._to_int_safe(program.get("net", 0))
+                info["investor_net"] = investor_net
+                info["program_net"] = program_net
+                info["external_updated_at"] = now_dt
+                info["external_status"] = "fresh"
+                info["external_error"] = ""
+                if isinstance(fetch_ts, dict):
+                    fetch_ts[code] = now_ts
+            self._dirty_codes.add(code)
+
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+
+    def _on_external_flow_error(self, requested_codes: List[str], error: Exception):
+        now_ts = time.time()
+        fetch_ts = getattr(self, "_external_last_fetch_ts", {})
+        inflight = getattr(self, "_external_refresh_inflight", set())
+        for code in requested_codes:
+            inflight.discard(code)
+            info = self.universe.get(code)
+            if not info:
+                continue
+            info["external_status"] = "error"
+            info["external_error"] = str(error)
+            if isinstance(fetch_ts, dict):
+                fetch_ts[code] = now_ts
+            self._dirty_codes.add(code)
+            self._log_once(
+                f"external_error:{code}",
+                f"[외부데이터] {info.get('name', code)} 수집 실패: {error}",
+            )
+        if requested_codes and not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+
+    def _on_external_refresh_timer(self):
+        if not self.is_running:
+            return
+        codes = list(self.universe.keys())
+        if codes:
+            self._request_external_refresh_batch(codes, reason="periodic", force=True)
+
+    def _start_external_refresh_loop(self, codes: List[str]):
+        if not self._external_data_enabled():
+            self._set_external_disabled_state(codes)
+            return
+
+        if codes:
+            self._request_external_refresh_batch(codes, reason="startup", force=True)
+
+        if not hasattr(self, "threadpool"):
+            return
+
+        if not hasattr(self, "_external_refresh_timer") or self._external_refresh_timer is None:
+            try:
+                self._external_refresh_timer = QTimer(self)
+            except TypeError:
+                self._external_refresh_timer = QTimer()
+            self._external_refresh_timer.timeout.connect(self._on_external_refresh_timer)
+        refresh_sec = max(1, int(getattr(Config, "EXTERNAL_FLOW_REFRESH_SEC", 10)))
+        self._external_refresh_timer.setInterval(refresh_sec * 1000)
+
+        if codes and not self._external_refresh_timer.isActive():
+            self._external_refresh_timer.start()
+
+    def _stop_external_refresh_loop(self):
+        timer = getattr(self, "_external_refresh_timer", None)
+        if timer is not None:
+            timer.stop()
+        if hasattr(self, "_external_refresh_inflight"):
+            self._external_refresh_inflight.clear()
+        if hasattr(self, "_external_last_fetch_ts") and isinstance(self._external_last_fetch_ts, dict):
+            self._external_last_fetch_ts.clear()
+
+    @staticmethod
+    def _time_strategy_phase(now_dt: Optional[datetime.datetime] = None) -> str:
+        now = now_dt or datetime.datetime.now()
+        minute_of_day = now.hour * 60 + now.minute
+        if minute_of_day < (9 * 60 + 30):
+            return "aggressive"
+        if minute_of_day < (14 * 60 + 30):
+            return "normal"
+        return "conservative"
+
+    def _maybe_recalculate_time_strategy_targets(self, now_dt: Optional[datetime.datetime] = None):
+        cfg = getattr(self, "config", None)
+        if not (self.is_running and cfg is not None and bool(getattr(cfg, "use_time_strategy", False))):
+            self._last_time_strategy_phase = None
+            return
+        if not self.universe:
+            return
+        phase = self._time_strategy_phase(now_dt)
+        if phase == getattr(self, "_last_time_strategy_phase", None):
+            return
+        self._last_time_strategy_phase = phase
+        for code in self.universe.keys():
+            self.universe[code]["target"] = self.strategy.calculate_target_price(code)
+            self._dirty_codes.add(code)
+        self.log(f"[시간전략] 구간 전환({phase})으로 목표가 재계산: {len(self.universe)}종목")
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
 
     def _sync_positions_snapshot(self, codes: List[str]) -> Tuple[bool, str]:
         """매매 시작 직후 계좌 포지션 스냅샷을 유니버스에 강제 반영한다."""
@@ -140,7 +425,8 @@ class TradingSessionMixin:
 
         # Keep live routing constrained to KR stock long path in phase-1.
         cfg = getattr(self, "config", None)
-        if cfg is not None and not self.chk_mock.isChecked():
+        is_mock = bool(hasattr(self, "chk_mock") and self.chk_mock.isChecked())
+        if cfg is not None and not is_mock:
             if str(getattr(cfg, "asset_scope", "kr_stock_live")) != "kr_stock_live":
                 QMessageBox.warning(
                     self,
@@ -153,6 +439,21 @@ class TradingSessionMixin:
                     self,
                     "실주문 숏 제한",
                     "숏 포지션은 현재 백테스트/시뮬레이션에서만 지원합니다.",
+                )
+                return
+            primary = self._strategy_primary_id()
+            capabilities = getattr(Config, "STRATEGY_CAPABILITIES", {})
+            cap = capabilities.get(primary)
+            if not cap or not bool(cap.get("live_supported", False)):
+                supported = sorted(
+                    k for k, v in capabilities.items() if isinstance(v, dict) and bool(v.get("live_supported", False))
+                )
+                supported_text = ", ".join(supported) if supported else "(none)"
+                self.log(f"[전략가드] 실거래 미지원 전략 차단: {primary}")
+                QMessageBox.warning(
+                    self,
+                    "실거래 전략 제한",
+                    f"선택 전략 `{primary}` 은(는) 실거래를 지원하지 않습니다.\n허용 전략: {supported_text}",
                 )
                 return
 
@@ -174,6 +475,11 @@ class TradingSessionMixin:
                 synced, reason = self._sync_positions_snapshot(initialized_codes)
                 if not synced:
                     raise RuntimeError(reason)
+                if cfg is not None and bool(getattr(cfg, "use_time_strategy", False)):
+                    self._last_time_strategy_phase = self._time_strategy_phase()
+                else:
+                    self._last_time_strategy_phase = None
+                self._start_external_refresh_loop(initialized_codes)
                 if self.ws_client:
                     self.ws_client.connect()
                     self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
@@ -204,6 +510,11 @@ class TradingSessionMixin:
                     synced, reason = self._sync_positions_snapshot(initialized_codes)
                     if not synced:
                         raise RuntimeError(reason)
+                    if cfg is not None and bool(getattr(cfg, "use_time_strategy", False)):
+                        self._last_time_strategy_phase = self._time_strategy_phase()
+                    else:
+                        self._last_time_strategy_phase = None
+                    self._start_external_refresh_loop(initialized_codes)
 
                     self._dirty_codes.update(initialized_codes)
                     self.sig_update_table.emit()
@@ -253,7 +564,11 @@ class TradingSessionMixin:
         if hasattr(self, "_position_sync_retry_count"):
             self._position_sync_retry_count = 0
         self._pending_order_state.clear()
+        if hasattr(self, "_manual_pending_state"):
+            self._manual_pending_state.clear()
         self._last_exec_event.clear()
+        self._last_time_strategy_phase = None
+        self._stop_external_refresh_loop()
         release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
         if callable(release_all_reserved):
             released_total = int(release_all_reserved(reason="STOP_TRADING") or 0)
@@ -381,6 +696,11 @@ class TradingSessionMixin:
                     "cooldown_until": None,
                     "buy_time": None,
                     "partial_profit_levels": set(),
+                    "investor_net": 0,
+                    "program_net": 0,
+                    "external_updated_at": None,
+                    "external_status": "idle",
+                    "external_error": "",
                 }
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):

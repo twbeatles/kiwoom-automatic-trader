@@ -203,24 +203,36 @@ class SystemShellMixin:
         if not self.is_running:
             return
 
+        cleanup_manual_pending = getattr(self, "_cleanup_manual_pending_state", None)
+        if callable(cleanup_manual_pending):
+            cleanup_manual_pending(now)
+
         self._refresh_account_info_async()
+        recalc_time_targets = getattr(self, "_maybe_recalculate_time_strategy_targets", None)
+        if callable(recalc_time_targets):
+            recalc_time_targets(now)
 
         if not self.time_liquidate_executed:
             if now.hour == Config.MARKET_CLOSE_HOUR and now.minute >= Config.MARKET_CLOSE_MINUTE:
                 self.time_liquidate_executed = True
                 self._time_liquidate()
 
-        if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0 and int(getattr(self, "deposit", 0) or 0) > 0:
-            self.daily_initial_deposit = int(self.deposit)
+        cfg = getattr(self, "config", None)
+        loss_basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+        if loss_basis == "total_equity":
+            basis_amount = int(getattr(self, "total_equity", 0) or 0) or int(getattr(self, "deposit", 0) or 0)
+        else:
+            basis_amount = int(getattr(self, "deposit", 0) or 0)
+        if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0 and basis_amount > 0:
+            self.daily_initial_deposit = basis_amount
 
         if self.chk_use_risk.isChecked() and not self.daily_loss_triggered and self.daily_initial_deposit > 0:
             loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
-            cfg = getattr(self, "config", None)
             max_loss = float(getattr(cfg, "max_daily_loss", self.spin_max_loss.value()))
             if loss_rate <= -max_loss:
                 self.daily_loss_triggered = True
                 self.log(
-                    f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원) - 매매 중지"
+                    f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원, 기준={loss_basis}) - 매매 중지"
                 )
                 self.stop_trading()
 
@@ -381,7 +393,18 @@ class SystemShellMixin:
                 self.tray_icon.hide()
 
             if self._history_dirty:
-                self._save_trade_history()
+                cfg = getattr(self, "config", None)
+                flush_sync = bool(
+                    getattr(
+                        cfg,
+                        "sync_history_flush_on_exit",
+                        getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+                    )
+                )
+                if flush_sync and hasattr(self, "_save_trade_history_sync"):
+                    self._save_trade_history_sync()
+                else:
+                    self._save_trade_history()
 
             event.accept()
         finally:

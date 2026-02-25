@@ -157,14 +157,26 @@ class DialogsProfilesMixin:
         """수동 주문 결과 처리"""
         if result.success:
             self.log(f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})")
-            if order_type == '매수':
-                self._set_pending_order(code, 'buy', '수동주문')
+            side = "buy" if order_type == "매수" else "sell"
+            if code in getattr(self, "universe", {}):
+                self._set_pending_order(code, side, "수동주문")
+                self._sync_position_from_account(code)
             else:
-                self._set_pending_order(code, 'sell', '수동주문')
-            self._sync_position_from_account(code)
+                set_manual_pending = getattr(self, "_set_manual_pending_order", None)
+                if callable(set_manual_pending):
+                    set_manual_pending(code, side, "수동주문")
+                else:
+                    self._set_pending_order(code, side, "수동주문")
         else:
             self.log(f"❌ 수동 주문 실패: {result.message}")
-            self._clear_pending_order(code)
+            if code in getattr(self, "universe", {}):
+                self._clear_pending_order(code)
+            else:
+                clear_manual_pending = getattr(self, "_clear_manual_pending_order", None)
+                if callable(clear_manual_pending):
+                    clear_manual_pending(code)
+                else:
+                    self._clear_pending_order(code)
 
     def _open_profile_manager(self):
         """프로필 관리 다이얼로그 열기"""
@@ -196,6 +208,8 @@ class DialogsProfilesMixin:
             "use_volume": self.chk_use_volume.isChecked(),
             "volume_mult": self.spin_volume_mult.value(),
             "use_risk": self.chk_use_risk.isChecked(),
+            "daily_loss_basis": self.combo_daily_loss_basis.currentText() if hasattr(self, "combo_daily_loss_basis") else "total_equity",
+            "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked() if hasattr(self, "chk_sync_history_flush_on_exit") else True,
             "codes": self.input_codes.text(),
             "use_ma": self.chk_use_ma.isChecked(),
             "ma_short": self.spin_ma_short.value(),
@@ -294,6 +308,10 @@ class DialogsProfilesMixin:
             self.spin_volume_mult.setValue(settings['volume_mult'])
         if 'use_risk' in settings:
             self.chk_use_risk.setChecked(settings['use_risk'])
+        if 'daily_loss_basis' in settings and hasattr(self, "combo_daily_loss_basis"):
+            self.combo_daily_loss_basis.setCurrentText(str(settings['daily_loss_basis']))
+        if 'sync_history_flush_on_exit' in settings and hasattr(self, "chk_sync_history_flush_on_exit"):
+            self.chk_sync_history_flush_on_exit.setChecked(bool(settings['sync_history_flush_on_exit']))
         if 'use_ma' in settings:
             self.chk_use_ma.setChecked(settings['use_ma'])
         if 'ma_short' in settings:

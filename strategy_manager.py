@@ -29,6 +29,18 @@ class StrategyManager:
     def log(self, msg):
         self.trader.log(msg)
 
+    def log_dedup(self, code: str, key: str, message: str, now_ts: Optional[float] = None):
+        cooldown_map = getattr(self.trader, "_log_cooldown_map", None)
+        if cooldown_map is None:
+            cooldown_map = {}
+            self.trader._log_cooldown_map = cooldown_map
+        ts = now_ts if now_ts is not None else time.time()
+        cache_key = f"{code}:{key}"
+        last_ts = float(cooldown_map.get(cache_key, 0.0))
+        if ts - last_ts >= float(getattr(Config, "LOG_DEDUP_SEC", 30)):
+            self.log(message)
+            cooldown_map[cache_key] = ts
+
     # ==================================================================
     # 스토캐스틱 RSI (신규)
     # ==================================================================
@@ -1192,17 +1204,8 @@ class StrategyManager:
         current = float(info.get("current", 0) or 0)
         target = float(info.get("target", 0) or 0)
 
-        cooldown_map = getattr(self.trader, "_log_cooldown_map", None)
-        if cooldown_map is None:
-            cooldown_map = {}
-            self.trader._log_cooldown_map = cooldown_map
-
         def log_once(key: str, message: str):
-            cache_key = f"{code}:{key}"
-            last_ts = cooldown_map.get(cache_key, 0.0)
-            if now_ts - last_ts >= Config.LOG_DEDUP_SEC:
-                self.log(message)
-                cooldown_map[cache_key] = now_ts
+            self.log_dedup(code, key, message, now_ts=now_ts)
 
         cfg = self.config
         if cfg:

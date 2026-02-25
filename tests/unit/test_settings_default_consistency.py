@@ -1,4 +1,4 @@
-﻿import json
+import json
 import sys
 import tempfile
 import unittest
@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault("keyring", MagicMock())
 
 from app.mixins.persistence_settings import PersistenceSettingsMixin
+from config import Config
 
 
 class _DummyText:
@@ -43,21 +44,20 @@ class _DummySpin:
         return self._value
 
 
+class _DummyCombo:
+    def __init__(self, value=""):
+        self._value = value
+
+    def setCurrentText(self, value):
+        self._value = str(value)
+
+    def currentText(self):
+        return self._value
+
+
 class _DummyLogger:
     def warning(self, _msg):
-        pass
-
-
-class _DummyConfig:
-    def __init__(self):
-        self.strategy_pack = {}
-        self.strategy_params = {}
-        self.portfolio_mode = "single_strategy"
-        self.short_enabled = False
-        self.asset_scope = "kr_stock_live"
-        self.backtest_config = {}
-        self.feature_flags = {}
-        self.execution_policy = "market"
+        return None
 
 
 class _Harness(PersistenceSettingsMixin):
@@ -65,7 +65,6 @@ class _Harness(PersistenceSettingsMixin):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
         self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
-        self.config = _DummyConfig()
 
         self.input_app_key = _DummyText()
         self.input_secret = _DummyText()
@@ -93,31 +92,36 @@ class _Harness(PersistenceSettingsMixin):
         self.input_tg_token = _DummyText()
         self.input_tg_chat = _DummyText()
         self.chk_use_telegram = _DummyCheck()
+        self.chk_use_market_limit = _DummyCheck()
+        self.spin_market_limit = _DummySpin()
+        self.chk_use_sector_limit = _DummyCheck()
+        self.spin_sector_limit = _DummySpin()
+        self.combo_daily_loss_basis = _DummyCombo("total_equity")
+        self.chk_sync_history_flush_on_exit = _DummyCheck(True)
 
     def log(self, _msg):
-        pass
+        return None
 
     def setStyleSheet(self, _style):
-        pass
+        return None
 
 
-class TestSettingsSchemaV3Migration(unittest.TestCase):
-    def test_v2_file_gets_v3_defaults_and_syncs_config(self):
+class TestSettingsDefaultConsistency(unittest.TestCase):
+    def test_missing_market_sector_defaults_follow_config_constants(self):
         trader = _Harness()
         with tempfile.TemporaryDirectory() as tmpdir:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
-            settings_path.write_text(json.dumps({"settings_version": 2, "betting": 11.0}), encoding="utf-8")
-
+            settings_path.write_text(
+                json.dumps({"settings_version": 3, "codes": "005930"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
             with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
                 "app.mixins.persistence_settings.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
 
-        self.assertEqual(trader.spin_betting.value(), 11.0)
-        self.assertIn("primary_strategy", trader.config.strategy_pack)
-        self.assertEqual(trader.config.asset_scope, "kr_stock_live")
-        self.assertEqual(trader.config.daily_loss_basis, "total_equity")
-        self.assertTrue(trader.config.sync_history_flush_on_exit)
+        self.assertEqual(trader.spin_market_limit.value(), Config.DEFAULT_MARKET_LIMIT)
+        self.assertEqual(trader.spin_sector_limit.value(), Config.DEFAULT_SECTOR_LIMIT)
 
 
 if __name__ == "__main__":

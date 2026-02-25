@@ -321,6 +321,13 @@ class UIBuildMixin:
         self.spin_max_holdings.setRange(1, 20)
         self.spin_max_holdings.setValue(Config.DEFAULT_MAX_HOLDINGS)
         layout.addWidget(self.spin_max_holdings, 5, 4)
+        self.combo_daily_loss_basis = NoScrollComboBox()
+        self.combo_daily_loss_basis.addItems(list(getattr(Config, "DAILY_LOSS_BASIS_OPTIONS", ["total_equity"])))
+        self.combo_daily_loss_basis.setCurrentText(
+            str(getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"))
+        )
+        self.combo_daily_loss_basis.setToolTip("일일 손실 한도 기준값 선택 (총자산/주문가능금액)")
+        layout.addWidget(self.combo_daily_loss_basis, 5, 5)
         
         # === 신규 전략 옵션 ===
         layout.addWidget(QLabel(""), 6, 0)  # 구분선
@@ -677,7 +684,14 @@ class UIBuildMixin:
         self.chk_minimize_tray.setChecked(Config.DEFAULT_MINIMIZE_TO_TRAY)
         layout.addWidget(self.chk_minimize_tray, 29, 2, 1, 3)
 
-        layout.setRowStretch(30, 1)
+        self.chk_sync_history_flush_on_exit = QCheckBox("종료 시 거래내역 동기 저장")
+        self.chk_sync_history_flush_on_exit.setToolTip("강제 종료 직전 거래내역을 동기 저장하여 유실을 줄입니다.")
+        self.chk_sync_history_flush_on_exit.setChecked(
+            bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True))
+        )
+        layout.addWidget(self.chk_sync_history_flush_on_exit, 30, 0, 1, 3)
+
+        layout.setRowStretch(31, 1)
         return main_widget
 
     def _create_chart_tab(self):
@@ -908,6 +922,9 @@ class UIBuildMixin:
             "retry count",
             "last sync error",
             "last update",
+            "external status",
+            "external updated",
+            "external age(sec)",
         ]
         self.diagnostic_table.setColumnCount(len(cols))
         self.diagnostic_table.setHorizontalHeaderLabels(cols)

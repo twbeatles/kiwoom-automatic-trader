@@ -280,9 +280,9 @@ class ExecutionEngineMixin:
         required_cash = int(quantity) * current_price if current_price > 0 else 0
         available_cash = getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
 
-        if required_cash > 0 and available_cash > 0 and required_cash > available_cash:
+        if required_cash > available_cash:
             self.log(
-                f"BUY skipped [{name}]: required={required_cash:,} available(V)={available_cash:,}"
+                f"BUY skipped [{name}]: required={required_cash:,} available(V)={available_cash:,} (INSUFFICIENT_CASH)"
             )
             seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
             info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)

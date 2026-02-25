@@ -1,5 +1,7 @@
 ﻿import unittest
 
+import datetime
+
 from config import TradingConfig
 from strategy_manager import StrategyManager
 
@@ -112,6 +114,40 @@ class TestStrategyPackEngine(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertFalse(conditions["risk:daily_loss_limit"])
+
+    def test_external_dependent_primary_is_blocked_when_external_data_disabled(self):
+        trader = _DummyTrader()
+        trader.universe["005930"]["investor_net"] = 100
+        trader.universe["005930"]["program_net"] = 200
+        trader.universe["005930"]["external_updated_at"] = datetime.datetime.now()
+        trader.universe["005930"]["external_status"] = "fresh"
+        cfg = TradingConfig(
+            use_rsi=False,
+            use_volume=False,
+            use_liquidity=False,
+            use_spread=False,
+            use_macd=False,
+            use_bb=False,
+            use_dmi=False,
+            use_stoch_rsi=False,
+            use_mtf=False,
+            use_gap=False,
+            use_entry_scoring=False,
+        )
+        cfg.strategy_pack = {
+            "primary_strategy": "investor_program_flow",
+            "entry_filters": [],
+            "risk_overlays": [],
+            "exit_overlays": [],
+        }
+        cfg.feature_flags["use_modular_strategy_pack"] = True
+        cfg.feature_flags["enable_external_data"] = False
+        sm = StrategyManager(trader, cfg)
+
+        passed, conditions, _ = sm.evaluate_buy_conditions("005930", now_ts=4000.0)
+
+        self.assertFalse(passed)
+        self.assertFalse(conditions["external_data_enabled"])
 
 
 if __name__ == "__main__":

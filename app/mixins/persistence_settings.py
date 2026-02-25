@@ -234,6 +234,18 @@ class PersistenceSettingsMixin:
             "max_loss": self.spin_max_loss.value(),
             "max_daily_loss": self.spin_max_loss.value(),
             "max_holdings": self.spin_max_holdings.value(),
+            "daily_loss_basis": self.combo_daily_loss_basis.currentText()
+            if hasattr(self, "combo_daily_loss_basis")
+            else getattr(self.config, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")),
+            "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked()
+            if hasattr(self, "chk_sync_history_flush_on_exit")
+            else bool(
+                getattr(
+                    self.config,
+                    "sync_history_flush_on_exit",
+                    getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+                )
+            ),
             "tg_token": self.input_tg_token.text(),
             "tg_chat": self.input_tg_chat.text(),
             "use_telegram": self.chk_use_telegram.isChecked(),
@@ -401,6 +413,16 @@ class PersistenceSettingsMixin:
                 settings.setdefault("feature_flags", dict(getattr(Config, "FEATURE_FLAGS", {})))
                 settings.setdefault("execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
                 settings.setdefault("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
+            settings.setdefault(
+                "daily_loss_basis",
+                getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+            )
+            settings.setdefault(
+                "sync_history_flush_on_exit",
+                bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True)),
+            )
+            settings.setdefault("market_limit", int(getattr(Config, "DEFAULT_MARKET_LIMIT", 70)))
+            settings.setdefault("sector_limit", int(getattr(Config, "DEFAULT_SECTOR_LIMIT", 30)))
 
 
             app_key = ""
@@ -484,11 +506,24 @@ class PersistenceSettingsMixin:
             if hasattr(self, "chk_use_market_limit"):
                 self.chk_use_market_limit.setChecked(settings.get("use_market_limit", False))
             if hasattr(self, "spin_market_limit"):
-                self.spin_market_limit.setValue(settings.get("market_limit", 30))
+                self.spin_market_limit.setValue(settings.get("market_limit", Config.DEFAULT_MARKET_LIMIT))
             if hasattr(self, "chk_use_sector_limit"):
                 self.chk_use_sector_limit.setChecked(settings.get("use_sector_limit", False))
             if hasattr(self, "spin_sector_limit"):
-                self.spin_sector_limit.setValue(settings.get("sector_limit", 20))
+                self.spin_sector_limit.setValue(settings.get("sector_limit", Config.DEFAULT_SECTOR_LIMIT))
+            if hasattr(self, "combo_daily_loss_basis"):
+                self.combo_daily_loss_basis.setCurrentText(
+                    str(settings.get("daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+                )
+            if hasattr(self, "chk_sync_history_flush_on_exit"):
+                self.chk_sync_history_flush_on_exit.setChecked(
+                    bool(
+                        settings.get(
+                            "sync_history_flush_on_exit",
+                            getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+                        )
+                    )
+                )
             if hasattr(self, "chk_use_atr_stop"):
                 self.chk_use_atr_stop.setChecked(settings.get("use_atr_stop", False))
             if hasattr(self, "spin_atr_mult"):
@@ -575,6 +610,22 @@ class PersistenceSettingsMixin:
                 cfg.execution_policy = str(settings.get("execution_policy", getattr(cfg, "execution_policy", "market")))
                 cfg.max_daily_loss = float(
                     settings.get("max_daily_loss", settings.get("max_loss", getattr(cfg, "max_daily_loss", 3.0)))
+                )
+                cfg.daily_loss_basis = str(
+                    settings.get(
+                        "daily_loss_basis",
+                        getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")),
+                    )
+                )
+                cfg.sync_history_flush_on_exit = bool(
+                    settings.get(
+                        "sync_history_flush_on_exit",
+                        getattr(
+                            cfg,
+                            "sync_history_flush_on_exit",
+                            getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+                        ),
+                    )
                 )
 
             self.log("📂 설정 불러옴")

@@ -219,8 +219,15 @@ class APIAccountMixin:
         if account != self.current_account or not info:
             return
 
-        self.deposit = info.available_amount
-        self.initial_deposit = self.initial_deposit or self.deposit
+        available_amount = int(getattr(info, "available_amount", 0) or getattr(info, "deposit", 0) or 0)
+        total_eval_amount = int(getattr(info, "total_eval_amount", 0) or 0)
+        computed_equity = available_amount + max(0, total_eval_amount)
+        if computed_equity <= 0:
+            computed_equity = available_amount
+
+        self.deposit = available_amount
+        self.total_equity = max(0, int(computed_equity))
+        self.initial_deposit = self.initial_deposit or self.total_equity or self.deposit
 
         # Virtual deposit is always real deposit minus active reserved cash.
         reserved_map = getattr(self, "_reserved_cash_by_code", {})
@@ -231,9 +238,16 @@ class APIAccountMixin:
 
         # 일일 기준 예수금이 비어 있으면 즉시 확보 (start_trading 시점 정합성 보장)
         if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
-            self.daily_initial_deposit = int(self.deposit)
+            cfg = getattr(self, "config", None)
+            basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+            basis_amount = self.total_equity if basis == "total_equity" else int(self.deposit)
+            if basis_amount <= 0:
+                basis_amount = int(self.deposit)
+            self.daily_initial_deposit = basis_amount
             
-        self.lbl_deposit.setText(f"예수금(V) {self.virtual_deposit:,} 원 / (실) {self.deposit:,} 원")
+        self.lbl_deposit.setText(
+            f"예수금(V) {self.virtual_deposit:,} 원 / (실) {self.deposit:,} 원 / 총자산 {self.total_equity:,} 원"
+        )
 
         profit = info.total_profit
         self.lbl_profit.setText(f"손익: {profit:+,} 원")

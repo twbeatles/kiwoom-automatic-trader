@@ -65,6 +65,18 @@ class _Harness(ExecutionEngineMixin):
 
 
 class TestBuyRejectCooldown(unittest.TestCase):
+    def test_execute_buy_blocks_when_virtual_cash_is_zero(self):
+        trader = _Harness()
+        trader.virtual_deposit = 0
+
+        trader._execute_buy("005930", quantity=1, price=10000)
+
+        info = trader.universe["005930"]
+        self.assertEqual(trader.threadpool.started, 0)
+        self.assertEqual(info["status"], "cooldown")
+        self.assertIsNotNone(info.get("cooldown_until"))
+        self.assertTrue(any("INSUFFICIENT_CASH" in msg for msg in trader.logs))
+
     def test_execute_buy_insufficient_cash_sets_cooldown(self):
         trader = _Harness()
 

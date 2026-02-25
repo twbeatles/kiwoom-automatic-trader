@@ -96,6 +96,48 @@ class _SystemShellHarness(SystemShellMixin):
         return None
 
 
+class _BasisHarness(SystemShellMixin):
+    def __init__(self, basis):
+        self.status_time = _DummyLabel()
+        self.status_trading = _DummyLabel()
+        self._last_status_badge = None
+        self.schedule = {"enabled": False}
+        self.is_connected = False
+        self.is_running = True
+        self.time_liquidate_executed = True
+        self.chk_use_risk = _DummyCheck(True)
+        self.daily_loss_triggered = False
+        self.daily_realized_profit = -40000
+        self.daily_initial_deposit = 0
+        self.total_realized_profit = 0
+        self.spin_max_loss = _DummySpin(3.0)
+        self._history_dirty = False
+        self.stopped = 0
+        self._trading_day = datetime.date.today()
+        self.deposit = 3_000_000
+        self.total_equity = 1_000_000
+        self.config = type(
+            "Cfg",
+            (),
+            {"max_daily_loss": 3.0, "daily_loss_basis": basis, "sync_history_flush_on_exit": True},
+        )()
+
+    def _refresh_account_info_async(self):
+        return None
+
+    def _time_liquidate(self):
+        return None
+
+    def _save_trade_history(self):
+        return None
+
+    def stop_trading(self):
+        self.stopped += 1
+
+    def log(self, _msg):
+        return None
+
+
 class TestDailyLossRollover(unittest.TestCase):
     def test_rollover_resets_daily_metrics_on_date_change(self):
         trader = _TradingDayHarness()
@@ -131,6 +173,19 @@ class TestDailyLossRollover(unittest.TestCase):
 
         self.assertEqual(trader.stopped, 1)
         self.assertTrue(trader.daily_loss_triggered)
+
+    def test_daily_loss_basis_switches_baseline(self):
+        equity_basis = _BasisHarness("total_equity")
+        equity_basis._on_timer()
+        self.assertEqual(equity_basis.daily_initial_deposit, 1_000_000)
+        self.assertEqual(equity_basis.stopped, 1)
+        self.assertTrue(equity_basis.daily_loss_triggered)
+
+        available_basis = _BasisHarness("available_amount")
+        available_basis._on_timer()
+        self.assertEqual(available_basis.daily_initial_deposit, 3_000_000)
+        self.assertEqual(available_basis.stopped, 0)
+        self.assertFalse(available_basis.daily_loss_triggered)
 
 
 if __name__ == "__main__":

@@ -44,6 +44,8 @@ class TradingConfig:
     max_holdings: int = 5
     use_risk_mgmt: bool = True
     max_daily_loss: float = 3.0
+    daily_loss_basis: str = "total_equity"
+    sync_history_flush_on_exit: bool = True
     
     # v4.3 신규 전략
     use_mtf: bool = False
@@ -216,6 +218,9 @@ class Config:
     DEFAULT_MAX_DAILY_LOSS = 3.0
     DEFAULT_MAX_HOLDINGS = 5
     DEFAULT_USE_RISK_MGMT = True
+    DEFAULT_DAILY_LOSS_BASIS = "total_equity"
+    DAILY_LOSS_BASIS_OPTIONS = ["total_equity", "available_amount"]
+    DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT = True
     
     # =========================================================================
     # 진입 점수 시스템 (v4.3 확장)
@@ -436,6 +441,9 @@ class Config:
     LOG_DEDUP_SEC = 30
     TABLE_BATCH_LIMIT = 200
     ORDER_REJECT_COOLDOWN_SEC = 10
+    EXTERNAL_FLOW_REFRESH_SEC = 10
+    EXTERNAL_FLOW_STALE_SEC = 30
+    EXTERNAL_FLOW_ON_DEMAND_DEBOUNCE_SEC = 5
     
     # =========================================================================
     # 기본 프리셋 정의
@@ -592,3 +600,21 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         "enable_external_data": True,
     }
     DEFAULT_EXECUTION_POLICY = "market"
+    STRATEGY_CAPABILITIES: Dict[str, Dict[str, bool]] = {
+        "volatility_breakout": {"live_supported": True, "requires_external_data": False},
+        "time_series_momentum": {"live_supported": True, "requires_external_data": False},
+        "cross_sectional_momentum": {"live_supported": False, "requires_external_data": False},
+        "ma_channel_trend": {"live_supported": True, "requires_external_data": False},
+        "orb_donchian_breakout": {"live_supported": True, "requires_external_data": False},
+        "pairs_trading_cointegration": {"live_supported": False, "requires_external_data": False},
+        "stat_arb_residual": {"live_supported": False, "requires_external_data": False},
+        "rsi_bollinger_reversion": {"live_supported": True, "requires_external_data": False},
+        "dmi_trend_strength": {"live_supported": True, "requires_external_data": False},
+        "ff5_factor_ls": {"live_supported": False, "requires_external_data": False},
+        "quality_value_lowvol": {"live_supported": False, "requires_external_data": False},
+        "investor_program_flow": {"live_supported": True, "requires_external_data": True},
+        "volatility_targeting_overlay": {"live_supported": False, "requires_external_data": False},
+        "risk_parity_portfolio": {"live_supported": False, "requires_external_data": False},
+        "execution_algo_twap_vwap_pov": {"live_supported": False, "requires_external_data": False},
+        "market_making_spread": {"live_supported": False, "requires_external_data": False},
+    }

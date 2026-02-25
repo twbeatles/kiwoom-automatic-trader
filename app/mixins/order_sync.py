@@ -11,6 +11,13 @@ from config import Config
 
 
 class OrderSyncMixin:
+    def _manual_pending_map(self):
+        mapping = getattr(self, "_manual_pending_state", None)
+        if not isinstance(mapping, dict):
+            mapping = {}
+            self._manual_pending_state = mapping
+        return mapping
+
     def _log_sync_fail_once(self, code: str, message: str):
         cooldown_map = getattr(self, "_log_cooldown_map", None)
         if cooldown_map is None:
@@ -76,13 +83,16 @@ class OrderSyncMixin:
             order_type = order_type_map.get(raw_order_type, raw_order_type or "주문")
 
             order_status = str(data.get("order_status") or data.get("ord_st") or data.get("status") or "").strip()
-            qty = self._to_int(data.get("exec_qty", data.get("qty", data.get("ord_qty", 0))))
+            exec_qty = self._to_int(data.get("exec_qty", data.get("qty", 0)))
+            display_qty = exec_qty if exec_qty > 0 else self._to_int(data.get("ord_qty", data.get("qty", 0)))
             price = self._to_int(data.get("exec_price", data.get("price", data.get("ord_prc", 0))))
+            status_lower = order_status.lower()
+            fill_like = ("체결" in order_status) or ("fill" in status_lower)
 
             if not order_status:
-                order_status = "체결" if qty > 0 else "알림"
+                order_status = "체결" if exec_qty > 0 else "알림"
 
-            msg = f"{order_type} {order_status} - {name} {qty}주"
+            msg = f"{order_type} {order_status} - {name} {display_qty}주"
             if price > 0:
                 msg += f" @ {price:,}원"
             self.log(msg)
@@ -94,19 +104,18 @@ class OrderSyncMixin:
             elif "매도" in order_type or "sell" in lower_type:
                 side = "sell"
 
-            if code and qty > 0 and side:
+            if code and exec_qty > 0 and side:
                 self._last_exec_event[code] = {
                     "side": side,
-                    "qty": qty,
+                    "qty": exec_qty,
                     "price": price,
                     "timestamp": datetime.datetime.now(),
                 }
                 self._position_sync_batch.add(code)
 
-            if code and ("체결" in order_status or "fill" in order_status.lower() or qty > 0):
+            if code and (exec_qty > 0 or fill_like):
                 self._sync_position_from_account(code)
 
-            status_lower = order_status.lower()
             cancel_like = any(token in order_status for token in ["취소", "거부", "실패"]) or any(
                 token in status_lower for token in ["cancel", "reject", "fail"]
             )
@@ -125,6 +134,9 @@ class OrderSyncMixin:
                         retry_count=0,
                     )
                 self._dirty_codes.add(code)
+            if code and code not in self.universe and code in self._manual_pending_map():
+                if cancel_like or exec_qty > 0 or fill_like:
+                    self._clear_manual_pending_order(code)
         except Exception as e:
             self.logger.error(f"주문 체결 처리 오류: {e}")
 
@@ -160,6 +172,30 @@ class OrderSyncMixin:
     def _clear_pending_order(self, code: str):
         self._pending_order_state.pop(code, None)
         self._diag_clear_pending_safe(code)
+
+    def _set_manual_pending_order(self, code: str, side: str, reason: str):
+        if not code:
+            return
+        pending_until = datetime.datetime.now() + datetime.timedelta(seconds=5)
+        self._manual_pending_map()[code] = {
+            "side": side,
+            "reason": reason,
+            "until": pending_until,
+        }
+
+    def _clear_manual_pending_order(self, code: str):
+        self._manual_pending_map().pop(code, None)
+
+    def _cleanup_manual_pending_state(self, now: datetime.datetime | None = None):
+        state = self._manual_pending_map()
+        if not state:
+            return
+        now_dt = now or datetime.datetime.now()
+        expired_codes = [
+            code for code, pending in state.items() if pending.get("until") and pending.get("until") <= now_dt
+        ]
+        for code in expired_codes:
+            state.pop(code, None)
 
     def _sync_position_from_account(self, code: str):
         """Sync positions from account API with debounce/batch."""

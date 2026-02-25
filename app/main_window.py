@@ -4,6 +4,7 @@ import datetime
 from typing import Any, Dict, Optional, Set
 
 from PyQt6.QtCore import *
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import *
 
 from config import Config, TradingConfig
@@ -65,12 +66,17 @@ class KiwoomProTrader(
         self._position_sync_scheduled = False
         self._position_sync_retry_count = 0
         self._pending_order_state: Dict[str, Dict[str, Any]] = {}
+        self._manual_pending_state: Dict[str, Dict[str, Any]] = {}
         self._last_exec_event: Dict[str, Dict[str, Any]] = {}
         self._reserved_cash_by_code: Dict[str, int] = {}
         self._diagnostics_by_code: Dict[str, Dict[str, Any]] = {}
         self._diagnostics_dirty_codes: Set[str] = set()
         self._account_refresh_pending = False
         self._last_account_refresh_ts = 0.0
+        self._external_refresh_inflight: Set[str] = set()
+        self._external_last_fetch_ts: Dict[str, float] = {}
+        self._external_refresh_timer: Optional[QTimer] = None
+        self._last_time_strategy_phase: Optional[str] = None
         self._force_quit_requested = False
         self._shutdown_in_progress = False
         self._connect_inflight = False
@@ -82,6 +88,7 @@ class KiwoomProTrader(
         self._log_cooldown_map: Dict[str, float] = {}
         self._holding_or_pending_count = 0
         self._sync_failed_codes: Set[str] = set()
+        self.total_equity = 0
         
         # v4.3 신규 상태
         self.current_theme = Config.DEFAULT_THEME
@@ -170,6 +177,10 @@ class KiwoomProTrader(
         self.chk_use_risk.toggled.connect(lambda v: setattr(self.config, 'use_risk_mgmt', v))
         self.spin_max_loss.valueChanged.connect(lambda v: setattr(self.config, 'max_daily_loss', float(v)))
         self.spin_max_holdings.valueChanged.connect(lambda v: setattr(self.config, 'max_holdings', v))
+        if hasattr(self, "combo_daily_loss_basis"):
+            self.combo_daily_loss_basis.currentTextChanged.connect(
+                lambda v: setattr(self.config, "daily_loss_basis", str(v))
+            )
         
         # 신규 전략들
         self.chk_use_stoch_rsi.toggled.connect(lambda v: setattr(self.config, 'use_stoch_rsi', v))
@@ -278,6 +289,10 @@ class KiwoomProTrader(
             self.chk_feature_external_data.toggled.connect(
                 lambda v: self.config.feature_flags.update({"enable_external_data": bool(v)})
             )
+        if hasattr(self, "chk_sync_history_flush_on_exit"):
+            self.chk_sync_history_flush_on_exit.toggled.connect(
+                lambda v: setattr(self.config, "sync_history_flush_on_exit", bool(v))
+            )
 
         # 현재 UI 값으로 config 초기 동기화
         self.config.betting_ratio = self.spin_betting.value()
@@ -296,6 +311,8 @@ class KiwoomProTrader(
         self.config.max_daily_loss = float(self.spin_max_loss.value())
         self.config.max_holdings = self.spin_max_holdings.value()
         self.config.use_risk_mgmt = self.chk_use_risk.isChecked()
+        if hasattr(self, "combo_daily_loss_basis"):
+            self.config.daily_loss_basis = str(self.combo_daily_loss_basis.currentText())
         self.config.use_stoch_rsi = self.chk_use_stoch_rsi.isChecked()
         self.config.stoch_upper = self.spin_stoch_upper.value()
         self.config.stoch_lower = self.spin_stoch_lower.value()
@@ -364,6 +381,8 @@ class KiwoomProTrader(
             self.config.feature_flags["enable_backtest"] = bool(self.chk_feature_backtest.isChecked())
         if hasattr(self, "chk_feature_external_data"):
             self.config.feature_flags["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
+        if hasattr(self, "chk_sync_history_flush_on_exit"):
+            self.config.sync_history_flush_on_exit = bool(self.chk_sync_history_flush_on_exit.isChecked())
 
     def _diag_touch(self, code: str, **fields: Any):
         if not code:
@@ -399,12 +418,24 @@ class KiwoomProTrader(
             return value.strftime("%H:%M:%S")
         return ""
 
+    @staticmethod
+    def _diag_age_seconds(value: Any) -> str:
+        if isinstance(value, datetime.datetime):
+            age = int((datetime.datetime.now() - value).total_seconds())
+            return str(max(0, age))
+        return ""
+
     def _refresh_diagnostics(self):
         if not hasattr(self, "diagnostic_table"):
             return
 
         if not self._diagnostics_dirty_codes and self.diagnostic_table.rowCount() == len(self.universe):
-            return
+            has_external_clock = any(
+                isinstance(info.get("external_updated_at"), datetime.datetime)
+                for info in self.universe.values()
+            )
+            if not has_external_clock:
+                return
 
         codes = list(self.universe.keys())
         self.diagnostic_table.setUpdatesEnabled(False)
@@ -417,6 +448,21 @@ class KiwoomProTrader(
                 sync_status = str(info.get("status", ""))
                 if sync_status == "sync_failed":
                     sync_status = "sync_failed"
+                external_updated = info.get("external_updated_at")
+                external_status = str(info.get("external_status", "") or "")
+                external_error = str(info.get("external_error", "") or "")
+                external_age = self._diag_age_seconds(external_updated)
+                stale_limit = int(getattr(Config, "EXTERNAL_FLOW_STALE_SEC", 30))
+                if external_status == "fresh" and external_age and int(external_age) > stale_limit:
+                    external_status = "stale"
+                if external_status == "error" and external_error:
+                    sync_error = str(diag.get("last_sync_error", "") or "")
+                    if sync_error:
+                        sync_error = f"{sync_error} | ext:{external_error}"
+                    else:
+                        sync_error = f"ext:{external_error}"
+                else:
+                    sync_error = str(diag.get("last_sync_error", ""))
 
                 values = [
                     code,
@@ -426,8 +472,11 @@ class KiwoomProTrader(
                     self._diag_fmt_dt(diag.get("pending_until") or pending.get("until")),
                     sync_status,
                     str(diag.get("retry_count", 0)),
-                    str(diag.get("last_sync_error", "")),
+                    sync_error,
                     self._diag_fmt_dt(diag.get("last_update")),
+                    external_status,
+                    self._diag_fmt_dt(external_updated),
+                    external_age,
                 ]
 
                 for col, text in enumerate(values):
@@ -438,6 +487,16 @@ class KiwoomProTrader(
                         self.diagnostic_table.setItem(row, col, item)
                     elif item.text() != str(text):
                         item.setText(str(text))
+                    if col == 9:
+                        state = str(text).lower()
+                        if state == "error":
+                            item.setForeground(QColor("#f85149"))
+                        elif state == "stale":
+                            item.setForeground(QColor("#d29922"))
+                        elif state == "fresh":
+                            item.setForeground(QColor("#3fb950"))
+                        else:
+                            item.setForeground(QColor("#8b949e"))
         finally:
             self.diagnostic_table.setUpdatesEnabled(True)
 
