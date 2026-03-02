@@ -1,5 +1,5 @@
 ﻿"""
-Kiwoom Pro Algo-Trader Config v4.3
+Kiwoom Pro Algo-Trader Config v4.5
 REST API 기반 + 확장 기능 설정
 """
 

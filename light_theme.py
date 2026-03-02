@@ -5,7 +5,7 @@ Light Theme for Kiwoom Pro Algo-Trader
 
 LIGHT_STYLESHEET = """
 /* ============================================
-   Kiwoom Pro Algo-Trader v4.3 Light Theme
+   Kiwoom Pro Algo-Trader v4.5 Light Theme
    Modern, Clean, Professional
    ============================================ */
 

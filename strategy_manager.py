@@ -1,5 +1,5 @@
 ﻿"""
-Strategy Manager v4.3
+Strategy Manager v4.5
 매매 전략 로직 - 확장된 기능 포함
 """
 

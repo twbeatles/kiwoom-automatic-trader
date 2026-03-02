@@ -9,7 +9,7 @@ from dark_theme import DARK_STYLESHEET
 
 class UIBuildMixin:
     def _init_ui(self):
-        self.setWindowTitle("Kiwoom Pro Algo-Trader v4.3 [REST API]")
+        self.setWindowTitle("Kiwoom Pro Algo-Trader v4.5 [REST API]")
         self.setGeometry(100, 100, 1400, 950)
         self.setMinimumSize(1100, 800)
         self.setStyleSheet(DARK_STYLESHEET)
@@ -245,285 +245,284 @@ class UIBuildMixin:
     def _create_advanced_tab(self):
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
-        
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         main_layout.addWidget(scroll)
-        
-        widget = QWidget()
-        scroll.setWidget(widget)
-        
-        layout = QGridLayout(widget)
-        layout.setSpacing(10)
-        
-        # RSI
+
+        container = QWidget()
+        scroll.setWidget(container)
+        outer = QVBoxLayout(container)
+        outer.setSpacing(16)
+
+        # ── 📊 기술지표 필터 ──
+        grp_ind = QGroupBox("📊 기술지표 필터")
+        g1 = QGridLayout()
+        g1.setSpacing(10)
+
         self.chk_use_rsi = QCheckBox("RSI 필터")
         self.chk_use_rsi.setChecked(Config.DEFAULT_USE_RSI)
-        layout.addWidget(self.chk_use_rsi, 0, 0)
-        layout.addWidget(QLabel("과매수:"), 0, 1)
+        g1.addWidget(self.chk_use_rsi, 0, 0)
+        g1.addWidget(QLabel("과매수:"), 0, 1)
         self.spin_rsi_upper = NoScrollSpinBox()
         self.spin_rsi_upper.setRange(50, 90)
         self.spin_rsi_upper.setValue(Config.DEFAULT_RSI_UPPER)
-        layout.addWidget(self.spin_rsi_upper, 0, 2)
-        layout.addWidget(QLabel("기간:"), 0, 3)
+        g1.addWidget(self.spin_rsi_upper, 0, 2)
+        g1.addWidget(QLabel("기간:"), 0, 3)
         self.spin_rsi_period = NoScrollSpinBox()
         self.spin_rsi_period.setRange(5, 30)
         self.spin_rsi_period.setValue(Config.DEFAULT_RSI_PERIOD)
-        layout.addWidget(self.spin_rsi_period, 0, 4)
-        
-        # MACD
+        g1.addWidget(self.spin_rsi_period, 0, 4)
+
         self.chk_use_macd = QCheckBox("MACD 필터")
         self.chk_use_macd.setChecked(Config.DEFAULT_USE_MACD)
-        layout.addWidget(self.chk_use_macd, 1, 0)
-        
-        # 볼린저
+        g1.addWidget(self.chk_use_macd, 1, 0)
+
         self.chk_use_bb = QCheckBox("볼린저밴드")
         self.chk_use_bb.setChecked(Config.DEFAULT_USE_BB)
-        layout.addWidget(self.chk_use_bb, 2, 0)
-        layout.addWidget(QLabel("배수:"), 2, 1)
+        g1.addWidget(self.chk_use_bb, 2, 0)
+        g1.addWidget(QLabel("배수:"), 2, 1)
         self.spin_bb_k = NoScrollDoubleSpinBox()
         self.spin_bb_k.setRange(1.0, 3.0)
         self.spin_bb_k.setValue(Config.DEFAULT_BB_STD)
-        layout.addWidget(self.spin_bb_k, 2, 2)
-        
-        # DMI
+        g1.addWidget(self.spin_bb_k, 2, 2)
+
         self.chk_use_dmi = QCheckBox("DMI/ADX 필터")
         self.chk_use_dmi.setChecked(Config.DEFAULT_USE_DMI)
-        layout.addWidget(self.chk_use_dmi, 3, 0)
-        layout.addWidget(QLabel("ADX 기준:"), 3, 1)
+        g1.addWidget(self.chk_use_dmi, 3, 0)
+        g1.addWidget(QLabel("ADX 기준:"), 3, 1)
         self.spin_adx = NoScrollSpinBox()
         self.spin_adx.setRange(10, 50)
         self.spin_adx.setValue(Config.DEFAULT_ADX_THRESHOLD)
-        layout.addWidget(self.spin_adx, 3, 2)
-        
-        # 거래량
+        g1.addWidget(self.spin_adx, 3, 2)
+
         self.chk_use_volume = QCheckBox("거래량 필터")
         self.chk_use_volume.setChecked(Config.DEFAULT_USE_VOLUME)
-        layout.addWidget(self.chk_use_volume, 4, 0)
-        layout.addWidget(QLabel("배수:"), 4, 1)
+        g1.addWidget(self.chk_use_volume, 4, 0)
+        g1.addWidget(QLabel("배수:"), 4, 1)
         self.spin_volume_mult = NoScrollDoubleSpinBox()
         self.spin_volume_mult.setRange(1.0, 5.0)
         self.spin_volume_mult.setValue(Config.DEFAULT_VOLUME_MULTIPLIER)
-        layout.addWidget(self.spin_volume_mult, 4, 2)
-        
-        # 리스크 관리
+        g1.addWidget(self.spin_volume_mult, 4, 2)
+
+        grp_ind.setLayout(g1)
+        outer.addWidget(grp_ind)
+
+        # ── 🛡️ 리스크 관리 ──
+        grp_risk = QGroupBox("🛡️ 리스크 관리")
+        g2 = QGridLayout()
+        g2.setSpacing(10)
+
         self.chk_use_risk = QCheckBox("일일 손실 한도")
         self.chk_use_risk.setChecked(Config.DEFAULT_USE_RISK_MGMT)
-        layout.addWidget(self.chk_use_risk, 5, 0)
-        layout.addWidget(QLabel("한도:"), 5, 1)
+        g2.addWidget(self.chk_use_risk, 0, 0)
+        g2.addWidget(QLabel("한도:"), 0, 1)
         self.spin_max_loss = NoScrollDoubleSpinBox()
         self.spin_max_loss.setRange(1, 20)
         self.spin_max_loss.setValue(Config.DEFAULT_MAX_DAILY_LOSS)
         self.spin_max_loss.setSuffix(" %")
-        layout.addWidget(self.spin_max_loss, 5, 2)
-        layout.addWidget(QLabel("최대보유:"), 5, 3)
+        g2.addWidget(self.spin_max_loss, 0, 2)
+        g2.addWidget(QLabel("최대보유:"), 0, 3)
         self.spin_max_holdings = NoScrollSpinBox()
         self.spin_max_holdings.setRange(1, 20)
         self.spin_max_holdings.setValue(Config.DEFAULT_MAX_HOLDINGS)
-        layout.addWidget(self.spin_max_holdings, 5, 4)
+        g2.addWidget(self.spin_max_holdings, 0, 4)
         self.combo_daily_loss_basis = NoScrollComboBox()
         self.combo_daily_loss_basis.addItems(list(getattr(Config, "DAILY_LOSS_BASIS_OPTIONS", ["total_equity"])))
         self.combo_daily_loss_basis.setCurrentText(
             str(getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"))
         )
         self.combo_daily_loss_basis.setToolTip("일일 손실 한도 기준값 선택 (총자산/주문가능금액)")
-        layout.addWidget(self.combo_daily_loss_basis, 5, 5)
-        
-        # === 신규 전략 옵션 ===
-        layout.addWidget(QLabel(""), 6, 0)  # 구분선
-        
-        # 이동평균 크로스오버
-        self.chk_use_ma = QCheckBox("MA 크로스오버")
-        layout.addWidget(self.chk_use_ma, 7, 0)
-        layout.addWidget(QLabel("단기:"), 7, 1)
-        self.spin_ma_short = NoScrollSpinBox()
-        self.spin_ma_short.setRange(3, 20)
-        self.spin_ma_short.setValue(5)
-        layout.addWidget(self.spin_ma_short, 7, 2)
-        layout.addWidget(QLabel("장기:"), 7, 3)
-        self.spin_ma_long = NoScrollSpinBox()
-        self.spin_ma_long.setRange(10, 60)
-        self.spin_ma_long.setValue(20)
-        layout.addWidget(self.spin_ma_long, 7, 4)
-        
-        # 시간대별 전략
-        self.chk_use_time_strategy = QCheckBox("시간대별 전략")
-        self.chk_use_time_strategy.setToolTip("09:00-09:30 공격적, 09:30-14:30 기본, 14:30- 보수적")
-        layout.addWidget(self.chk_use_time_strategy, 8, 0, 1, 2)
-        
-        # ATR 포지션 사이징
-        self.chk_use_atr_sizing = QCheckBox("ATR 사이징")
-        layout.addWidget(self.chk_use_atr_sizing, 8, 2)
-        layout.addWidget(QLabel("위험%:"), 8, 3)
-        self.spin_risk_percent = NoScrollDoubleSpinBox()
-        self.spin_risk_percent.setRange(0.5, 5.0)
-        self.spin_risk_percent.setValue(1.0)
-        self.spin_risk_percent.setSuffix(" %")
-        layout.addWidget(self.spin_risk_percent, 8, 4)
-        
-        # 분할 매수/매도
-        self.chk_use_split = QCheckBox("분할 주문")
-        layout.addWidget(self.chk_use_split, 9, 0)
-        layout.addWidget(QLabel("횟수:"), 9, 1)
-        self.spin_split_count = NoScrollSpinBox()
-        self.spin_split_count.setRange(2, 5)
-        self.spin_split_count.setValue(3)
-        layout.addWidget(self.spin_split_count, 9, 2)
-        layout.addWidget(QLabel("간격%:"), 9, 3)
-        self.spin_split_percent = NoScrollDoubleSpinBox()
-        self.spin_split_percent.setRange(0.1, 2.0)
-        self.spin_split_percent.setValue(0.5)
-        self.spin_split_percent.setSuffix(" %")
-        layout.addWidget(self.spin_split_percent, 9, 4)
-        
-        # === v4.3 신규 전략 옵션 ===
-        layout.addWidget(QLabel("─── v4.3 신규 ───"), 10, 0, 1, 5)
-        
-        # 스토캐스틱 RSI
-        self.chk_use_stoch_rsi = QCheckBox("스토캐스틱 RSI")
-        self.chk_use_stoch_rsi.setToolTip("RSI보다 민감한 과매수/과매도 감지")
-        layout.addWidget(self.chk_use_stoch_rsi, 11, 0)
-        layout.addWidget(QLabel("상한:"), 11, 1)
-        self.spin_stoch_upper = NoScrollSpinBox()
-        self.spin_stoch_upper.setRange(60, 95)
-        self.spin_stoch_upper.setValue(80)
-        layout.addWidget(self.spin_stoch_upper, 11, 2)
-        layout.addWidget(QLabel("하한:"), 11, 3)
-        self.spin_stoch_lower = NoScrollSpinBox()
-        self.spin_stoch_lower.setRange(5, 40)
-        self.spin_stoch_lower.setValue(20)
-        layout.addWidget(self.spin_stoch_lower, 11, 4)
-        
-        # MTF 분석
-        self.chk_use_mtf = QCheckBox("다중 시간프레임(MTF)")
-        self.chk_use_mtf.setToolTip("일봉+분봉 추세 일치 시에만 진입")
-        layout.addWidget(self.chk_use_mtf, 12, 0, 1, 2)
-        
-        # 단계별 익절
-        self.chk_use_partial_profit = QCheckBox("단계별 익절")
-        self.chk_use_partial_profit.setToolTip("3%→30%, 5%→30%, 8%→20% 분할 청산")
-        layout.addWidget(self.chk_use_partial_profit, 12, 2, 1, 2)
-        
-        # 갭 분석
-        self.chk_use_gap = QCheckBox("갭 분석")
-        self.chk_use_gap.setToolTip("갭 상승/하락에 따라 K값 자동 조정")
-        layout.addWidget(self.chk_use_gap, 13, 0)
-        
-        # 동적 포지션 사이징
-        self.chk_use_dynamic_sizing = QCheckBox("동적 사이징")
-        self.chk_use_dynamic_sizing.setToolTip("연속 손실 시 투자금 자동 축소 (Anti-Martingale)")
-        layout.addWidget(self.chk_use_dynamic_sizing, 13, 2, 1, 2)
-        
-        # 시장 분산
-        self.chk_use_market_limit = QCheckBox("시장 분산")
-        self.chk_use_market_limit.setToolTip("코스피/코스닥 비중 제한")
-        layout.addWidget(self.chk_use_market_limit, 14, 0)
-        layout.addWidget(QLabel("최대%:"), 14, 1)
-        self.spin_market_limit = NoScrollSpinBox()
-        self.spin_market_limit.setRange(50, 100)
-        self.spin_market_limit.setValue(70)
-        layout.addWidget(self.spin_market_limit, 14, 2)
-        
-        # 섹터 제한
-        self.chk_use_sector_limit = QCheckBox("섹터 제한")
-        self.chk_use_sector_limit.setToolTip("동일 업종 투자 비중 제한")
-        layout.addWidget(self.chk_use_sector_limit, 14, 3)
-        layout.addWidget(QLabel("%:"), 14, 4)
-        self.spin_sector_limit = NoScrollSpinBox()
-        self.spin_sector_limit.setRange(10, 50)
-        self.spin_sector_limit.setValue(30)
-        layout.addWidget(self.spin_sector_limit, 14, 5)
+        g2.addWidget(self.combo_daily_loss_basis, 0, 5)
         
         # ATR 손절
         self.chk_use_atr_stop = QCheckBox("ATR 손절")
         self.chk_use_atr_stop.setToolTip("변동성 기반 동적 손절선")
-        layout.addWidget(self.chk_use_atr_stop, 15, 0)
-        layout.addWidget(QLabel("배수:"), 15, 1)
+        g2.addWidget(self.chk_use_atr_stop, 1, 0)
+        g2.addWidget(QLabel("배수:"), 1, 1)
         self.spin_atr_mult = NoScrollDoubleSpinBox()
         self.spin_atr_mult.setRange(1.0, 5.0)
         self.spin_atr_mult.setValue(2.0)
-        layout.addWidget(self.spin_atr_mult, 15, 2)
-        
-        # 사운드 알림
-        self.chk_use_sound = QCheckBox("사운드 알림")
-        self.chk_use_sound.setToolTip("매수/매도 시 알림음 재생")
-        self.chk_use_sound.stateChanged.connect(self._on_sound_changed)
-        layout.addWidget(self.chk_use_sound, 15, 3, 1, 2)
+        g2.addWidget(self.spin_atr_mult, 1, 2)
 
-        # === v4.3 신규 전략 옵션 ===
-        layout.addWidget(QLabel("─── v4.3 신규 ───"), 16, 0, 1, 5)
+        # 시장 분산
+        self.chk_use_market_limit = QCheckBox("시장 분산")
+        self.chk_use_market_limit.setToolTip("코스피/코스닥 비중 제한")
+        g2.addWidget(self.chk_use_market_limit, 2, 0)
+        g2.addWidget(QLabel("최대%:"), 2, 1)
+        self.spin_market_limit = NoScrollSpinBox()
+        self.spin_market_limit.setRange(50, 100)
+        self.spin_market_limit.setValue(70)
+        g2.addWidget(self.spin_market_limit, 2, 2)
 
-        # 유동성 필터
+        # 섹터 제한
+        self.chk_use_sector_limit = QCheckBox("섹터 제한")
+        self.chk_use_sector_limit.setToolTip("동일 업종 투자 비중 제한")
+        g2.addWidget(self.chk_use_sector_limit, 2, 3)
+        g2.addWidget(QLabel("%:"), 2, 4)
+        self.spin_sector_limit = NoScrollSpinBox()
+        self.spin_sector_limit.setRange(10, 50)
+        self.spin_sector_limit.setValue(30)
+        g2.addWidget(self.spin_sector_limit, 2, 5)
+
+        # 동적 포지션 사이징
+        self.chk_use_dynamic_sizing = QCheckBox("동적 사이징")
+        self.chk_use_dynamic_sizing.setToolTip("연속 손실 시 투자금 자동 축소 (Anti-Martingale)")
+        g2.addWidget(self.chk_use_dynamic_sizing, 3, 0, 1, 2)
+
+        # ATR 포지션 사이징
+        self.chk_use_atr_sizing = QCheckBox("ATR 사이징")
+        g2.addWidget(self.chk_use_atr_sizing, 3, 2)
+        g2.addWidget(QLabel("위험%:"), 3, 3)
+        self.spin_risk_percent = NoScrollDoubleSpinBox()
+        self.spin_risk_percent.setRange(0.5, 5.0)
+        self.spin_risk_percent.setValue(1.0)
+        self.spin_risk_percent.setSuffix(" %")
+        g2.addWidget(self.spin_risk_percent, 3, 4)
+
+        grp_risk.setLayout(g2)
+        outer.addWidget(grp_risk)
+
+        # ── 📈 진입 전략 ──
+        grp_entry = QGroupBox("📈 진입 전략")
+        g3 = QGridLayout()
+        g3.setSpacing(10)
+
+        self.chk_use_ma = QCheckBox("MA 크로스오버")
+        g3.addWidget(self.chk_use_ma, 0, 0)
+        g3.addWidget(QLabel("단기:"), 0, 1)
+        self.spin_ma_short = NoScrollSpinBox()
+        self.spin_ma_short.setRange(3, 20)
+        self.spin_ma_short.setValue(5)
+        g3.addWidget(self.spin_ma_short, 0, 2)
+        g3.addWidget(QLabel("장기:"), 0, 3)
+        self.spin_ma_long = NoScrollSpinBox()
+        self.spin_ma_long.setRange(10, 60)
+        self.spin_ma_long.setValue(20)
+        g3.addWidget(self.spin_ma_long, 0, 4)
+
+        self.chk_use_stoch_rsi = QCheckBox("스토캐스틱 RSI")
+        self.chk_use_stoch_rsi.setToolTip("RSI보다 민감한 과매수/과매도 감지")
+        g3.addWidget(self.chk_use_stoch_rsi, 1, 0)
+        g3.addWidget(QLabel("상한:"), 1, 1)
+        self.spin_stoch_upper = NoScrollSpinBox()
+        self.spin_stoch_upper.setRange(60, 95)
+        self.spin_stoch_upper.setValue(80)
+        g3.addWidget(self.spin_stoch_upper, 1, 2)
+        g3.addWidget(QLabel("하한:"), 1, 3)
+        self.spin_stoch_lower = NoScrollSpinBox()
+        self.spin_stoch_lower.setRange(5, 40)
+        self.spin_stoch_lower.setValue(20)
+        g3.addWidget(self.spin_stoch_lower, 1, 4)
+
+        self.chk_use_mtf = QCheckBox("다중 시간프레임(MTF)")
+        self.chk_use_mtf.setToolTip("일봉+분봉 추세 일치 시에만 진입")
+        g3.addWidget(self.chk_use_mtf, 2, 0, 1, 2)
+
+        self.chk_use_gap = QCheckBox("갭 분석")
+        self.chk_use_gap.setToolTip("갭 상승/하락에 따라 K값 자동 조정")
+        g3.addWidget(self.chk_use_gap, 2, 2, 1, 2)
+
+        self.chk_use_time_strategy = QCheckBox("시간대별 전략")
+        self.chk_use_time_strategy.setToolTip("09:00-09:30 공격적, 09:30-14:30 기본, 14:30- 보수적")
+        g3.addWidget(self.chk_use_time_strategy, 3, 0, 1, 2)
+
+        self.chk_use_breakout_confirm = QCheckBox("돌파 확인")
+        self.chk_use_breakout_confirm.setToolTip("목표가 돌파 후 N틱 유지 시 진입")
+        self.chk_use_breakout_confirm.setChecked(Config.DEFAULT_USE_BREAKOUT_CONFIRM)
+        g3.addWidget(self.chk_use_breakout_confirm, 3, 2)
+        g3.addWidget(QLabel("틱수:"), 3, 3)
+        self.spin_breakout_ticks = NoScrollSpinBox()
+        self.spin_breakout_ticks.setRange(1, 10)
+        self.spin_breakout_ticks.setValue(Config.DEFAULT_BREAKOUT_TICKS)
+        g3.addWidget(self.spin_breakout_ticks, 3, 4)
+
+        self.chk_use_entry_score = QCheckBox("진입 점수")
+        self.chk_use_entry_score.setToolTip("여러 지표 점수가 기준 이상일 때만 진입")
+        self.chk_use_entry_score.setChecked(Config.USE_ENTRY_SCORING)
+        g3.addWidget(self.chk_use_entry_score, 4, 0)
+        self.spin_entry_score_threshold = NoScrollSpinBox()
+        self.spin_entry_score_threshold.setRange(40, 100)
+        self.spin_entry_score_threshold.setValue(Config.ENTRY_SCORE_THRESHOLD)
+        g3.addWidget(self.spin_entry_score_threshold, 4, 1)
+
+        self.chk_use_partial_profit = QCheckBox("단계별 익절")
+        self.chk_use_partial_profit.setToolTip("3%→30%, 5%→30%, 8%→20% 분할 청산")
+        g3.addWidget(self.chk_use_partial_profit, 4, 2, 1, 2)
+
+        grp_entry.setLayout(g3)
+        outer.addWidget(grp_entry)
+
+        # ── ⚙️ 주문 실행 ──
+        grp_order = QGroupBox("⚙️ 주문 실행")
+        g4 = QGridLayout()
+        g4.setSpacing(10)
+
+        self.chk_use_split = QCheckBox("분할 주문")
+        g4.addWidget(self.chk_use_split, 0, 0)
+        g4.addWidget(QLabel("횟수:"), 0, 1)
+        self.spin_split_count = NoScrollSpinBox()
+        self.spin_split_count.setRange(2, 5)
+        self.spin_split_count.setValue(3)
+        g4.addWidget(self.spin_split_count, 0, 2)
+        g4.addWidget(QLabel("간격%:"), 0, 3)
+        self.spin_split_percent = NoScrollDoubleSpinBox()
+        self.spin_split_percent.setRange(0.1, 2.0)
+        self.spin_split_percent.setValue(0.5)
+        self.spin_split_percent.setSuffix(" %")
+        g4.addWidget(self.spin_split_percent, 0, 4)
+
+        self.chk_use_cooldown = QCheckBox("재진입 쿨다운")
+        self.chk_use_cooldown.setToolTip("매도 후 일정 시간 재진입 제한")
+        self.chk_use_cooldown.setChecked(Config.DEFAULT_USE_COOLDOWN)
+        g4.addWidget(self.chk_use_cooldown, 1, 0)
+        g4.addWidget(QLabel("분:"), 1, 1)
+        self.spin_cooldown_min = NoScrollSpinBox()
+        self.spin_cooldown_min.setRange(1, 120)
+        self.spin_cooldown_min.setValue(Config.DEFAULT_COOLDOWN_MINUTES)
+        g4.addWidget(self.spin_cooldown_min, 1, 2)
+
+        self.chk_use_time_stop = QCheckBox("시간 청산")
+        self.chk_use_time_stop.setToolTip("보유 시간이 기준을 넘으면 자동 청산")
+        self.chk_use_time_stop.setChecked(Config.DEFAULT_USE_TIME_STOP)
+        g4.addWidget(self.chk_use_time_stop, 1, 3)
+        g4.addWidget(QLabel("분:"), 1, 4)
+        self.spin_time_stop_min = NoScrollSpinBox()
+        self.spin_time_stop_min.setRange(5, 480)
+        self.spin_time_stop_min.setValue(Config.DEFAULT_MAX_HOLD_MINUTES)
+        g4.addWidget(self.spin_time_stop_min, 1, 5)
+
         self.chk_use_liquidity = QCheckBox("유동성 필터")
         self.chk_use_liquidity.setToolTip("20일 평균 거래대금 기준")
         self.chk_use_liquidity.setChecked(Config.DEFAULT_USE_LIQUIDITY)
-        layout.addWidget(self.chk_use_liquidity, 17, 0)
-        layout.addWidget(QLabel("최소(억):"), 17, 1)
+        g4.addWidget(self.chk_use_liquidity, 2, 0)
+        g4.addWidget(QLabel("최소(억):"), 2, 1)
         self.spin_min_value = NoScrollDoubleSpinBox()
         self.spin_min_value.setRange(1, 500)
         self.spin_min_value.setValue(Config.DEFAULT_MIN_AVG_VALUE / 100_000_000)
         self.spin_min_value.setSuffix(" 억")
-        layout.addWidget(self.spin_min_value, 17, 2)
+        g4.addWidget(self.spin_min_value, 2, 2)
 
-        # 스프레드 필터
         self.chk_use_spread = QCheckBox("스프레드 필터")
         self.chk_use_spread.setToolTip("호가 스프레드가 좁을 때만 진입")
         self.chk_use_spread.setChecked(Config.DEFAULT_USE_SPREAD)
-        layout.addWidget(self.chk_use_spread, 18, 0)
-        layout.addWidget(QLabel("최대%:"), 18, 1)
+        g4.addWidget(self.chk_use_spread, 2, 3)
+        g4.addWidget(QLabel("최대%:"), 2, 4)
         self.spin_spread_max = NoScrollDoubleSpinBox()
         self.spin_spread_max.setRange(0.05, 2.0)
         self.spin_spread_max.setValue(Config.DEFAULT_MAX_SPREAD_PCT)
         self.spin_spread_max.setSuffix(" %")
-        layout.addWidget(self.spin_spread_max, 18, 2)
+        g4.addWidget(self.spin_spread_max, 2, 5)
 
-        # 돌파 확인
-        self.chk_use_breakout_confirm = QCheckBox("돌파 확인")
-        self.chk_use_breakout_confirm.setToolTip("목표가 돌파 후 N틱 유지 시 진입")
-        self.chk_use_breakout_confirm.setChecked(Config.DEFAULT_USE_BREAKOUT_CONFIRM)
-        layout.addWidget(self.chk_use_breakout_confirm, 19, 0)
-        layout.addWidget(QLabel("틱수:"), 19, 1)
-        self.spin_breakout_ticks = NoScrollSpinBox()
-        self.spin_breakout_ticks.setRange(1, 10)
-        self.spin_breakout_ticks.setValue(Config.DEFAULT_BREAKOUT_TICKS)
-        layout.addWidget(self.spin_breakout_ticks, 19, 2)
+        grp_order.setLayout(g4)
+        outer.addWidget(grp_order)
 
-        # 재진입 쿨다운
-        self.chk_use_cooldown = QCheckBox("재진입 쿨다운")
-        self.chk_use_cooldown.setToolTip("매도 후 일정 시간 재진입 제한")
-        self.chk_use_cooldown.setChecked(Config.DEFAULT_USE_COOLDOWN)
-        layout.addWidget(self.chk_use_cooldown, 20, 0)
-        layout.addWidget(QLabel("분:"), 20, 1)
-        self.spin_cooldown_min = NoScrollSpinBox()
-        self.spin_cooldown_min.setRange(1, 120)
-        self.spin_cooldown_min.setValue(Config.DEFAULT_COOLDOWN_MINUTES)
-        layout.addWidget(self.spin_cooldown_min, 20, 2)
+        # ── 🚀 v5.0 Strategy Pack ──
+        grp_v5 = QGroupBox("🚀 v5.0 Strategy Pack")
+        g5 = QGridLayout()
+        g5.setSpacing(10)
 
-        # 시간 청산
-        self.chk_use_time_stop = QCheckBox("시간 청산")
-        self.chk_use_time_stop.setToolTip("보유 시간이 기준을 넘으면 자동 청산")
-        self.chk_use_time_stop.setChecked(Config.DEFAULT_USE_TIME_STOP)
-        layout.addWidget(self.chk_use_time_stop, 21, 0)
-        layout.addWidget(QLabel("분:"), 21, 1)
-        self.spin_time_stop_min = NoScrollSpinBox()
-        self.spin_time_stop_min.setRange(5, 480)
-        self.spin_time_stop_min.setValue(Config.DEFAULT_MAX_HOLD_MINUTES)
-        layout.addWidget(self.spin_time_stop_min, 21, 2)
-
-        # 진입 점수
-        self.chk_use_entry_score = QCheckBox("진입 점수")
-        self.chk_use_entry_score.setToolTip("여러 지표 점수가 기준 이상일 때만 진입")
-        self.chk_use_entry_score.setChecked(Config.USE_ENTRY_SCORING)
-        layout.addWidget(self.chk_use_entry_score, 21, 3)
-        self.spin_entry_score_threshold = NoScrollSpinBox()
-        self.spin_entry_score_threshold.setRange(40, 100)
-        self.spin_entry_score_threshold.setValue(Config.ENTRY_SCORE_THRESHOLD)
-        layout.addWidget(self.spin_entry_score_threshold, 21, 4)
-
-        # === v5.0 strategy pack / portfolio / backtest ===
-        layout.addWidget(QLabel("=== v5.0 Strategy Pack ==="), 22, 0, 1, 5)
-
-        layout.addWidget(QLabel("Strategy Pack:"), 23, 0)
+        g5.addWidget(QLabel("Strategy Pack:"), 0, 0)
         self.combo_strategy_pack = NoScrollComboBox()
         self.combo_strategy_pack.addItems([
             "volatility_breakout",
@@ -544,154 +543,162 @@ class UIBuildMixin:
             "market_making_spread",
         ])
         self.combo_strategy_pack.setCurrentText(Config.DEFAULT_STRATEGY_PACK.get("primary_strategy", "volatility_breakout"))
-        layout.addWidget(self.combo_strategy_pack, 23, 1, 1, 2)
+        g5.addWidget(self.combo_strategy_pack, 0, 1, 1, 2)
 
-        layout.addWidget(QLabel("Portfolio:"), 23, 3)
+        g5.addWidget(QLabel("Portfolio:"), 0, 3)
         self.combo_portfolio_mode = NoScrollComboBox()
         self.combo_portfolio_mode.addItems(["single_strategy", "multi_strategy"])
         self.combo_portfolio_mode.setCurrentText(Config.DEFAULT_PORTFOLIO_MODE)
-        layout.addWidget(self.combo_portfolio_mode, 23, 4)
+        g5.addWidget(self.combo_portfolio_mode, 0, 4)
 
         self.chk_short_enabled = QCheckBox("Enable short (sim/backtest)")
         self.chk_short_enabled.setChecked(Config.DEFAULT_SHORT_ENABLED)
-        layout.addWidget(self.chk_short_enabled, 24, 0, 1, 2)
+        g5.addWidget(self.chk_short_enabled, 1, 0, 1, 2)
 
-        layout.addWidget(QLabel("Asset Scope:"), 24, 2)
+        g5.addWidget(QLabel("Asset Scope:"), 1, 2)
         self.combo_asset_scope = NoScrollComboBox()
         self.combo_asset_scope.addItems(["kr_stock_live", "kr_stock_etf", "multi_asset_sim"])
         self.combo_asset_scope.setCurrentText(Config.DEFAULT_ASSET_SCOPE)
-        layout.addWidget(self.combo_asset_scope, 24, 3, 1, 2)
+        g5.addWidget(self.combo_asset_scope, 1, 3, 1, 2)
 
-        layout.addWidget(QLabel("Execution:"), 25, 0)
+        g5.addWidget(QLabel("Execution:"), 2, 0)
         self.combo_execution_policy = NoScrollComboBox()
         self.combo_execution_policy.addItems(["market", "limit"])
         self.combo_execution_policy.setCurrentText(getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
-        layout.addWidget(self.combo_execution_policy, 25, 1)
+        g5.addWidget(self.combo_execution_policy, 2, 1)
 
-        layout.addWidget(QLabel("Backtest TF:"), 25, 2)
+        g5.addWidget(QLabel("Backtest TF:"), 2, 2)
         self.combo_backtest_timeframe = NoScrollComboBox()
         self.combo_backtest_timeframe.addItems(["1d", "1m", "5m", "15m"])
         self.combo_backtest_timeframe.setCurrentText(Config.DEFAULT_BACKTEST_CONFIG.get("timeframe", "1d"))
-        layout.addWidget(self.combo_backtest_timeframe, 25, 3)
+        g5.addWidget(self.combo_backtest_timeframe, 2, 3)
 
         self.spin_backtest_lookback = NoScrollSpinBox()
         self.spin_backtest_lookback.setRange(60, 5000)
         self.spin_backtest_lookback.setValue(int(Config.DEFAULT_BACKTEST_CONFIG.get("lookback_days", 365)))
-        layout.addWidget(self.spin_backtest_lookback, 25, 4)
+        g5.addWidget(self.spin_backtest_lookback, 2, 4)
 
-        layout.addWidget(QLabel("Fee bps:"), 26, 0)
+        g5.addWidget(QLabel("Fee bps:"), 3, 0)
         self.spin_backtest_commission = NoScrollDoubleSpinBox()
         self.spin_backtest_commission.setRange(0.0, 50.0)
         self.spin_backtest_commission.setValue(float(Config.DEFAULT_BACKTEST_CONFIG.get("commission_bps", 5.0)))
-        layout.addWidget(self.spin_backtest_commission, 26, 1)
+        g5.addWidget(self.spin_backtest_commission, 3, 1)
 
-        layout.addWidget(QLabel("Slip bps:"), 26, 2)
+        g5.addWidget(QLabel("Slip bps:"), 3, 2)
         self.spin_backtest_slippage = NoScrollDoubleSpinBox()
         self.spin_backtest_slippage.setRange(0.0, 50.0)
         self.spin_backtest_slippage.setValue(float(Config.DEFAULT_BACKTEST_CONFIG.get("slippage_bps", 3.0)))
-        layout.addWidget(self.spin_backtest_slippage, 26, 3)
+        g5.addWidget(self.spin_backtest_slippage, 3, 3)
 
         self.chk_feature_modular_pack = QCheckBox("Modular pack engine")
         self.chk_feature_modular_pack.setChecked(bool(Config.FEATURE_FLAGS.get("use_modular_strategy_pack", True)))
-        layout.addWidget(self.chk_feature_modular_pack, 27, 0, 1, 2)
+        g5.addWidget(self.chk_feature_modular_pack, 4, 0, 1, 2)
         self.chk_feature_backtest = QCheckBox("Backtest enabled")
         self.chk_feature_backtest.setChecked(bool(Config.FEATURE_FLAGS.get("enable_backtest", True)))
-        layout.addWidget(self.chk_feature_backtest, 27, 2)
+        g5.addWidget(self.chk_feature_backtest, 4, 2)
         self.chk_feature_external_data = QCheckBox("External data enabled")
         self.chk_feature_external_data.setChecked(bool(Config.FEATURE_FLAGS.get("enable_external_data", True)))
-        layout.addWidget(self.chk_feature_external_data, 27, 3, 1, 2)
+        g5.addWidget(self.chk_feature_external_data, 4, 3, 1, 2)
 
-        
-        # === 이벤트 연결 및 초기 상태 설정 ===
-        self.chk_use_rsi.toggled.connect(lambda s: self.spin_rsi_upper.setEnabled(s))
-        self.chk_use_rsi.toggled.connect(lambda s: self.spin_rsi_period.setEnabled(s))
-        self.spin_rsi_upper.setEnabled(self.chk_use_rsi.isChecked())
-        self.spin_rsi_period.setEnabled(self.chk_use_rsi.isChecked())
-        
-        # MACD (입력 필드 없음, 체크박스만 있음)
-        
-        self.chk_use_bb.toggled.connect(lambda s: self.spin_bb_k.setEnabled(s))
-        self.spin_bb_k.setEnabled(self.chk_use_bb.isChecked())
-        
-        self.chk_use_dmi.toggled.connect(lambda s: self.spin_adx.setEnabled(s))
-        self.spin_adx.setEnabled(self.chk_use_dmi.isChecked())
-        
-        self.chk_use_volume.toggled.connect(lambda s: self.spin_volume_mult.setEnabled(s))
-        self.spin_volume_mult.setEnabled(self.chk_use_volume.isChecked())
-        
-        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_loss.setEnabled(s))
-        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_holdings.setEnabled(s))
-        self.spin_max_loss.setEnabled(self.chk_use_risk.isChecked())
-        self.spin_max_holdings.setEnabled(self.chk_use_risk.isChecked())
-        
-        self.chk_use_ma.toggled.connect(lambda s: self.spin_ma_short.setEnabled(s))
-        self.chk_use_ma.toggled.connect(lambda s: self.spin_ma_long.setEnabled(s))
-        self.spin_ma_short.setEnabled(self.chk_use_ma.isChecked())
-        self.spin_ma_long.setEnabled(self.chk_use_ma.isChecked())
-        
-        self.chk_use_atr_sizing.toggled.connect(lambda s: self.spin_risk_percent.setEnabled(s))
-        self.spin_risk_percent.setEnabled(self.chk_use_atr_sizing.isChecked())
-        
-        self.chk_use_split.toggled.connect(lambda s: self.spin_split_count.setEnabled(s))
-        self.chk_use_split.toggled.connect(lambda s: self.spin_split_percent.setEnabled(s))
-        self.spin_split_count.setEnabled(self.chk_use_split.isChecked())
-        self.spin_split_percent.setEnabled(self.chk_use_split.isChecked())
-        
-        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_upper.setEnabled(s))
-        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_lower.setEnabled(s))
-        self.spin_stoch_upper.setEnabled(self.chk_use_stoch_rsi.isChecked())
-        self.spin_stoch_lower.setEnabled(self.chk_use_stoch_rsi.isChecked())
-        
-        # MTF, 단계별 익절, 갭 분석, 동적 사이징 (현재 입력 필드 없음 혹은 로직상 별도 처리)
-        
-        self.chk_use_market_limit.toggled.connect(lambda s: self.spin_market_limit.setEnabled(s))
-        self.spin_market_limit.setEnabled(self.chk_use_market_limit.isChecked())
-        
-        self.chk_use_sector_limit.toggled.connect(lambda s: self.spin_sector_limit.setEnabled(s))
-        self.spin_sector_limit.setEnabled(self.chk_use_sector_limit.isChecked())
-        
-        self.chk_use_atr_stop.toggled.connect(lambda s: self.spin_atr_mult.setEnabled(s))
-        self.spin_atr_mult.setEnabled(self.chk_use_atr_stop.isChecked())
-        
-        self.chk_use_liquidity.toggled.connect(lambda s: self.spin_min_value.setEnabled(s))
-        self.spin_min_value.setEnabled(self.chk_use_liquidity.isChecked())
-        
-        self.chk_use_spread.toggled.connect(lambda s: self.spin_spread_max.setEnabled(s))
-        self.spin_spread_max.setEnabled(self.chk_use_spread.isChecked())
-        
-        self.chk_use_breakout_confirm.toggled.connect(lambda s: self.spin_breakout_ticks.setEnabled(s))
-        self.spin_breakout_ticks.setEnabled(self.chk_use_breakout_confirm.isChecked())
-        
-        self.chk_use_cooldown.toggled.connect(lambda s: self.spin_cooldown_min.setEnabled(s))
-        self.spin_cooldown_min.setEnabled(self.chk_use_cooldown.isChecked())
-        
-        self.chk_use_time_stop.toggled.connect(lambda s: self.spin_time_stop_min.setEnabled(s))
-        self.spin_time_stop_min.setEnabled(self.chk_use_time_stop.isChecked())
+        grp_v5.setLayout(g5)
+        outer.addWidget(grp_v5)
 
-        self.chk_use_entry_score.toggled.connect(lambda s: self.spin_entry_score_threshold.setEnabled(s))
-        self.spin_entry_score_threshold.setEnabled(self.chk_use_entry_score.isChecked())
-        
-        # === 시스템 설정 (v4.4 신규) ===
-        layout.addWidget(QLabel("─── 시스템 설정 ───"), 28, 0, 1, 5)
-        
+        # ── 🔧 시스템 설정 ──
+        grp_sys = QGroupBox("🔧 시스템 설정")
+        g6 = QGridLayout()
+        g6.setSpacing(10)
+
         self.chk_auto_start = QCheckBox("윈도우 시작 시 자동 실행")
         self.chk_auto_start.setToolTip("윈도우 부팅 시 프로그램이 자동으로 시작됩니다.")
         self.chk_auto_start.toggled.connect(self._set_auto_start)
-        layout.addWidget(self.chk_auto_start, 29, 0, 1, 2)
-        
+        g6.addWidget(self.chk_auto_start, 0, 0, 1, 2)
+
         self.chk_minimize_tray = QCheckBox("종료 시 트레이로 최소화")
         self.chk_minimize_tray.setToolTip("창을 닫아도 프로그램이 종료되지 않고 트레이 아이콘으로 숨겨집니다.")
         self.chk_minimize_tray.setChecked(Config.DEFAULT_MINIMIZE_TO_TRAY)
-        layout.addWidget(self.chk_minimize_tray, 29, 2, 1, 3)
+        g6.addWidget(self.chk_minimize_tray, 0, 2, 1, 3)
+
+        self.chk_use_sound = QCheckBox("사운드 알림")
+        self.chk_use_sound.setToolTip("매수/매도 시 알림음 재생")
+        self.chk_use_sound.stateChanged.connect(self._on_sound_changed)
+        g6.addWidget(self.chk_use_sound, 1, 0, 1, 2)
 
         self.chk_sync_history_flush_on_exit = QCheckBox("종료 시 거래내역 동기 저장")
         self.chk_sync_history_flush_on_exit.setToolTip("강제 종료 직전 거래내역을 동기 저장하여 유실을 줄입니다.")
         self.chk_sync_history_flush_on_exit.setChecked(
             bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True))
         )
-        layout.addWidget(self.chk_sync_history_flush_on_exit, 30, 0, 1, 3)
+        g6.addWidget(self.chk_sync_history_flush_on_exit, 1, 2, 1, 3)
 
-        layout.setRowStretch(31, 1)
+        grp_sys.setLayout(g6)
+        outer.addWidget(grp_sys)
+
+        # === 이벤트 연결 및 초기 상태 설정 ===
+        self.chk_use_rsi.toggled.connect(lambda s: self.spin_rsi_upper.setEnabled(s))
+        self.chk_use_rsi.toggled.connect(lambda s: self.spin_rsi_period.setEnabled(s))
+        self.spin_rsi_upper.setEnabled(self.chk_use_rsi.isChecked())
+        self.spin_rsi_period.setEnabled(self.chk_use_rsi.isChecked())
+
+        self.chk_use_bb.toggled.connect(lambda s: self.spin_bb_k.setEnabled(s))
+        self.spin_bb_k.setEnabled(self.chk_use_bb.isChecked())
+
+        self.chk_use_dmi.toggled.connect(lambda s: self.spin_adx.setEnabled(s))
+        self.spin_adx.setEnabled(self.chk_use_dmi.isChecked())
+
+        self.chk_use_volume.toggled.connect(lambda s: self.spin_volume_mult.setEnabled(s))
+        self.spin_volume_mult.setEnabled(self.chk_use_volume.isChecked())
+
+        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_loss.setEnabled(s))
+        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_holdings.setEnabled(s))
+        self.spin_max_loss.setEnabled(self.chk_use_risk.isChecked())
+        self.spin_max_holdings.setEnabled(self.chk_use_risk.isChecked())
+
+        self.chk_use_ma.toggled.connect(lambda s: self.spin_ma_short.setEnabled(s))
+        self.chk_use_ma.toggled.connect(lambda s: self.spin_ma_long.setEnabled(s))
+        self.spin_ma_short.setEnabled(self.chk_use_ma.isChecked())
+        self.spin_ma_long.setEnabled(self.chk_use_ma.isChecked())
+
+        self.chk_use_atr_sizing.toggled.connect(lambda s: self.spin_risk_percent.setEnabled(s))
+        self.spin_risk_percent.setEnabled(self.chk_use_atr_sizing.isChecked())
+
+        self.chk_use_split.toggled.connect(lambda s: self.spin_split_count.setEnabled(s))
+        self.chk_use_split.toggled.connect(lambda s: self.spin_split_percent.setEnabled(s))
+        self.spin_split_count.setEnabled(self.chk_use_split.isChecked())
+        self.spin_split_percent.setEnabled(self.chk_use_split.isChecked())
+
+        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_upper.setEnabled(s))
+        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_lower.setEnabled(s))
+        self.spin_stoch_upper.setEnabled(self.chk_use_stoch_rsi.isChecked())
+        self.spin_stoch_lower.setEnabled(self.chk_use_stoch_rsi.isChecked())
+
+        self.chk_use_market_limit.toggled.connect(lambda s: self.spin_market_limit.setEnabled(s))
+        self.spin_market_limit.setEnabled(self.chk_use_market_limit.isChecked())
+
+        self.chk_use_sector_limit.toggled.connect(lambda s: self.spin_sector_limit.setEnabled(s))
+        self.spin_sector_limit.setEnabled(self.chk_use_sector_limit.isChecked())
+
+        self.chk_use_atr_stop.toggled.connect(lambda s: self.spin_atr_mult.setEnabled(s))
+        self.spin_atr_mult.setEnabled(self.chk_use_atr_stop.isChecked())
+
+        self.chk_use_liquidity.toggled.connect(lambda s: self.spin_min_value.setEnabled(s))
+        self.spin_min_value.setEnabled(self.chk_use_liquidity.isChecked())
+
+        self.chk_use_spread.toggled.connect(lambda s: self.spin_spread_max.setEnabled(s))
+        self.spin_spread_max.setEnabled(self.chk_use_spread.isChecked())
+
+        self.chk_use_breakout_confirm.toggled.connect(lambda s: self.spin_breakout_ticks.setEnabled(s))
+        self.spin_breakout_ticks.setEnabled(self.chk_use_breakout_confirm.isChecked())
+
+        self.chk_use_cooldown.toggled.connect(lambda s: self.spin_cooldown_min.setEnabled(s))
+        self.spin_cooldown_min.setEnabled(self.chk_use_cooldown.isChecked())
+
+        self.chk_use_time_stop.toggled.connect(lambda s: self.spin_time_stop_min.setEnabled(s))
+        self.spin_time_stop_min.setEnabled(self.chk_use_time_stop.isChecked())
+
+        self.chk_use_entry_score.toggled.connect(lambda s: self.spin_entry_score_threshold.setEnabled(s))
+        self.spin_entry_score_threshold.setEnabled(self.chk_use_entry_score.isChecked())
+
+        outer.addStretch()
         return main_widget
 
     def _create_chart_tab(self):
@@ -1045,6 +1052,6 @@ class UIBuildMixin:
         self.statusBar().addWidget(self.status_time)
         self.statusBar().addWidget(QLabel("  "))  # 간격
         self.statusBar().addWidget(self.status_trading)
-        self.statusBar().addPermanentWidget(QLabel("v4.3 REST API"))
+        self.statusBar().addPermanentWidget(QLabel("v4.5 REST API"))
 
 
