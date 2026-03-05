@@ -121,6 +121,22 @@ class ExecutionData:
     total_volume: int = 0        # 누적거래량
     ask_price: int = 0           # 매도호가
     bid_price: int = 0           # 매수호가
+    trading_status: str = ""     # 거래상태 (NORMAL/VI/HALT 등)
+    market_event: str = ""       # 시장 이벤트 플래그
+    index_code: str = ""         # 연계 인덱스 코드
+    index_value: float = 0.0     # 연계 인덱스 값
+
+
+@dataclass
+class IndexTick:
+    """지수/시장 상태 틱"""
+    code: str
+    value: float = 0.0
+    change: float = 0.0
+    change_rate: float = 0.0
+    timestamp: str = ""
+    trading_status: str = ""
+    market_event: str = ""
 
 
 @dataclass  

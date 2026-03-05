@@ -170,205 +170,37 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-> 기준: `git -c core.quotePath=false ls-files` (Git 추적 파일 1:1)
+> 기준: 2026-03-05, `git -c core.quotePath=false ls-files`
 
 ```text
-키움증권 자동 매매 프로그램/
-├── api/
-│   ├── __init__.py
-│   ├── auth.py
-│   ├── models.py
-│   ├── rest_client.py
-│   └── websocket_client.py
+kiwoom-automatic-trader/
+├── api/                     # REST/WS 모델, 인증, 클라이언트
 ├── app/
-│   ├── mixins/
-│   │   ├── __init__.py
-│   │   ├── api_account.py
-│   │   ├── dialogs_profiles.py
-│   │   ├── execution_engine.py
-│   │   ├── market_data_tabs.py
-│   │   ├── order_sync.py
-│   │   ├── persistence_settings.py
-│   │   ├── system_shell.py
-│   │   ├── trading_session.py
-│   │   └── ui_build.py
-│   ├── support/
-│   │   ├── __init__.py
-│   │   ├── execution_policy.py
-│   │   ├── widgets.py
-│   │   └── worker.py
-│   ├── __init__.py
-│   └── main_window.py
-├── backtest/
-│   ├── __init__.py
-│   └── engine.py
-├── backup/
-│   ├── refactor_phase0/
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── refactor_phase1/
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── refactor_phase2/
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── refactor_phase3/
-│   │   ├── app/
-│   │   │   ├── mixins/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── api_account.py
-│   │   │   │   ├── dialogs_profiles.py
-│   │   │   │   ├── execution_engine.py
-│   │   │   │   ├── market_data_tabs.py
-│   │   │   │   ├── order_sync.py
-│   │   │   │   ├── persistence_settings.py
-│   │   │   │   ├── system_shell.py
-│   │   │   │   ├── trading_session.py
-│   │   │   │   └── ui_build.py
-│   │   │   ├── support/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── widgets.py
-│   │   │   │   └── worker.py
-│   │   │   ├── __init__.py
-│   │   │   └── main_window.py
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── refactor_phase4/
-│   │   ├── app/
-│   │   │   ├── mixins/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── api_account.py
-│   │   │   │   ├── dialogs_profiles.py
-│   │   │   │   ├── execution_engine.py
-│   │   │   │   ├── market_data_tabs.py
-│   │   │   │   ├── order_sync.py
-│   │   │   │   ├── persistence_settings.py
-│   │   │   │   ├── system_shell.py
-│   │   │   │   ├── trading_session.py
-│   │   │   │   └── ui_build.py
-│   │   │   ├── support/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── widgets.py
-│   │   │   │   └── worker.py
-│   │   │   ├── __init__.py
-│   │   │   └── main_window.py
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── refactor_phase5/
-│   │   ├── app/
-│   │   │   ├── mixins/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── api_account.py
-│   │   │   │   ├── dialogs_profiles.py
-│   │   │   │   ├── execution_engine.py
-│   │   │   │   ├── market_data_tabs.py
-│   │   │   │   ├── order_sync.py
-│   │   │   │   ├── persistence_settings.py
-│   │   │   │   ├── system_shell.py
-│   │   │   │   ├── trading_session.py
-│   │   │   │   └── ui_build.py
-│   │   │   ├── support/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── widgets.py
-│   │   │   │   └── worker.py
-│   │   │   ├── __init__.py
-│   │   │   └── main_window.py
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── refactor_phase6/
-│   │   ├── app/
-│   │   │   ├── mixins/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── api_account.py
-│   │   │   │   ├── dialogs_profiles.py
-│   │   │   │   ├── execution_engine.py
-│   │   │   │   ├── market_data_tabs.py
-│   │   │   │   ├── order_sync.py
-│   │   │   │   ├── persistence_settings.py
-│   │   │   │   ├── system_shell.py
-│   │   │   │   ├── trading_session.py
-│   │   │   │   └── ui_build.py
-│   │   │   ├── support/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── widgets.py
-│   │   │   │   └── worker.py
-│   │   │   ├── __init__.py
-│   │   │   └── main_window.py
-│   │   ├── KiwoomTrader.spec
-│   │   └── 키움증권 자동매매.py
-│   ├── KiwoomProTrader.spec
-│   ├── upbit_trader.py
-│   ├── verify_decoupling.py
-│   ├── verify_phase3.py
-│   ├── verify_phase4.py
-│   └── 키움증권 자동매매_old.py
-├── data/
-│   ├── providers/
-│   │   ├── __init__.py
-│   │   ├── csv_provider.py
-│   │   ├── dart_provider.py
-│   │   ├── kiwoom_provider.py
-│   │   └── macro_provider.py
-│   └── __init__.py
-├── dist_new/
-│   └── KiwoomTrader_v4.5.exe
-├── portfolio/
-│   ├── __init__.py
-│   └── allocator.py
-├── strategies/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── pack.py
-│   └── types.py
-├── tests/
-│   ├── unit/
-│   │   ├── __init__.py
-│   │   ├── test_backtest_engine.py
-│   │   ├── test_dirty_table_refresh.py
-│   │   ├── test_execution_policy.py
-│   │   ├── test_force_quit_close_event.py
-│   │   ├── test_order_sync_to_int.py
-│   │   ├── test_position_sync_debounce.py
-│   │   ├── test_settings_schema_compat.py
-│   │   ├── test_settings_schema_v3.py
-│   │   ├── test_strategy_decision_cache.py
-│   │   ├── test_strategy_pack_engine.py
-│   │   └── test_trading_session_state_machine.py
-│   └── __init__.py
-├── tools/
-│   ├── __init__.py
-│   ├── perf_smoke.py
-│   ├── refactor_manifest.py
-│   └── refactor_verify.py
-├── .gitignore
-├── CLAUDE.md
+│   ├── main_window.py       # KiwoomProTrader 조립 클래스
+│   ├── mixins/              # UI/세션/실행/동기화/저장/프로필
+│   └── support/             # worker/widgets/execution_policy
+├── backtest/                # 이벤트 드리븐 백테스트 엔진
+├── strategies/              # 모듈형 전략팩
+├── portfolio/               # 포지션 예산 배분
+├── data/providers/          # 외부 데이터 provider
+├── tests/unit/              # 단위 테스트(2026-03-05 기준 68 passed)
+├── tools/                   # refactor/perf 검증 도구
 ├── config.py
-├── dark_theme.py
-├── GEMINI.md
-├── icon.png
-├── KiwoomTrader.spec
-├── light_theme.py
-├── profile_manager.py
-├── PROJECT_STRUCTURE_ANALYSIS.md
-├── README.md
-├── sound_notifier.py
-├── STRATEGY_EXPANSION_BLUEPRINT.md
 ├── strategy_manager.py
-├── telegram_notifier.py
-├── ui_dialogs.py
-└── 키움증권 자동매매.py
+├── KiwoomTrader.spec
+└── 문서: README.md / CLAUDE.md / GEMINI.md / PROJECT_STRUCTURE_ANALYSIS.md / STRATEGY_EXPANSION_BLUEPRINT.md
 ```
 
 ### 파일별 역할
 
-| 파일 | 라인 수 | 주요 기능 |
-|------|---------|-----------|
-| `키움증권 자동매매.py` | 얇은 엔트리 | `app.main_window.KiwoomProTrader` 실행 래퍼 |
-| `app/main_window.py` | 238 | 메인 클래스 선언 + 공용 시그널 + 초기화 |
+| 파일 | 라인 수(2026-03-05) | 주요 기능 |
+|------|---------------------:|-----------|
+| `키움증권 자동매매.py` | 38 | `app.main_window.KiwoomProTrader` 실행 래퍼 |
+| `app/main_window.py` | 585 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태 |
 | `app/mixins/*.py` | 분할 모듈 | UI/API/주문/저장/다이얼로그 기능별 구현 |
-| `strategy_manager.py` | 1158 | 매매 전략 로직, 지표 계산 |
-| `config.py` | 517 | 설정 상수, 실거래 가드, 기본값 |
-| `ui_dialogs.py` | 577 | 검색/주문/설정 다이얼로그 |
+| `strategy_manager.py` | 1599 | 매매 전략 로직, 지표 계산, 가드 메트릭 |
+| `config.py` | 688 | 설정 상수, v4 스키마, 가드 기본값 |
+| `ui_dialogs.py` | 644 | 검색/주문/설정 다이얼로그 |
 
 ---
 
@@ -679,19 +511,39 @@ python -m pytest -q tests/unit
 ### kiwoom_settings.json
 ```json
 {
-  "settings_version": 3,
+  "settings_version": 4,
   "codes": "005930,000660",
   "k_value": 0.5,
   "betting_ratio": 10.0,
   "betting": 10.0,
+  "use_shock_guard": true,
+  "use_vi_guard": true,
+  "use_slippage_guard": true,
   ...
 }
 ```
-설정 스키마(v3) 정책:
-- canonical 스키마는 `settings_version = 3`
+설정 스키마(v4) 정책:
+- canonical 스키마는 `settings_version = 4`
 - 저장은 `betting_ratio`를 기준으로 사용
 - `betting`은 legacy 파일 호환을 위해 병행 저장/로드
-- `settings_version < 3` 파일은 로드 시 v3 필드(`strategy_pack`, `feature_flags`, `execution_policy` 등)가 자동 보강됩니다.
+- `settings_version < 4` 파일은 로드 시 v4 가드 필드가 자동 보강됩니다.
+
+### v4 Guard 옵션
+- Shock guard: `shock_1m_pct`, `shock_5m_pct`, `shock_cooldown_min`
+- VI/HALT guard: 공식 상태 우선 + proxy(`vi_proxy_1m_pct`, `vi_proxy_spread_pct`) 폴백
+- Regime sizing: ATR% 기반 `elevated/extreme` 구간에서 포지션 축소
+- Liquidity stress guard: 스프레드/거래대금 스트레스 구간 진입 차단
+- Slippage guard: 최근 체결 슬리피지 평균 bps 초과 시 진입 차단
+- Order health guard: 주문 실패 급증 시 degraded 모드로 진입 차단
+
+진단 탭 컬럼(v4):
+- `market state`, `guard reason`, `risk mode`, `health mode`
+
+운영 KPI(v4):
+- `guard_block_count_by_reason`
+- `shock_mode_minutes`
+- `order_health_degraded_count`
+- `avg_slippage_bps`
 
 ### kiwoom_presets.json
 ```json

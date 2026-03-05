@@ -60,6 +60,10 @@ class StrategyPackEngine:
             "external_data_enabled": 1.0 if external_enabled_flag else 0.0,
             "external_data_fresh": 1.0 if external_fresh else 0.0,
             "external_age_sec": external_age_sec,
+            "shock_score": 0.0,
+            "estimated_slippage_bps": 0.0,
+            "guard_blocked": 0.0,
+            "regime": 0.0,
         }
         signals: List[Signal] = []
 
@@ -119,6 +123,19 @@ class StrategyPackEngine:
             metrics["entry_score"] = float(score)
         else:
             conditions["entry_score"] = True
+
+        guard_failed = any(
+            not conditions.get(k, True)
+            for k in (
+                "risk:shock_mode_guard",
+                "risk:shock_guard",
+                "risk:vi_guard",
+                "risk:liquidity_stress_guard",
+                "risk:slippage_guard",
+                "risk:order_health_guard",
+            )
+        )
+        metrics["guard_blocked"] = 1.0 if guard_failed else 0.0
 
         passed = all(conditions.values())
         reason = None if passed else "one_or_more_conditions_failed"
@@ -295,6 +312,8 @@ class StrategyPackEngine:
     def _evaluate_risk_overlay(self, name: str, context: StrategyContext) -> bool:
         code = context.code
         cfg = context.config
+        info = context.info
+        trader = self.manager.trader
 
         if name == "max_holdings":
             max_holdings = int(getattr(cfg, "max_holdings", 5))
@@ -308,7 +327,6 @@ class StrategyPackEngine:
             return self.manager.check_sector_limit(code)
 
         if name == "daily_loss_limit":
-            trader = self.manager.trader
             if not getattr(cfg, "use_risk_mgmt", True):
                 return True
             initial = float(
@@ -330,5 +348,66 @@ class StrategyPackEngine:
             loss_rate = (realized / initial) * 100.0
             max_loss = float(getattr(cfg, "max_daily_loss", 3.0))
             return loss_rate > -max_loss
+
+        if name in {"shock_mode_guard", "shock_guard"}:
+            if not bool(getattr(cfg, "use_shock_guard", True)):
+                return True
+            mode = str(getattr(trader, "_global_risk_mode", "normal"))
+            until = getattr(trader, "_global_risk_until", None)
+            if mode != "shock":
+                return True
+            if isinstance(until, datetime.datetime):
+                return datetime.datetime.now() >= until
+            return False
+
+        if name == "vi_guard":
+            if not bool(getattr(cfg, "use_vi_guard", True)):
+                return True
+            market_state = str(info.get("market_state", "normal") or "normal")
+            return market_state not in {"vi", "halt", "reopen_cooldown"}
+
+        if name == "regime_guard":
+            return True
+
+        if name == "liquidity_stress_guard":
+            if not bool(getattr(cfg, "use_liquidity_stress_guard", True)):
+                return True
+            ask = float(info.get("ask_price", 0) or 0)
+            bid = float(info.get("bid_price", 0) or 0)
+            spread_pct = 0.0
+            if ask > 0 and bid > 0 and (ask + bid) > 0:
+                spread_pct = (ask - bid) / ((ask + bid) / 2.0) * 100.0
+            stress_spread = float(getattr(cfg, "stress_spread_pct", getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0)))
+            avg_value = float(info.get("avg_value_20", 0) or 0)
+            min_value = float(getattr(cfg, "min_avg_value", getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000)))
+            if min_value < 10_000_000:
+                min_value *= 100_000_000
+            ratio = float(getattr(cfg, "stress_min_value_ratio", getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35)))
+            stressed = spread_pct > stress_spread or (avg_value > 0 and avg_value < min_value * ratio)
+            return not stressed
+
+        if name == "slippage_guard":
+            if not bool(getattr(cfg, "use_slippage_guard", True)):
+                return True
+            series = getattr(trader, "_recent_slippage_bps", None)
+            if not series:
+                return True
+            window = int(getattr(cfg, "slippage_window_trades", getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20)))
+            values = list(series)[-max(1, window) :]
+            if not values:
+                return True
+            avg_slip = sum(abs(float(v)) for v in values) / len(values)
+            return avg_slip <= float(getattr(cfg, "max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+
+        if name == "order_health_guard":
+            if not bool(getattr(cfg, "use_order_health_guard", True)):
+                return True
+            mode = str(getattr(trader, "_order_health_mode", "normal"))
+            until = getattr(trader, "_order_health_until", None)
+            if mode != "degraded":
+                return True
+            if isinstance(until, datetime.datetime):
+                return datetime.datetime.now() >= until
+            return False
 
         return True

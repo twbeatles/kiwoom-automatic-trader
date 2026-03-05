@@ -25,6 +25,8 @@ htmlcov/
 .hypothesis/
 build/
 dist/
+dist_new/
+release/
 *.egg-info/
 pip-wheel-metadata/
 

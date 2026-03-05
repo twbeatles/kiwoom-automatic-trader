@@ -2,6 +2,7 @@
 """
 Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 경량화 최적화 빌드 설정 (ONEFILE 모드)
+2026-03-05: v4 Guard 확장 모듈은 collect_submodules 경로로 패키징 동기화
 """
 
 from PyInstaller.utils.hooks import collect_submodules

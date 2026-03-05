@@ -603,6 +603,70 @@ class UIBuildMixin:
         grp_v5.setLayout(g5)
         outer.addWidget(grp_v5)
 
+        # ── 🚨 v4 급변동/서킷 가드 ──
+        grp_guard = QGroupBox("🚨 v4 급변동/서킷 가드")
+        g7 = QGridLayout()
+        g7.setSpacing(10)
+
+        self.chk_use_shock_guard = QCheckBox("시장 쇼크 가드")
+        self.chk_use_shock_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_SHOCK_GUARD", True)))
+        g7.addWidget(self.chk_use_shock_guard, 0, 0)
+        g7.addWidget(QLabel("1m%:"), 0, 1)
+        self.spin_shock_1m = NoScrollDoubleSpinBox()
+        self.spin_shock_1m.setRange(0.5, 10.0)
+        self.spin_shock_1m.setSingleStep(0.1)
+        self.spin_shock_1m.setValue(float(getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5)))
+        self.spin_shock_1m.setSuffix(" %")
+        g7.addWidget(self.spin_shock_1m, 0, 2)
+        g7.addWidget(QLabel("5m%:"), 0, 3)
+        self.spin_shock_5m = NoScrollDoubleSpinBox()
+        self.spin_shock_5m.setRange(1.0, 15.0)
+        self.spin_shock_5m.setSingleStep(0.1)
+        self.spin_shock_5m.setValue(float(getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8)))
+        self.spin_shock_5m.setSuffix(" %")
+        g7.addWidget(self.spin_shock_5m, 0, 4)
+        g7.addWidget(QLabel("쿨다운(분):"), 0, 5)
+        self.spin_shock_cooldown = NoScrollSpinBox()
+        self.spin_shock_cooldown.setRange(1, 120)
+        self.spin_shock_cooldown.setValue(int(getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10)))
+        g7.addWidget(self.spin_shock_cooldown, 0, 6)
+
+        self.chk_use_vi_guard = QCheckBox("VI/정지 가드")
+        self.chk_use_vi_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_VI_GUARD", True)))
+        g7.addWidget(self.chk_use_vi_guard, 1, 0)
+        g7.addWidget(QLabel("쿨다운(분):"), 1, 1)
+        self.spin_vi_cooldown = NoScrollSpinBox()
+        self.spin_vi_cooldown.setRange(1, 120)
+        self.spin_vi_cooldown.setValue(int(getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7)))
+        g7.addWidget(self.spin_vi_cooldown, 1, 2)
+
+        self.chk_use_regime_sizing = QCheckBox("레짐 기반 사이징")
+        self.chk_use_regime_sizing.setChecked(bool(getattr(Config, "DEFAULT_USE_REGIME_SIZING", True)))
+        g7.addWidget(self.chk_use_regime_sizing, 1, 3, 1, 2)
+
+        self.chk_use_slippage_guard = QCheckBox("슬리피지 가드")
+        self.chk_use_slippage_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_SLIPPAGE_GUARD", True)))
+        g7.addWidget(self.chk_use_slippage_guard, 2, 0)
+        g7.addWidget(QLabel("max bps:"), 2, 1)
+        self.spin_max_slippage_bps = NoScrollDoubleSpinBox()
+        self.spin_max_slippage_bps.setRange(1.0, 100.0)
+        self.spin_max_slippage_bps.setSingleStep(1.0)
+        self.spin_max_slippage_bps.setValue(float(getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+        g7.addWidget(self.spin_max_slippage_bps, 2, 2)
+
+        self.chk_use_order_health_guard = QCheckBox("주문건강 가드")
+        self.chk_use_order_health_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_ORDER_HEALTH_GUARD", True)))
+        g7.addWidget(self.chk_use_order_health_guard, 2, 3, 1, 2)
+
+        self.chk_use_liquidity_stress_guard = QCheckBox("유동성 스트레스 가드")
+        self.chk_use_liquidity_stress_guard.setChecked(
+            bool(getattr(Config, "DEFAULT_USE_LIQUIDITY_STRESS_GUARD", True))
+        )
+        g7.addWidget(self.chk_use_liquidity_stress_guard, 3, 0, 1, 2)
+
+        grp_guard.setLayout(g7)
+        outer.addWidget(grp_guard)
+
         # ── 🔧 시스템 설정 ──
         grp_sys = QGroupBox("🔧 시스템 설정")
         g6 = QGridLayout()
@@ -697,6 +761,17 @@ class UIBuildMixin:
 
         self.chk_use_entry_score.toggled.connect(lambda s: self.spin_entry_score_threshold.setEnabled(s))
         self.spin_entry_score_threshold.setEnabled(self.chk_use_entry_score.isChecked())
+
+        self.chk_use_shock_guard.toggled.connect(lambda s: self.spin_shock_1m.setEnabled(s))
+        self.chk_use_shock_guard.toggled.connect(lambda s: self.spin_shock_5m.setEnabled(s))
+        self.chk_use_shock_guard.toggled.connect(lambda s: self.spin_shock_cooldown.setEnabled(s))
+        self.spin_shock_1m.setEnabled(self.chk_use_shock_guard.isChecked())
+        self.spin_shock_5m.setEnabled(self.chk_use_shock_guard.isChecked())
+        self.spin_shock_cooldown.setEnabled(self.chk_use_shock_guard.isChecked())
+        self.chk_use_vi_guard.toggled.connect(lambda s: self.spin_vi_cooldown.setEnabled(s))
+        self.spin_vi_cooldown.setEnabled(self.chk_use_vi_guard.isChecked())
+        self.chk_use_slippage_guard.toggled.connect(lambda s: self.spin_max_slippage_bps.setEnabled(s))
+        self.spin_max_slippage_bps.setEnabled(self.chk_use_slippage_guard.isChecked())
 
         outer.addStretch()
         return main_widget
@@ -932,6 +1007,10 @@ class UIBuildMixin:
             "external status",
             "external updated",
             "external age(sec)",
+            "market state",
+            "guard reason",
+            "risk mode",
+            "health mode",
         ]
         self.diagnostic_table.setColumnCount(len(cols))
         self.diagnostic_table.setHorizontalHeaderLabels(cols)

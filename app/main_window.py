@@ -1,7 +1,8 @@
 """Main window class assembled from mixins."""
 
+from collections import deque
 import datetime
-from typing import Any, Dict, Optional, Set
+from typing import Any, Deque, Dict, Optional, Set
 
 from PyQt6.QtCore import *
 from PyQt6.QtGui import QColor
@@ -89,6 +90,16 @@ class KiwoomProTrader(
         self._holding_or_pending_count = 0
         self._sync_failed_codes: Set[str] = set()
         self.total_equity = 0
+        self._global_risk_mode = "normal"
+        self._global_risk_until: Optional[datetime.datetime] = None
+        self._order_health_mode = "normal"
+        self._order_health_until: Optional[datetime.datetime] = None
+        self._recent_slippage_bps: Deque[float] = deque(maxlen=300)
+        self._order_fail_events: Deque[float] = deque(maxlen=500)
+        self._index_ticks_by_market: Dict[str, Deque[tuple]] = {}
+        self._recent_ticks_by_code: Dict[str, Deque[tuple]] = {}
+        self._guard_reason_by_code: Dict[str, str] = {}
+        self._market_status_probe_logged = False
         
         # v4.3 신규 상태
         self.current_theme = Config.DEFAULT_THEME
@@ -293,6 +304,32 @@ class KiwoomProTrader(
             self.chk_sync_history_flush_on_exit.toggled.connect(
                 lambda v: setattr(self.config, "sync_history_flush_on_exit", bool(v))
             )
+        if hasattr(self, "chk_use_shock_guard"):
+            self.chk_use_shock_guard.toggled.connect(lambda v: setattr(self.config, "use_shock_guard", bool(v)))
+        if hasattr(self, "spin_shock_1m"):
+            self.spin_shock_1m.valueChanged.connect(lambda v: setattr(self.config, "shock_1m_pct", float(v)))
+        if hasattr(self, "spin_shock_5m"):
+            self.spin_shock_5m.valueChanged.connect(lambda v: setattr(self.config, "shock_5m_pct", float(v)))
+        if hasattr(self, "spin_shock_cooldown"):
+            self.spin_shock_cooldown.valueChanged.connect(lambda v: setattr(self.config, "shock_cooldown_min", int(v)))
+        if hasattr(self, "chk_use_vi_guard"):
+            self.chk_use_vi_guard.toggled.connect(lambda v: setattr(self.config, "use_vi_guard", bool(v)))
+        if hasattr(self, "spin_vi_cooldown"):
+            self.spin_vi_cooldown.valueChanged.connect(lambda v: setattr(self.config, "vi_cooldown_min", int(v)))
+        if hasattr(self, "chk_use_regime_sizing"):
+            self.chk_use_regime_sizing.toggled.connect(lambda v: setattr(self.config, "use_regime_sizing", bool(v)))
+        if hasattr(self, "chk_use_liquidity_stress_guard"):
+            self.chk_use_liquidity_stress_guard.toggled.connect(
+                lambda v: setattr(self.config, "use_liquidity_stress_guard", bool(v))
+            )
+        if hasattr(self, "chk_use_slippage_guard"):
+            self.chk_use_slippage_guard.toggled.connect(lambda v: setattr(self.config, "use_slippage_guard", bool(v)))
+        if hasattr(self, "spin_max_slippage_bps"):
+            self.spin_max_slippage_bps.valueChanged.connect(lambda v: setattr(self.config, "max_slippage_bps", float(v)))
+        if hasattr(self, "chk_use_order_health_guard"):
+            self.chk_use_order_health_guard.toggled.connect(
+                lambda v: setattr(self.config, "use_order_health_guard", bool(v))
+            )
 
         # 현재 UI 값으로 config 초기 동기화
         self.config.betting_ratio = self.spin_betting.value()
@@ -383,6 +420,28 @@ class KiwoomProTrader(
             self.config.feature_flags["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
         if hasattr(self, "chk_sync_history_flush_on_exit"):
             self.config.sync_history_flush_on_exit = bool(self.chk_sync_history_flush_on_exit.isChecked())
+        if hasattr(self, "chk_use_shock_guard"):
+            self.config.use_shock_guard = bool(self.chk_use_shock_guard.isChecked())
+        if hasattr(self, "spin_shock_1m"):
+            self.config.shock_1m_pct = float(self.spin_shock_1m.value())
+        if hasattr(self, "spin_shock_5m"):
+            self.config.shock_5m_pct = float(self.spin_shock_5m.value())
+        if hasattr(self, "spin_shock_cooldown"):
+            self.config.shock_cooldown_min = int(self.spin_shock_cooldown.value())
+        if hasattr(self, "chk_use_vi_guard"):
+            self.config.use_vi_guard = bool(self.chk_use_vi_guard.isChecked())
+        if hasattr(self, "spin_vi_cooldown"):
+            self.config.vi_cooldown_min = int(self.spin_vi_cooldown.value())
+        if hasattr(self, "chk_use_regime_sizing"):
+            self.config.use_regime_sizing = bool(self.chk_use_regime_sizing.isChecked())
+        if hasattr(self, "chk_use_liquidity_stress_guard"):
+            self.config.use_liquidity_stress_guard = bool(self.chk_use_liquidity_stress_guard.isChecked())
+        if hasattr(self, "chk_use_slippage_guard"):
+            self.config.use_slippage_guard = bool(self.chk_use_slippage_guard.isChecked())
+        if hasattr(self, "spin_max_slippage_bps"):
+            self.config.max_slippage_bps = float(self.spin_max_slippage_bps.value())
+        if hasattr(self, "chk_use_order_health_guard"):
+            self.config.use_order_health_guard = bool(self.chk_use_order_health_guard.isChecked())
 
     def _diag_touch(self, code: str, **fields: Any):
         if not code:
@@ -477,6 +536,14 @@ class KiwoomProTrader(
                     external_status,
                     self._diag_fmt_dt(external_updated),
                     external_age,
+                    str(info.get("market_state", "normal") or "normal"),
+                    str(
+                        info.get("last_guard_reason")
+                        or self._guard_reason_by_code.get(code, "")
+                        or ""
+                    ),
+                    str(getattr(self, "_global_risk_mode", "normal")),
+                    str(getattr(self, "_order_health_mode", "normal")),
                 ]
 
                 for col, text in enumerate(values):
@@ -496,6 +563,20 @@ class KiwoomProTrader(
                         elif state == "fresh":
                             item.setForeground(QColor("#3fb950"))
                         else:
+                            item.setForeground(QColor("#8b949e"))
+                    elif col == 12:
+                        state = str(text).lower()
+                        if state in {"halt", "vi"}:
+                            item.setForeground(QColor("#f85149"))
+                        elif state == "reopen_cooldown":
+                            item.setForeground(QColor("#d29922"))
+                        else:
+                            item.setForeground(QColor("#8b949e"))
+                    elif col in {13, 14, 15}:
+                        state = str(text).lower()
+                        if state in {"shock", "degraded"} or (col == 13 and state):
+                            item.setForeground(QColor("#f85149"))
+                        elif state in {"normal", ""}:
                             item.setForeground(QColor("#8b949e"))
         finally:
             self.diagnostic_table.setUpdatesEnabled(True)

@@ -52,6 +52,111 @@ class ExecutionEngineMixin:
             total += self._release_reserved_cash(code, reason=reason, refund=True)
         return total
 
+    @staticmethod
+    def _spread_pct(info: dict) -> float:
+        ask = float(info.get("ask_price", 0) or 0)
+        bid = float(info.get("bid_price", 0) or 0)
+        if ask <= 0 or bid <= 0 or (ask + bid) <= 0:
+            return 0.0
+        mid = (ask + bid) / 2.0
+        if mid <= 0:
+            return 0.0
+        return (ask - bid) / mid * 100.0
+
+    def _average_recent_slippage_bps(self, window_size: int) -> float:
+        series = getattr(self, "_recent_slippage_bps", None)
+        if series is None:
+            return 0.0
+        values = list(series)
+        if not values:
+            return 0.0
+        size = max(1, int(window_size))
+        subset = values[-size:]
+        if not subset:
+            return 0.0
+        return sum(abs(float(v)) for v in subset) / len(subset)
+
+    def _is_liquidity_stress(self, info: dict) -> bool:
+        cfg = getattr(self, "config", None)
+        if cfg is None or not bool(getattr(cfg, "use_liquidity_stress_guard", True)):
+            return False
+        spread_pct = self._spread_pct(info)
+        stress_spread = float(getattr(cfg, "stress_spread_pct", getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0)))
+        if spread_pct > stress_spread:
+            return True
+
+        avg_value = float(info.get("avg_value_20", 0) or 0)
+        min_value = float(getattr(cfg, "min_avg_value", getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000)))
+        if min_value < 10_000_000:  # legacy UI scale: 억 단위
+            min_value *= 100_000_000
+        ratio = float(
+            getattr(cfg, "stress_min_value_ratio", getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35))
+        )
+        return avg_value > 0 and avg_value < (min_value * ratio)
+
+    def _resolve_regime_profile(self, code: str) -> tuple[str, float, int]:
+        manager = getattr(self, "strategy", None)
+        default = ("normal", 1.0, 0)
+        if manager is None:
+            return default
+        fn = getattr(manager, "get_regime_profile", None)
+        if not callable(fn):
+            return default
+        regime, scale, _atr_pct = fn(code)
+        regime_text = str(regime or "normal")
+        if regime_text == "extreme":
+            return regime_text, float(scale), 2
+        if regime_text == "elevated":
+            return regime_text, float(scale), 1
+        return regime_text, float(scale), 0
+
+    def _can_enter_trade(self, code: str, info: dict, now: datetime.datetime) -> tuple[bool, str]:
+        cfg = getattr(self, "config", None)
+        if cfg is None:
+            return True, ""
+
+        refresh_health = getattr(self, "_update_order_health_mode", None)
+        if callable(refresh_health):
+            refresh_health(now)
+        release_shock = getattr(self, "_maybe_release_global_risk_mode", None)
+        if callable(release_shock):
+            release_shock(now)
+
+        sync_failed_codes = getattr(self, "_sync_failed_codes", set())
+        if str(info.get("status", "")) == "sync_failed" or code in sync_failed_codes:
+            return False, "sync_failed"
+
+        if bool(getattr(cfg, "use_shock_guard", True)):
+            if str(getattr(self, "_global_risk_mode", "normal")) == "shock":
+                until = getattr(self, "_global_risk_until", None)
+                if until is None or now < until:
+                    return False, "shock_guard"
+
+        if bool(getattr(cfg, "use_vi_guard", True)):
+            market_state = str(info.get("market_state", "normal") or "normal")
+            if market_state in {"vi", "halt", "reopen_cooldown"}:
+                return False, "vi_guard"
+
+        if bool(getattr(cfg, "use_order_health_guard", True)):
+            if str(getattr(self, "_order_health_mode", "normal")) == "degraded":
+                until = getattr(self, "_order_health_until", None)
+                if until is None or now < until:
+                    return False, "order_health_guard"
+
+        if self._is_liquidity_stress(info):
+            return False, "liquidity_stress_guard"
+
+        if bool(getattr(cfg, "use_slippage_guard", True)):
+            max_slippage = float(getattr(cfg, "max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+            window_size = int(
+                getattr(cfg, "slippage_window_trades", getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20))
+            )
+            avg_slip = self._average_recent_slippage_bps(window_size)
+            if avg_slip > max_slippage:
+                return False, "slippage_guard"
+
+        return True, ""
+
     def _on_execution(self, data: ExecutionData):
         """Handle realtime execution tick and evaluate buy/sell conditions."""
         if not self.is_running:
@@ -93,6 +198,23 @@ class ExecutionEngineMixin:
         self._dirty_codes.add(code)
 
         now = datetime.datetime.now()
+        market_state_updater = getattr(self, "_update_market_state_from_execution", None)
+        if callable(market_state_updater):
+            market_state_updater(code, info, data, now)
+        shock_updater = getattr(self, "_update_shock_mode", None)
+        market_key_fn = getattr(self, "_market_key_from_info", None)
+        index_series_fn = getattr(self, "_get_index_series", None)
+        if callable(shock_updater):
+            market_key = market_key_fn(info) if callable(market_key_fn) else "KOSPI"
+            # Fallback: when official index feed is unavailable, use representative
+            # per-market stock price stream for price-based shock detection.
+            if callable(index_series_fn):
+                series = index_series_fn(market_key)
+                if series and (now.timestamp() - float(series[-1][0])) > 5.0:
+                    series.append((now.timestamp(), float(current_price)))
+                elif not series:
+                    series.append((now.timestamp(), float(current_price)))
+            shock_updater(market_key, now)
         no_buy = now.hour >= Config.NO_ENTRY_HOUR
         held = int(info.get("held", 0))
         target = int(info.get("target", 0))
@@ -184,12 +306,32 @@ class ExecutionEngineMixin:
             if getattr(self, "daily_loss_triggered", False):
                 return
 
+            allowed, reason_code = self._can_enter_trade(code, info, now)
+            if not allowed:
+                info["last_guard_reason"] = reason_code
+                guard_map = getattr(self, "_guard_reason_by_code", None)
+                if isinstance(guard_map, dict):
+                    guard_map[code] = reason_code
+                logger = getattr(self, "_log_once", None)
+                if callable(logger):
+                    logger(
+                        f"guard:{code}:{reason_code}",
+                        f"[진입차단] {info.get('name', code)} reason={reason_code}",
+                    )
+                return
+            info["last_guard_reason"] = ""
+            guard_map = getattr(self, "_guard_reason_by_code", None)
+            if isinstance(guard_map, dict):
+                guard_map[code] = ""
+
+            regime, _regime_scale, holdings_penalty = self._resolve_regime_profile(code)
             max_holdings = int(
                 cfg_value(
                     "max_holdings",
                     int(self.spin_max_holdings.value()) if hasattr(self, "spin_max_holdings") else Config.DEFAULT_MAX_HOLDINGS,
                 )
             )
+            max_holdings = max(1, max_holdings - int(holdings_penalty))
             if int(getattr(self, "_holding_or_pending_count", 0)) >= max_holdings:
                 return
 
@@ -247,6 +389,11 @@ class ExecutionEngineMixin:
                         quantity = self.strategy.calculate_position_size(code, risk_percent)
                     else:
                         quantity = self.strategy._default_position_size(code)
+
+                    if regime in {"elevated", "extreme"}:
+                        regime_fn = getattr(self.strategy, "apply_regime_size_scale", None)
+                        if callable(regime_fn):
+                            quantity = int(regime_fn(code, quantity))
 
                     if quantity > 0:
                         self._execute_buy(code, quantity, current_price)
@@ -316,6 +463,9 @@ class ExecutionEngineMixin:
     def _on_buy_error(self, e, code, name):
         """Handle buy error."""
         self.log(f"BUY error [{name}]: {e}")
+        record_failure = getattr(self, "_record_order_failure", None)
+        if callable(record_failure):
+            record_failure("BUY_ERROR", code=code)
         self._release_reserved_cash(code, reason="BUY_ERROR", refund=True)
         self._clear_pending_order(code)
         if code in self.universe:
@@ -345,11 +495,14 @@ class ExecutionEngineMixin:
                 self.universe[code]["status"] = "buy_submitted"
                 self.universe[code]["cooldown_until"] = None
                 self.universe[code]["breakout_hits"] = 0
-            self._set_pending_order(code, "buy", "BUY")
+            self._set_pending_order(code, "buy", "BUY", expected_price=int(price or 0))
             self.log(f"BUY submitted: {name} {quantity} shares")
             self._sync_position_from_account(code)
         else:
             self.log(f"BUY rejected [{name}]: {result.message}")
+            record_failure = getattr(self, "_record_order_failure", None)
+            if callable(record_failure):
+                record_failure("BUY_REJECTED", code=code)
             self._release_reserved_cash(code, reason="BUY_REJECTED", refund=True)
             if code in self.universe:
                 info = self.universe[code]
@@ -415,6 +568,9 @@ class ExecutionEngineMixin:
     def _on_sell_error(self, e, code, name):
         """Handle sell error."""
         self.log(f"SELL error [{name}]: {e}")
+        record_failure = getattr(self, "_record_order_failure", None)
+        if callable(record_failure):
+            record_failure("SELL_ERROR", code=code)
         self._clear_pending_order(code)
         if code in self.universe:
             self.universe[code]["status"] = "holding"
@@ -427,11 +583,14 @@ class ExecutionEngineMixin:
         if result.success:
             if code in self.universe:
                 self.universe[code]["status"] = "sell_submitted"
-            self._set_pending_order(code, "sell", reason)
+            self._set_pending_order(code, "sell", reason, expected_price=int(price or 0))
             self.log(f"SELL submitted: {name} {quantity} shares ({reason})")
             self._sync_position_from_account(code)
         else:
             self.log(f"SELL rejected [{name}]: {result.message}")
+            record_failure = getattr(self, "_record_order_failure", None)
+            if callable(record_failure):
+                record_failure("SELL_REJECTED", code=code)
             if code in self.universe:
                 self.universe[code]["status"] = "holding"
             self._clear_pending_order(code)

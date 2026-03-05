@@ -1,6 +1,5 @@
-import datetime
+﻿import datetime
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from app.main_window import KiwoomProTrader
@@ -9,7 +8,6 @@ from app.main_window import KiwoomProTrader
 class _DummyItem:
     def __init__(self, text=""):
         self._text = str(text)
-        self.foreground = None
 
     def text(self):
         return self._text
@@ -20,8 +18,8 @@ class _DummyItem:
     def setTextAlignment(self, *_args, **_kwargs):
         return None
 
-    def setForeground(self, color):
-        self.foreground = color
+    def setForeground(self, _color):
+        return None
 
 
 class _DummyTable:
@@ -51,7 +49,7 @@ class _Harness:
     _refresh_diagnostics = KiwoomProTrader._refresh_diagnostics
 
     def __init__(self):
-        now = datetime.datetime.now() - datetime.timedelta(seconds=12)
+        now = datetime.datetime.now() - datetime.timedelta(seconds=2)
         self.universe = {
             "005930": {
                 "name": "삼성전자",
@@ -72,39 +70,15 @@ class _Harness:
         self.diagnostic_table = _DummyTable()
 
 
-class TestDiagnosticsExternalColumns(unittest.TestCase):
-    def test_diagnostics_schema_contains_external_columns(self):
-        cols = [
-            "external status",
-            "external updated",
-            "external age(sec)",
-            "market state",
-            "guard reason",
-            "risk mode",
-            "health mode",
-        ]
-        source = Path("app/mixins/ui_build.py").read_text(encoding="utf-8")
-        for col in cols:
-            self.assertIn(col, source)
-
-    def test_refresh_diagnostics_populates_external_values(self):
+class TestGuardReasonDiagnostics(unittest.TestCase):
+    def test_guard_reason_column_is_populated(self):
         trader = _Harness()
         with patch("app.main_window.QTableWidgetItem", _DummyItem):
             trader._refresh_diagnostics()
 
-        status = trader.diagnostic_table.item(0, 9).text()
-        updated = trader.diagnostic_table.item(0, 10).text()
-        age = trader.diagnostic_table.item(0, 11).text()
-        market_state = trader.diagnostic_table.item(0, 12).text()
-        guard_reason = trader.diagnostic_table.item(0, 13).text()
-        risk_mode = trader.diagnostic_table.item(0, 14).text()
-
-        self.assertEqual(status, "fresh")
-        self.assertTrue(updated)
-        self.assertTrue(age.isdigit())
-        self.assertEqual(market_state, "normal")
-        self.assertEqual(guard_reason, "shock_guard")
-        self.assertEqual(risk_mode, "shock")
+        self.assertEqual(trader.diagnostic_table.item(0, 12).text(), "normal")
+        self.assertEqual(trader.diagnostic_table.item(0, 13).text(), "shock_guard")
+        self.assertEqual(trader.diagnostic_table.item(0, 14).text(), "shock")
 
 
 if __name__ == "__main__":

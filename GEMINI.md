@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-02-19
+> **최종 업데이트**: 2026-03-05
 
 ---
 
@@ -144,15 +144,14 @@ pyinstaller KiwoomTrader.spec
 - `tools/perf_smoke.py`로 전략 평가 성능 스모크 테스트를 수행할 수 있습니다.
 
 ### 2) 설정 스키마 기준
-- 현재 canonical 스키마는 `settings_version = 3` 입니다.
-- v2 파일은 로드 시 v3 키가 자동 보강되며, `betting` 키는 호환 목적으로 계속 처리됩니다.
+- 현재 canonical 스키마는 `settings_version = 4` 입니다.
+- `settings_version < 4` 파일은 로드 시 v4 가드 키가 자동 보강됩니다.
 
 ### 3) 테스트 기준
 ```bash
 pytest -q tests/unit
 ```
-- 2026-02-18 실행 결과: **15 passed, 2 warnings**
-- 경고는 `websockets.legacy` deprecation 관련입니다.
+- 테스트 건수는 지속 증가하므로, 최신 결과는 하단 `2026-03-05 v4 Guard 동기화` 섹션을 기준으로 확인합니다.
 
 ---
 
@@ -174,8 +173,7 @@ pytest -q tests/unit
 ```bash
 pytest -q tests/unit
 ```
-- 2026-02-19 실행 결과: **37 passed, 1 warning**
-- `websockets.legacy` deprecation 경고는 제거되었습니다.
+- 상세 수치는 하단 최신 동기화 섹션 기준으로 관리합니다.
 
 ---
 
@@ -188,3 +186,23 @@ pytest -q tests/unit
 ### 2) 다크 테마 및 버전 통합
 - `dark_theme.py`를 전면 개편하여 누락된 위젯 스타일을 보완하고, 대시보드의 시인성을 높이는 프리미엄 테마를 완성했습니다.
 - 코드베이스 전반의 버전을 **v4.5**로 통일했습니다.
+
+---
+
+## 2026-03-05 v4 Guard 동기화
+
+1. Fail-Closed 정책
+- 가드 판정 불확실/오류 시 신규 진입은 차단하고 청산은 허용합니다.
+
+2. 상태머신
+- `shock`: 시장 급변동 감지 시 세션 단위 진입 차단
+- `vi/halt`: 종목 단위 진입 차단
+- `reopen_cooldown`: VI/HALT 해제 직후 재개장 쿨다운
+- `order_health=degraded`: 주문 실패 급증 시 세션 단위 진입 차단
+
+3. 진단 컬럼
+- `market state`, `guard reason`, `risk mode`, `health mode`
+
+4. 최신 검증 결과
+- `python -m pytest tests/unit --disable-warnings`
+- 결과: **68 passed in 1.36s** (2026-03-05)

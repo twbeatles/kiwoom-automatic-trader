@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-02-19
+> **최종 업데이트**: 2026-03-05
 
 ---
 
@@ -118,10 +118,11 @@
   - `LIVE_GUARD_PHRASE`
   - `LIVE_GUARD_TIMEOUT_SEC`
 
-- 설정 스키마(v3):
-  - `settings_version: 3` (canonical)
+- 설정 스키마(v4):
+  - canonical은 `settings_version: 4`
   - `betting_ratio`를 canonical로 사용
-  - `betting`은 구버전(legacy) 호환용으로 병행 유지
+  - `betting`은 legacy 호환용으로 병행 저장/로드
+  - `settings_version < 4` 파일은 로드 시 v4 가드 키 자동 보강
 
 - 유니버스 표준 키:
   - `prev_high`, `prev_low`
@@ -187,11 +188,11 @@ pyinstaller KiwoomTrader.spec
 
 ---
 
-## 2026-02-19 추가 동기화 메모
+## 2026-03-05 추가 동기화 메모
 
 1. 설정 스키마 기준
-- 현재 canonical은 `settings_version = 3`이며, v2는 legacy 호환 대상으로만 유지됩니다.
-- `settings_version < 3` 로드 시 v3 키(`strategy_pack`, `strategy_params`, `portfolio_mode`, `short_enabled`, `asset_scope`, `backtest_config`, `feature_flags`, `execution_policy`)가 자동 보강됩니다.
+- 현재 canonical은 `settings_version = 4`입니다.
+- `settings_version < 4` 로드 시 v4 가드 키가 자동 보강됩니다(기존 값 우선, 누락 키만 default 주입).
 
 2. 누락되기 쉬운 실제 모듈
 - `app/support/execution_policy.py` (market/limit 주문 라우팅)
@@ -228,3 +229,14 @@ python tools/perf_smoke.py
 
 3. 버전 통일:
 - 전체 소스 및 설정(.spec, config 등)의 기재 버전을 **v4.5**로 일원화.
+
+6. v4 가드 상태머신(Fail-Closed)
+- 기본 정책: `Fail-Closed` (불확실/오류 시 신규 진입 차단, 청산 허용)
+- Shock: `abs(ret_1m) >= shock_1m_pct` 또는 `abs(ret_5m) >= shock_5m_pct` 시 global `shock` 진입
+- VI/HALT: 공식 상태 우선, 미지원 시 price/spread proxy로 `vi` 판정
+- `vi` 해제 후 `reopen_cooldown` 동안 신규 진입 차단
+- Order health: 실패 이벤트 윈도우 임계치 초과 시 `degraded`, 쿨다운 후 자동 정상 복구
+
+7. 진단/운영 지표(v4)
+- 진단 컬럼: `market state`, `guard reason`, `risk mode`, `health mode`
+- KPI: `guard_block_count_by_reason`, `shock_mode_minutes`, `order_health_degraded_count`, `avg_slippage_bps`

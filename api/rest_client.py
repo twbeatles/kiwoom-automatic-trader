@@ -780,3 +780,28 @@ class KiwoomRESTClient:
         
         return {}
 
+    # =========================================================================
+    # 시장 상태/지수 API (v4 확장)
+    # =========================================================================
+
+    def get_market_status(self) -> Dict[str, Any]:
+        """시장 상태 조회 (지원 시). 지원되지 않으면 빈 dict 반환."""
+        result = self._request("POST", "/api/dostk/market/status", data={})
+        if result and result.get("return_code") == 0:
+            output = result.get("output", {})
+            if isinstance(output, dict):
+                return output
+        return {}
+
+    def get_index_quote(self, index_code: str) -> Dict[str, Any]:
+        """지수 시세 조회 (지원 시). 지원되지 않으면 빈 dict 반환."""
+        if not index_code:
+            return {}
+        data = {"idx_cd": index_code}
+        result = self._request("POST", "/api/dostk/index/quote", data=data)
+        if result and result.get("return_code") == 0:
+            output = result.get("output", {})
+            if isinstance(output, dict):
+                return output
+        return {}
+

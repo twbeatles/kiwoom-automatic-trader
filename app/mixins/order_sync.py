@@ -1,6 +1,7 @@
 """Order/execution sync mixin for KiwoomProTrader."""
 
 import datetime
+from collections import deque
 from typing import Iterable, Set
 
 from PyQt6.QtCore import QTimer
@@ -57,6 +58,87 @@ class OrderSyncMixin:
             self.virtual_deposit = max(0, int(getattr(self, "virtual_deposit", 0) or 0) + amount)
         return amount
 
+    def _record_order_failure(self, reason: str, code: str = ""):
+        cfg = getattr(self, "config", None)
+        if cfg is None or not bool(getattr(cfg, "use_order_health_guard", True)):
+            return
+
+        now_ts = datetime.datetime.now().timestamp()
+        events = getattr(self, "_order_fail_events", None)
+        if not isinstance(events, deque):
+            events = deque(maxlen=500)
+            self._order_fail_events = events
+        events.append(now_ts)
+
+        window_sec = max(
+            1,
+            int(getattr(cfg, "order_health_window_sec", getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60))),
+        )
+        while events and (now_ts - float(events[0])) > window_sec:
+            events.popleft()
+
+        fail_count_limit = max(
+            1,
+            int(getattr(cfg, "order_health_fail_count", getattr(Config, "DEFAULT_ORDER_HEALTH_FAIL_COUNT", 5))),
+        )
+        if len(events) >= fail_count_limit:
+            cooldown_sec = max(
+                1,
+                int(
+                    getattr(
+                        cfg,
+                        "order_health_cooldown_sec",
+                        getattr(Config, "DEFAULT_ORDER_HEALTH_COOLDOWN_SEC", 180),
+                    )
+                ),
+            )
+            until = datetime.datetime.now() + datetime.timedelta(seconds=cooldown_sec)
+            self._order_health_mode = "degraded"
+            self._order_health_until = until
+            if hasattr(self, "log"):
+                self.log(
+                    f"[주문건강] degraded 활성화 fail={len(events)}/{fail_count_limit}, "
+                    f"cooldown={cooldown_sec}s ({reason}:{code})"
+                )
+
+    def _update_order_health_mode(self, now_dt: datetime.datetime | None = None):
+        now = now_dt or datetime.datetime.now()
+        cfg = getattr(self, "config", None)
+        if cfg is None:
+            return
+        events = getattr(self, "_order_fail_events", None)
+        if isinstance(events, deque):
+            window_sec = max(
+                1,
+                int(getattr(cfg, "order_health_window_sec", getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60))),
+            )
+            now_ts = now.timestamp()
+            while events and (now_ts - float(events[0])) > window_sec:
+                events.popleft()
+
+        if str(getattr(self, "_order_health_mode", "normal")) != "degraded":
+            return
+        until = getattr(self, "_order_health_until", None)
+        if isinstance(until, datetime.datetime) and now >= until:
+            self._order_health_mode = "normal"
+            self._order_health_until = None
+            if hasattr(self, "log"):
+                self.log("[주문건강] degraded -> normal 자동복구")
+
+    def _record_slippage_bps(self, expected_price: int, fill_price: int, code: str = ""):
+        expected = float(expected_price or 0)
+        fill = float(fill_price or 0)
+        if expected <= 0 or fill <= 0:
+            return
+        slippage = abs((fill - expected) / expected) * 10000.0
+        series = getattr(self, "_recent_slippage_bps", None)
+        if not isinstance(series, deque):
+            series = deque(maxlen=300)
+            self._recent_slippage_bps = series
+        series.append(slippage)
+        if code and code in getattr(self, "universe", {}):
+            self.universe[code]["last_slippage_bps"] = float(slippage)
+
     def _on_realtime(self, data: ExecutionData):
         self.sig_execution.emit(data)
 
@@ -67,6 +149,7 @@ class OrderSyncMixin:
     def _on_order_execution(self, data):
         """Handle realtime order/execution notifications in main thread."""
         try:
+            self._update_order_health_mode()
             code = str(data.get("code") or data.get("stk_cd") or "").strip()
             info = self.universe.get(code, {}) if code else {}
             name = data.get("name") or data.get("stk_nm") or info.get("name", code)
@@ -120,6 +203,7 @@ class OrderSyncMixin:
                 token in status_lower for token in ["cancel", "reject", "fail"]
             )
             if code and cancel_like:
+                self._record_order_failure("ORDER_CANCEL_REJECT", code=code)
                 pending = self._pending_order_state.get(code, {})
                 pending_side = str(pending.get("side", ""))
                 self._clear_pending_order(code)
@@ -153,7 +237,7 @@ class OrderSyncMixin:
         except (ValueError, TypeError):
             return default
 
-    def _set_pending_order(self, code: str, side: str, reason: str):
+    def _set_pending_order(self, code: str, side: str, reason: str, expected_price: int = 0):
         if not code:
             return
         pending_until = datetime.datetime.now() + datetime.timedelta(seconds=5)
@@ -161,6 +245,7 @@ class OrderSyncMixin:
             "side": side,
             "reason": reason,
             "until": pending_until,
+            "expected_price": int(expected_price or 0),
         }
         self._diag_touch_safe(
             code,
@@ -248,6 +333,7 @@ class OrderSyncMixin:
 
         positions_by_code = {getattr(pos, "code", ""): pos for pos in positions or []}
         now = datetime.datetime.now()
+        self._update_order_health_mode(now)
 
         for code_item in target_codes:
             info = self.universe.get(code_item)
@@ -283,6 +369,10 @@ class OrderSyncMixin:
                 fill_price = self._to_int(exec_event.get("price", 0)) if exec_event.get("side") == "buy" else 0
                 if fill_price <= 0:
                     fill_price = new_buy_price or int(info.get("current", 0))
+                expected_price = self._to_int(pending.get("expected_price", 0)) if pending else 0
+                if expected_price <= 0:
+                    expected_price = int(info.get("current", 0) or fill_price)
+                self._record_slippage_bps(expected_price, fill_price, code_item)
                 amount = max(0, fill_price * buy_qty)
 
                 self._add_trade(
@@ -309,6 +399,10 @@ class OrderSyncMixin:
                 fill_price = self._to_int(exec_event.get("price", 0)) if exec_event.get("side") == "sell" else 0
                 if fill_price <= 0:
                     fill_price = int(info.get("current", 0))
+                expected_price = self._to_int(pending.get("expected_price", 0)) if pending else 0
+                if expected_price <= 0:
+                    expected_price = int(info.get("current", 0) or fill_price)
+                self._record_slippage_bps(expected_price, fill_price, code_item)
                 amount = max(0, fill_price * sell_qty)
                 profit = (fill_price - prev_buy_price) * sell_qty if prev_buy_price > 0 else 0
                 reason = pending.get("reason", "체결동기화") if pending else "체결동기화"

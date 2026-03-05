@@ -118,6 +118,36 @@ class TradingConfig:
     use_time_stop: bool = False
     time_stop_min: int = 120
 
+    # 시장 충격/VI/레짐/실행건전성 가드 (v4)
+    use_shock_guard: bool = True
+    shock_1m_pct: float = 1.5
+    shock_5m_pct: float = 2.8
+    shock_cooldown_min: int = 10
+
+    use_vi_guard: bool = True
+    vi_cooldown_min: int = 7
+    vi_proxy_1m_pct: float = 4.0
+    vi_proxy_spread_pct: float = 1.2
+
+    use_regime_sizing: bool = True
+    regime_elevated_atr_pct: float = 2.5
+    regime_extreme_atr_pct: float = 4.0
+    regime_size_scale_elevated: float = 0.7
+    regime_size_scale_extreme: float = 0.4
+
+    use_liquidity_stress_guard: bool = True
+    stress_spread_pct: float = 1.0
+    stress_min_value_ratio: float = 0.35
+
+    use_slippage_guard: bool = True
+    max_slippage_bps: float = 15.0
+    slippage_window_trades: int = 20
+
+    use_order_health_guard: bool = True
+    order_health_fail_count: int = 5
+    order_health_window_sec: int = 60
+    order_health_cooldown_sec: int = 180
+
 
 class Config:
     """프로그램 설정 상수"""
@@ -348,6 +378,38 @@ class Config:
     # =========================================================================
     DEFAULT_RISK_PERCENT = 1.0
     DEFAULT_USE_ATR_SIZING = False
+
+    # =========================================================================
+    # 급변동/VI/레짐/실행건전성 가드 (v4)
+    # =========================================================================
+    DEFAULT_USE_SHOCK_GUARD = True
+    DEFAULT_SHOCK_1M_PCT = 1.5
+    DEFAULT_SHOCK_5M_PCT = 2.8
+    DEFAULT_SHOCK_COOLDOWN_MIN = 10
+
+    DEFAULT_USE_VI_GUARD = True
+    DEFAULT_VI_COOLDOWN_MIN = 7
+    DEFAULT_VI_PROXY_1M_PCT = 4.0
+    DEFAULT_VI_PROXY_SPREAD_PCT = 1.2
+
+    DEFAULT_USE_REGIME_SIZING = True
+    DEFAULT_REGIME_ELEVATED_ATR_PCT = 2.5
+    DEFAULT_REGIME_EXTREME_ATR_PCT = 4.0
+    DEFAULT_REGIME_SIZE_SCALE_ELEVATED = 0.7
+    DEFAULT_REGIME_SIZE_SCALE_EXTREME = 0.4
+
+    DEFAULT_USE_LIQUIDITY_STRESS_GUARD = True
+    DEFAULT_STRESS_SPREAD_PCT = 1.0
+    DEFAULT_STRESS_MIN_VALUE_RATIO = 0.35
+
+    DEFAULT_USE_SLIPPAGE_GUARD = True
+    DEFAULT_MAX_SLIPPAGE_BPS = 15.0
+    DEFAULT_SLIPPAGE_WINDOW_TRADES = 20
+
+    DEFAULT_USE_ORDER_HEALTH_GUARD = True
+    DEFAULT_ORDER_HEALTH_FAIL_COUNT = 5
+    DEFAULT_ORDER_HEALTH_WINDOW_SEC = 60
+    DEFAULT_ORDER_HEALTH_COOLDOWN_SEC = 180
     
     # =========================================================================
     # 사운드 알림 설정 (v4.3 신규)
@@ -497,6 +559,12 @@ class Config:
         "breakout_confirm": "돌파 확인 - 목표가 돌파 후 N틱 유지 시 진입",
         "cooldown": "쿨다운 - 매도 후 일정 시간 재진입 제한",
         "time_stop": "시간 청산 - 보유 시간이 기준을 넘으면 청산",
+        "shock_guard": "시장 급등/급락 쇼크 감지 시 신규 진입 차단",
+        "vi_guard": "VI/거래정지 추정 구간에서 신규 진입 차단",
+        "regime_sizing": "변동성 레짐에 따라 포지션 크기 자동 축소",
+        "liquidity_stress": "스프레드/거래대금 스트레스 구간 진입 차단",
+        "slippage_guard": "최근 체결 슬리피지가 높을 때 신규 진입 차단",
+        "order_health_guard": "주문 실패 급증 시 세션 단위 신규 진입 차단",
     }
     
     # =========================================================================
@@ -574,7 +642,7 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         """
     }
 
-    SETTINGS_SCHEMA_VERSION = 3
+    SETTINGS_SCHEMA_VERSION = 4
     # =========================================================================
     # 전략팩/백테스트/실행 정책 (v5.0)
     # =========================================================================

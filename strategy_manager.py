@@ -1015,6 +1015,67 @@ class StrategyManager:
         
         return None
 
+    def get_regime_profile(self, code) -> Tuple[str, float, float]:
+        """변동성 레짐 프로파일 반환: (regime, size_scale, atr_pct)."""
+        info = self.trader.universe.get(code, {})
+        current = float(info.get("current", 0) or 0)
+        if current <= 0:
+            return "normal", 1.0, 0.0
+
+        high_list = info.get("high_history", [])
+        low_list = info.get("low_history", [])
+        close_list = info.get("price_history", [])
+        if len(high_list) < 15 or len(low_list) < 15 or len(close_list) < 15:
+            return "normal", 1.0, 0.0
+
+        atr = float(self.calculate_atr(high_list, low_list, close_list, period=14) or 0)
+        if atr <= 0:
+            return "normal", 1.0, 0.0
+        atr_pct = (atr / current) * 100.0
+
+        cfg = self.config
+        if cfg and bool(getattr(cfg, "use_regime_sizing", True)):
+            elevated = float(
+                getattr(cfg, "regime_elevated_atr_pct", getattr(Config, "DEFAULT_REGIME_ELEVATED_ATR_PCT", 2.5))
+            )
+            extreme = float(
+                getattr(cfg, "regime_extreme_atr_pct", getattr(Config, "DEFAULT_REGIME_EXTREME_ATR_PCT", 4.0))
+            )
+            scale_elevated = float(
+                getattr(
+                    cfg,
+                    "regime_size_scale_elevated",
+                    getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_ELEVATED", 0.7),
+                )
+            )
+            scale_extreme = float(
+                getattr(
+                    cfg,
+                    "regime_size_scale_extreme",
+                    getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_EXTREME", 0.4),
+                )
+            )
+        else:
+            elevated = float(getattr(Config, "DEFAULT_REGIME_ELEVATED_ATR_PCT", 2.5))
+            extreme = float(getattr(Config, "DEFAULT_REGIME_EXTREME_ATR_PCT", 4.0))
+            scale_elevated = float(getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_ELEVATED", 0.7))
+            scale_extreme = float(getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_EXTREME", 0.4))
+
+        if atr_pct >= extreme:
+            return "extreme", max(0.1, scale_extreme), atr_pct
+        if atr_pct >= elevated:
+            return "elevated", max(0.1, scale_elevated), atr_pct
+        return "normal", 1.0, atr_pct
+
+    def apply_regime_size_scale(self, code, quantity: int) -> int:
+        qty = max(0, int(quantity or 0))
+        if qty <= 0:
+            return 0
+        regime, scale, _atr_pct = self.get_regime_profile(code)
+        if regime in {"elevated", "extreme"}:
+            return max(1, int(qty * float(scale)))
+        return qty
+
     def calculate_position_size(self, code, risk_percent=1.0, atr_multiplier=2.0):
         """ATR 기반 포지션 크기 계산"""
         info = self.trader.universe.get(code, {})
@@ -1049,7 +1110,7 @@ class StrategyManager:
         if final_size > 0:
             self.log(f"[{info.get('name', code)}] ATR 사이징: ATR={atr:.0f}, 적정수량={final_size}주")
         
-        return max(0, final_size)
+        return self.apply_regime_size_scale(code, max(0, final_size))
     
     def _default_position_size(self, code):
         """기본 포지션 크기 계산"""
@@ -1062,7 +1123,8 @@ class StrategyManager:
             invest_amount = self.trader.deposit * (self.config.betting_ratio / 100)
         else:
             invest_amount = self.trader.deposit * (self.trader.spin_betting.value() / 100)
-        return max(0, int(invest_amount / current_price))
+        base_qty = max(0, int(invest_amount / current_price))
+        return self.apply_regime_size_scale(code, base_qty)
 
     def get_time_based_k_value(self):
         """시간대별 K값 반환"""
@@ -1192,8 +1254,24 @@ class StrategyManager:
 
         pack_result = self._evaluate_with_strategy_pack(code, now_ts)
         if pack_result is not None:
-            self._decision_cache[code] = {"ts": now_ts, "result": pack_result}
-            return pack_result
+            passed, conditions, metrics = pack_result
+            for key in (
+                "risk:shock_mode_guard",
+                "risk:shock_guard",
+                "risk:vi_guard",
+                "risk:regime_guard",
+                "risk:liquidity_stress_guard",
+                "risk:slippage_guard",
+                "risk:order_health_guard",
+            ):
+                conditions.setdefault(key, True)
+            metrics.setdefault("shock_score", 0.0)
+            metrics.setdefault("estimated_slippage_bps", 0.0)
+            metrics.setdefault("guard_blocked", 0.0)
+            metrics.setdefault("regime", 0.0)
+            normalized = (bool(passed), dict(conditions), dict(metrics))
+            self._decision_cache[code] = {"ts": now_ts, "result": normalized}
+            return normalized
 
         info = self.trader.universe.get(code, {})
         prices = info.get("price_history", [])
@@ -1282,6 +1360,11 @@ class StrategyManager:
             "spread_pct": 0.0,
             "entry_score": 100.0,
             "gap_ratio": 0.0,
+            "shock_score": 0.0,
+            "estimated_slippage_bps": 0.0,
+            "guard_blocked": 0.0,
+            "regime": 0.0,
+            "atr_pct": 0.0,
         }
         conditions: Dict[str, bool] = {}
 
@@ -1420,6 +1503,82 @@ class StrategyManager:
         else:
             conditions["entry_score"] = True
             metrics["entry_score"] = 100.0
+
+        regime_name, regime_scale, atr_pct = self.get_regime_profile(code)
+        metrics["atr_pct"] = float(atr_pct)
+        metrics["regime"] = {"normal": 0.0, "elevated": 1.0, "extreme": 2.0}.get(regime_name, 0.0)
+
+        spread_pct = float(metrics.get("spread_pct", 0.0) or 0.0)
+        avg_slippage_bps = 0.0
+        slip_series = getattr(self.trader, "_recent_slippage_bps", None)
+        if slip_series:
+            window = int(
+                getattr(
+                    cfg,
+                    "slippage_window_trades",
+                    getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20),
+                )
+            )
+            samples = list(slip_series)[-max(1, window) :]
+            if samples:
+                avg_slippage_bps = sum(abs(float(v)) for v in samples) / len(samples)
+        metrics["estimated_slippage_bps"] = float(avg_slippage_bps)
+
+        shock_mode = str(getattr(self.trader, "_global_risk_mode", "normal"))
+        shock_until = getattr(self.trader, "_global_risk_until", None)
+        shock_active = shock_mode == "shock" and (
+            not isinstance(shock_until, datetime.datetime)
+            or datetime.datetime.now() < shock_until
+        )
+        metrics["shock_score"] = 1.0 if shock_active else 0.0
+        conditions["shock_guard"] = not (bool(getattr(cfg, "use_shock_guard", True)) and shock_active)
+
+        market_state = str(info.get("market_state", "normal") or "normal")
+        conditions["vi_guard"] = not (
+            bool(getattr(cfg, "use_vi_guard", True))
+            and market_state in {"vi", "halt", "reopen_cooldown"}
+        )
+
+        conditions["regime_guard"] = True
+
+        if bool(getattr(cfg, "use_liquidity_stress_guard", True)):
+            min_value = float(getattr(cfg, "min_avg_value", getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000)))
+            if min_value < 10_000_000:
+                min_value *= 100_000_000
+            ratio = float(getattr(cfg, "stress_min_value_ratio", getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35)))
+            stress_spread = float(getattr(cfg, "stress_spread_pct", getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0)))
+            liquidity_stress = spread_pct > stress_spread or (avg_value > 0 and avg_value < min_value * ratio)
+            conditions["liquidity_stress_guard"] = not liquidity_stress
+        else:
+            conditions["liquidity_stress_guard"] = True
+
+        max_slippage = float(getattr(cfg, "max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+        conditions["slippage_guard"] = not (
+            bool(getattr(cfg, "use_slippage_guard", True))
+            and avg_slippage_bps > max_slippage
+        )
+
+        order_health_mode = str(getattr(self.trader, "_order_health_mode", "normal"))
+        order_health_until = getattr(self.trader, "_order_health_until", None)
+        order_health_degraded = order_health_mode == "degraded" and (
+            not isinstance(order_health_until, datetime.datetime)
+            or datetime.datetime.now() < order_health_until
+        )
+        conditions["order_health_guard"] = not (
+            bool(getattr(cfg, "use_order_health_guard", True)) and order_health_degraded
+        )
+
+        if not all(
+            conditions.get(k, True)
+            for k in (
+                "shock_guard",
+                "vi_guard",
+                "liquidity_stress_guard",
+                "slippage_guard",
+                "order_health_guard",
+            )
+        ):
+            metrics["guard_blocked"] = 1.0
 
         result = (all(conditions.values()), conditions, metrics)
         self._decision_cache[code] = {"ts": now_ts, "result": result}

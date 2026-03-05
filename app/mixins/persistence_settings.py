@@ -36,6 +36,63 @@ from light_theme import LIGHT_STYLESHEET
 
 
 class PersistenceSettingsMixin:
+    @staticmethod
+    def _v4_guard_defaults() -> dict:
+        return {
+            "use_shock_guard": bool(getattr(Config, "DEFAULT_USE_SHOCK_GUARD", True)),
+            "shock_1m_pct": float(getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5)),
+            "shock_5m_pct": float(getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8)),
+            "shock_cooldown_min": int(getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10)),
+            "use_vi_guard": bool(getattr(Config, "DEFAULT_USE_VI_GUARD", True)),
+            "vi_cooldown_min": int(getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7)),
+            "vi_proxy_1m_pct": float(getattr(Config, "DEFAULT_VI_PROXY_1M_PCT", 4.0)),
+            "vi_proxy_spread_pct": float(getattr(Config, "DEFAULT_VI_PROXY_SPREAD_PCT", 1.2)),
+            "use_regime_sizing": bool(getattr(Config, "DEFAULT_USE_REGIME_SIZING", True)),
+            "regime_elevated_atr_pct": float(getattr(Config, "DEFAULT_REGIME_ELEVATED_ATR_PCT", 2.5)),
+            "regime_extreme_atr_pct": float(getattr(Config, "DEFAULT_REGIME_EXTREME_ATR_PCT", 4.0)),
+            "regime_size_scale_elevated": float(getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_ELEVATED", 0.7)),
+            "regime_size_scale_extreme": float(getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_EXTREME", 0.4)),
+            "use_liquidity_stress_guard": bool(getattr(Config, "DEFAULT_USE_LIQUIDITY_STRESS_GUARD", True)),
+            "stress_spread_pct": float(getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0)),
+            "stress_min_value_ratio": float(getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35)),
+            "use_slippage_guard": bool(getattr(Config, "DEFAULT_USE_SLIPPAGE_GUARD", True)),
+            "max_slippage_bps": float(getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)),
+            "slippage_window_trades": int(getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20)),
+            "use_order_health_guard": bool(getattr(Config, "DEFAULT_USE_ORDER_HEALTH_GUARD", True)),
+            "order_health_fail_count": int(getattr(Config, "DEFAULT_ORDER_HEALTH_FAIL_COUNT", 5)),
+            "order_health_window_sec": int(getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60)),
+            "order_health_cooldown_sec": int(getattr(Config, "DEFAULT_ORDER_HEALTH_COOLDOWN_SEC", 180)),
+        }
+
+    def _apply_settings_schema_migration(self, settings: dict):
+        version = int(settings.get("settings_version", 1))
+        if version < 3:
+            settings.setdefault("strategy_pack", dict(getattr(Config, "DEFAULT_STRATEGY_PACK", {})))
+            settings.setdefault("strategy_params", dict(getattr(Config, "DEFAULT_STRATEGY_PARAMS", {})))
+            settings.setdefault("portfolio_mode", getattr(Config, "DEFAULT_PORTFOLIO_MODE", "single_strategy"))
+            settings.setdefault("short_enabled", getattr(Config, "DEFAULT_SHORT_ENABLED", False))
+            settings.setdefault("asset_scope", getattr(Config, "DEFAULT_ASSET_SCOPE", "kr_stock_live"))
+            settings.setdefault("backtest_config", dict(getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})))
+            settings.setdefault("feature_flags", dict(getattr(Config, "FEATURE_FLAGS", {})))
+            settings.setdefault("execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
+            settings.setdefault("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
+
+        settings.setdefault(
+            "daily_loss_basis",
+            getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+        )
+        settings.setdefault(
+            "sync_history_flush_on_exit",
+            bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True)),
+        )
+        settings.setdefault("market_limit", int(getattr(Config, "DEFAULT_MARKET_LIMIT", 70)))
+        settings.setdefault("sector_limit", int(getattr(Config, "DEFAULT_SECTOR_LIMIT", 30)))
+
+        for key, default in self._v4_guard_defaults().items():
+            settings.setdefault(key, default)
+
+        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 4))
+
     def _add_trade(self, record: dict):
         """거래 기록 추가."""
         record["timestamp"] = datetime.datetime.now().isoformat()
@@ -210,7 +267,7 @@ class PersistenceSettingsMixin:
 
     def _save_settings(self):
         settings = {
-            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 3)),
+            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 4)),
             "is_mock": self.chk_mock.isChecked(),
             "auto_start": self.chk_auto_start.isChecked(),
             "codes": self.input_codes.text(),
@@ -293,8 +350,37 @@ class PersistenceSettingsMixin:
             "theme": self.current_theme,
         }
 
-        # v3+ extended strategy/backtest schema
+        guard_defaults = self._v4_guard_defaults()
+        for key, default in guard_defaults.items():
+            settings[key] = default
         cfg = getattr(self, "config", None)
+        if cfg is not None:
+            for key in guard_defaults.keys():
+                settings[key] = getattr(cfg, key, settings[key])
+        if hasattr(self, "chk_use_shock_guard"):
+            settings["use_shock_guard"] = bool(self.chk_use_shock_guard.isChecked())
+        if hasattr(self, "spin_shock_1m"):
+            settings["shock_1m_pct"] = float(self.spin_shock_1m.value())
+        if hasattr(self, "spin_shock_5m"):
+            settings["shock_5m_pct"] = float(self.spin_shock_5m.value())
+        if hasattr(self, "spin_shock_cooldown"):
+            settings["shock_cooldown_min"] = int(self.spin_shock_cooldown.value())
+        if hasattr(self, "chk_use_vi_guard"):
+            settings["use_vi_guard"] = bool(self.chk_use_vi_guard.isChecked())
+        if hasattr(self, "spin_vi_cooldown"):
+            settings["vi_cooldown_min"] = int(self.spin_vi_cooldown.value())
+        if hasattr(self, "chk_use_regime_sizing"):
+            settings["use_regime_sizing"] = bool(self.chk_use_regime_sizing.isChecked())
+        if hasattr(self, "chk_use_liquidity_stress_guard"):
+            settings["use_liquidity_stress_guard"] = bool(self.chk_use_liquidity_stress_guard.isChecked())
+        if hasattr(self, "chk_use_slippage_guard"):
+            settings["use_slippage_guard"] = bool(self.chk_use_slippage_guard.isChecked())
+        if hasattr(self, "spin_max_slippage_bps"):
+            settings["max_slippage_bps"] = float(self.spin_max_slippage_bps.value())
+        if hasattr(self, "chk_use_order_health_guard"):
+            settings["use_order_health_guard"] = bool(self.chk_use_order_health_guard.isChecked())
+
+        # v3+ extended strategy/backtest schema
         settings["strategy_pack"] = dict(
             getattr(cfg, "strategy_pack", getattr(Config, "DEFAULT_STRATEGY_PACK", {}))
         )
@@ -402,27 +488,7 @@ class PersistenceSettingsMixin:
 
             with open(Config.SETTINGS_FILE, "r", encoding="utf-8") as file:
                 settings = json.load(file)
-            settings_version = int(settings.get("settings_version", 1))
-            if settings_version < 3:
-                settings.setdefault("strategy_pack", dict(getattr(Config, "DEFAULT_STRATEGY_PACK", {})))
-                settings.setdefault("strategy_params", dict(getattr(Config, "DEFAULT_STRATEGY_PARAMS", {})))
-                settings.setdefault("portfolio_mode", getattr(Config, "DEFAULT_PORTFOLIO_MODE", "single_strategy"))
-                settings.setdefault("short_enabled", getattr(Config, "DEFAULT_SHORT_ENABLED", False))
-                settings.setdefault("asset_scope", getattr(Config, "DEFAULT_ASSET_SCOPE", "kr_stock_live"))
-                settings.setdefault("backtest_config", dict(getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})))
-                settings.setdefault("feature_flags", dict(getattr(Config, "FEATURE_FLAGS", {})))
-                settings.setdefault("execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
-                settings.setdefault("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
-            settings.setdefault(
-                "daily_loss_basis",
-                getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
-            )
-            settings.setdefault(
-                "sync_history_flush_on_exit",
-                bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True)),
-            )
-            settings.setdefault("market_limit", int(getattr(Config, "DEFAULT_MARKET_LIMIT", 70)))
-            settings.setdefault("sector_limit", int(getattr(Config, "DEFAULT_SECTOR_LIMIT", 30)))
+            self._apply_settings_schema_migration(settings)
 
 
             app_key = ""
@@ -554,6 +620,34 @@ class PersistenceSettingsMixin:
                 self.chk_use_entry_score.setChecked(settings.get("use_entry_scoring", Config.USE_ENTRY_SCORING))
             if hasattr(self, "spin_entry_score_threshold"):
                 self.spin_entry_score_threshold.setValue(settings.get("entry_score_threshold", Config.ENTRY_SCORE_THRESHOLD))
+            if hasattr(self, "chk_use_shock_guard"):
+                self.chk_use_shock_guard.setChecked(bool(settings.get("use_shock_guard", True)))
+            if hasattr(self, "spin_shock_1m"):
+                self.spin_shock_1m.setValue(float(settings.get("shock_1m_pct", getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5))))
+            if hasattr(self, "spin_shock_5m"):
+                self.spin_shock_5m.setValue(float(settings.get("shock_5m_pct", getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8))))
+            if hasattr(self, "spin_shock_cooldown"):
+                self.spin_shock_cooldown.setValue(
+                    int(settings.get("shock_cooldown_min", getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10)))
+                )
+            if hasattr(self, "chk_use_vi_guard"):
+                self.chk_use_vi_guard.setChecked(bool(settings.get("use_vi_guard", True)))
+            if hasattr(self, "spin_vi_cooldown"):
+                self.spin_vi_cooldown.setValue(
+                    int(settings.get("vi_cooldown_min", getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7)))
+                )
+            if hasattr(self, "chk_use_regime_sizing"):
+                self.chk_use_regime_sizing.setChecked(bool(settings.get("use_regime_sizing", True)))
+            if hasattr(self, "chk_use_liquidity_stress_guard"):
+                self.chk_use_liquidity_stress_guard.setChecked(bool(settings.get("use_liquidity_stress_guard", True)))
+            if hasattr(self, "chk_use_slippage_guard"):
+                self.chk_use_slippage_guard.setChecked(bool(settings.get("use_slippage_guard", True)))
+            if hasattr(self, "spin_max_slippage_bps"):
+                self.spin_max_slippage_bps.setValue(
+                    float(settings.get("max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+                )
+            if hasattr(self, "chk_use_order_health_guard"):
+                self.chk_use_order_health_guard.setChecked(bool(settings.get("use_order_health_guard", True)))
 
             if isinstance(settings.get("schedule"), dict):
                 raw_schedule = settings.get("schedule", {})
@@ -627,6 +721,8 @@ class PersistenceSettingsMixin:
                         ),
                     )
                 )
+                for key, default in self._v4_guard_defaults().items():
+                    setattr(cfg, key, settings.get(key, getattr(cfg, key, default)))
 
             self.log("📂 설정 불러옴")
         except (json.JSONDecodeError, FileNotFoundError, OSError) as exc:

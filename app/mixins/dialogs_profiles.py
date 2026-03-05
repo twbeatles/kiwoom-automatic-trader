@@ -262,6 +262,17 @@ class DialogsProfilesMixin:
                 "enable_backtest": self.chk_feature_backtest.isChecked() if hasattr(self, "chk_feature_backtest") else True,
                 "enable_external_data": self.chk_feature_external_data.isChecked() if hasattr(self, "chk_feature_external_data") else True,
             },
+            "use_shock_guard": self.chk_use_shock_guard.isChecked() if hasattr(self, "chk_use_shock_guard") else True,
+            "shock_1m_pct": self.spin_shock_1m.value() if hasattr(self, "spin_shock_1m") else getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5),
+            "shock_5m_pct": self.spin_shock_5m.value() if hasattr(self, "spin_shock_5m") else getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8),
+            "shock_cooldown_min": self.spin_shock_cooldown.value() if hasattr(self, "spin_shock_cooldown") else getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10),
+            "use_vi_guard": self.chk_use_vi_guard.isChecked() if hasattr(self, "chk_use_vi_guard") else True,
+            "vi_cooldown_min": self.spin_vi_cooldown.value() if hasattr(self, "spin_vi_cooldown") else getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7),
+            "use_regime_sizing": self.chk_use_regime_sizing.isChecked() if hasattr(self, "chk_use_regime_sizing") else True,
+            "use_liquidity_stress_guard": self.chk_use_liquidity_stress_guard.isChecked() if hasattr(self, "chk_use_liquidity_stress_guard") else True,
+            "use_slippage_guard": self.chk_use_slippage_guard.isChecked() if hasattr(self, "chk_use_slippage_guard") else True,
+            "max_slippage_bps": self.spin_max_slippage_bps.value() if hasattr(self, "spin_max_slippage_bps") else getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0),
+            "use_order_health_guard": self.chk_use_order_health_guard.isChecked() if hasattr(self, "chk_use_order_health_guard") else True,
             "schedule": dict(self.schedule),
             "theme": self.current_theme,
         }
@@ -380,6 +391,28 @@ class DialogsProfilesMixin:
             self.chk_use_entry_score.setChecked(settings['use_entry_scoring'])
         if 'entry_score_threshold' in settings:
             self.spin_entry_score_threshold.setValue(settings['entry_score_threshold'])
+        if 'use_shock_guard' in settings and hasattr(self, "chk_use_shock_guard"):
+            self.chk_use_shock_guard.setChecked(bool(settings['use_shock_guard']))
+        if 'shock_1m_pct' in settings and hasattr(self, "spin_shock_1m"):
+            self.spin_shock_1m.setValue(float(settings['shock_1m_pct']))
+        if 'shock_5m_pct' in settings and hasattr(self, "spin_shock_5m"):
+            self.spin_shock_5m.setValue(float(settings['shock_5m_pct']))
+        if 'shock_cooldown_min' in settings and hasattr(self, "spin_shock_cooldown"):
+            self.spin_shock_cooldown.setValue(int(settings['shock_cooldown_min']))
+        if 'use_vi_guard' in settings and hasattr(self, "chk_use_vi_guard"):
+            self.chk_use_vi_guard.setChecked(bool(settings['use_vi_guard']))
+        if 'vi_cooldown_min' in settings and hasattr(self, "spin_vi_cooldown"):
+            self.spin_vi_cooldown.setValue(int(settings['vi_cooldown_min']))
+        if 'use_regime_sizing' in settings and hasattr(self, "chk_use_regime_sizing"):
+            self.chk_use_regime_sizing.setChecked(bool(settings['use_regime_sizing']))
+        if 'use_liquidity_stress_guard' in settings and hasattr(self, "chk_use_liquidity_stress_guard"):
+            self.chk_use_liquidity_stress_guard.setChecked(bool(settings['use_liquidity_stress_guard']))
+        if 'use_slippage_guard' in settings and hasattr(self, "chk_use_slippage_guard"):
+            self.chk_use_slippage_guard.setChecked(bool(settings['use_slippage_guard']))
+        if 'max_slippage_bps' in settings and hasattr(self, "spin_max_slippage_bps"):
+            self.spin_max_slippage_bps.setValue(float(settings['max_slippage_bps']))
+        if 'use_order_health_guard' in settings and hasattr(self, "chk_use_order_health_guard"):
+            self.chk_use_order_health_guard.setChecked(bool(settings['use_order_health_guard']))
         if 'portfolio_mode' in settings and hasattr(self, "combo_portfolio_mode"):
             self.combo_portfolio_mode.setCurrentText(str(settings['portfolio_mode']))
         if 'short_enabled' in settings and hasattr(self, "chk_short_enabled"):
@@ -417,6 +450,22 @@ class DialogsProfilesMixin:
                 self.chk_feature_external_data.setChecked(bool(flags.get('enable_external_data', True)))
             if hasattr(self, "config"):
                 self.config.feature_flags = dict(flags)
+        if hasattr(self, "config"):
+            for key in (
+                "use_shock_guard",
+                "shock_1m_pct",
+                "shock_5m_pct",
+                "shock_cooldown_min",
+                "use_vi_guard",
+                "vi_cooldown_min",
+                "use_regime_sizing",
+                "use_liquidity_stress_guard",
+                "use_slippage_guard",
+                "max_slippage_bps",
+                "use_order_health_guard",
+            ):
+                if key in settings:
+                    setattr(self.config, key, settings[key])
         if 'schedule' in settings and isinstance(settings['schedule'], dict):
             self.schedule = settings['schedule']
         if settings.get('theme') in ('dark', 'light'):

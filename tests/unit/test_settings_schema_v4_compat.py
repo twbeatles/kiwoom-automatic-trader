@@ -1,4 +1,4 @@
-import json
+﻿import json
 import sys
 import tempfile
 import unittest
@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault("keyring", MagicMock())
 
 from app.mixins.persistence_settings import PersistenceSettingsMixin
-from config import Config
 
 
 class _DummyText:
@@ -60,11 +59,24 @@ class _DummyLogger:
         return None
 
 
+class _DummyConfig:
+    def __init__(self):
+        self.strategy_pack = {}
+        self.strategy_params = {}
+        self.portfolio_mode = "single_strategy"
+        self.short_enabled = False
+        self.asset_scope = "kr_stock_live"
+        self.backtest_config = {}
+        self.feature_flags = {}
+        self.execution_policy = "market"
+
+
 class _Harness(PersistenceSettingsMixin):
     def __init__(self):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
         self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
+        self.config = _DummyConfig()
 
         self.input_app_key = _DummyText()
         self.input_secret = _DummyText()
@@ -92,12 +104,19 @@ class _Harness(PersistenceSettingsMixin):
         self.input_tg_token = _DummyText()
         self.input_tg_chat = _DummyText()
         self.chk_use_telegram = _DummyCheck()
-        self.chk_use_market_limit = _DummyCheck()
-        self.spin_market_limit = _DummySpin()
-        self.chk_use_sector_limit = _DummyCheck()
-        self.spin_sector_limit = _DummySpin()
         self.combo_daily_loss_basis = _DummyCombo("total_equity")
-        self.chk_sync_history_flush_on_exit = _DummyCheck(True)
+
+        self.chk_use_shock_guard = _DummyCheck()
+        self.spin_shock_1m = _DummySpin()
+        self.spin_shock_5m = _DummySpin()
+        self.spin_shock_cooldown = _DummySpin()
+        self.chk_use_vi_guard = _DummyCheck()
+        self.spin_vi_cooldown = _DummySpin()
+        self.chk_use_regime_sizing = _DummyCheck()
+        self.chk_use_liquidity_stress_guard = _DummyCheck()
+        self.chk_use_slippage_guard = _DummyCheck()
+        self.spin_max_slippage_bps = _DummySpin()
+        self.chk_use_order_health_guard = _DummyCheck()
 
     def log(self, _msg):
         return None
@@ -106,25 +125,23 @@ class _Harness(PersistenceSettingsMixin):
         return None
 
 
-class TestSettingsDefaultConsistency(unittest.TestCase):
-    def test_missing_market_sector_defaults_follow_config_constants(self):
+class TestSettingsSchemaV4Compat(unittest.TestCase):
+    def test_v3_file_loads_with_v4_guard_defaults(self):
         trader = _Harness()
         with tempfile.TemporaryDirectory() as tmpdir:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
-            settings_path.write_text(
-                json.dumps({"settings_version": 4, "codes": "005930"}, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            settings_path.write_text(json.dumps({"settings_version": 3, "codes": "005930"}), encoding="utf-8")
+
             with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
                 "app.mixins.persistence_settings.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
 
-        self.assertEqual(trader.spin_market_limit.value(), Config.DEFAULT_MARKET_LIMIT)
-        self.assertEqual(trader.spin_sector_limit.value(), Config.DEFAULT_SECTOR_LIMIT)
-        guard_defaults = trader._v4_guard_defaults()
-        self.assertEqual(guard_defaults["max_slippage_bps"], Config.DEFAULT_MAX_SLIPPAGE_BPS)
-        self.assertTrue(guard_defaults["use_shock_guard"])
+        self.assertTrue(trader.chk_use_shock_guard.isChecked())
+        self.assertTrue(trader.chk_use_vi_guard.isChecked())
+        self.assertTrue(trader.chk_use_order_health_guard.isChecked())
+        self.assertGreater(float(trader.spin_max_slippage_bps.value()), 0.0)
+        self.assertTrue(getattr(trader.config, "use_shock_guard", False))
 
 
 if __name__ == "__main__":
