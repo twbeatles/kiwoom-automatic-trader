@@ -323,6 +323,9 @@ class TradingSessionMixin:
         mapping = getattr(self, "_index_ticks_by_market", None)
         if isinstance(mapping, dict):
             mapping.clear()
+        fallback_map = getattr(self, "_shock_fallback_rep_by_market", None)
+        if isinstance(fallback_map, dict):
+            fallback_map.clear()
 
     def _on_index_tick(self, tick):
         try:
@@ -629,6 +632,9 @@ class TradingSessionMixin:
                 info["status"] = "holding"
                 info["buy_time"] = now
                 info["cooldown_until"] = None
+                info["entry_origin"] = "session_inbound"
+                info["time_stop_eligible"] = False
+                info["sync_failed_reason"] = ""
                 if hasattr(self, "strategy") and invest_amount > 0:
                     self.strategy.update_market_investment(code, invest_amount, is_buy=True)
                     self.strategy.update_sector_investment(code, invest_amount, is_buy=True)
@@ -637,6 +643,9 @@ class TradingSessionMixin:
                 info["buy_time"] = None
                 info["max_profit_rate"] = 0
                 info["partial_profit_levels"] = set()
+                info["entry_origin"] = "watch"
+                info["time_stop_eligible"] = True
+                info["sync_failed_reason"] = ""
 
             if hasattr(self, "_sync_failed_codes"):
                 self._sync_failed_codes.discard(code)
@@ -998,6 +1007,9 @@ class TradingSessionMixin:
                     "market_state": "normal",
                     "market_state_until": None,
                     "last_guard_reason": "",
+                    "time_stop_eligible": True,
+                    "entry_origin": "watch",
+                    "sync_failed_reason": "",
                 }
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):

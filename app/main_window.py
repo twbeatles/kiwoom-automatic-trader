@@ -62,6 +62,8 @@ class KiwoomProTrader(
         self.win_count = 0
         self._trading_day = datetime.date.today()
         self._history_dirty = False
+        self._history_save_inflight = False
+        self._history_save_pending_snapshot = None
         self._position_sync_pending: Set[str] = set()
         self._position_sync_batch: Set[str] = set()
         self._position_sync_scheduled = False
@@ -97,9 +99,11 @@ class KiwoomProTrader(
         self._recent_slippage_bps: Deque[float] = deque(maxlen=300)
         self._order_fail_events: Deque[float] = deque(maxlen=500)
         self._index_ticks_by_market: Dict[str, Deque[tuple]] = {}
+        self._shock_fallback_rep_by_market: Dict[str, str] = {}
         self._recent_ticks_by_code: Dict[str, Deque[tuple]] = {}
         self._guard_reason_by_code: Dict[str, str] = {}
         self._market_status_probe_logged = False
+        self._diagnostic_row_to_code: Dict[int, str] = {}
         
         # v4.3 신규 상태
         self.current_theme = Config.DEFAULT_THEME
@@ -452,6 +456,8 @@ class KiwoomProTrader(
                 "pending_side": "",
                 "pending_reason": "",
                 "pending_until": None,
+                "pending_state": "",
+                "pending_remaining": "",
                 "sync_status": "",
                 "retry_count": 0,
                 "last_sync_error": "",
@@ -469,7 +475,14 @@ class KiwoomProTrader(
     def _diag_clear_pending(self, code: str):
         if not code:
             return
-        self._diag_touch(code, pending_side="", pending_reason="", pending_until=None)
+        self._diag_touch(
+            code,
+            pending_side="",
+            pending_reason="",
+            pending_until=None,
+            pending_state="",
+            pending_remaining="",
+        )
 
     @staticmethod
     def _diag_fmt_dt(value: Any) -> str:
@@ -500,7 +513,9 @@ class KiwoomProTrader(
         self.diagnostic_table.setUpdatesEnabled(False)
         try:
             self.diagnostic_table.setRowCount(len(codes))
+            row_to_code: Dict[int, str] = {}
             for row, code in enumerate(codes):
+                row_to_code[row] = code
                 info = self.universe.get(code, {})
                 diag = self._diagnostics_by_code.get(code, {})
                 pending = self._pending_order_state.get(code, {})
@@ -544,6 +559,9 @@ class KiwoomProTrader(
                     ),
                     str(getattr(self, "_global_risk_mode", "normal")),
                     str(getattr(self, "_order_health_mode", "normal")),
+                    str(diag.get("pending_state") or pending.get("state") or ""),
+                    str(diag.get("pending_remaining") or pending.get("remaining_qty") or ""),
+                    str(info.get("sync_failed_reason", "") or ""),
                 ]
 
                 for col, text in enumerate(values):
@@ -578,8 +596,91 @@ class KiwoomProTrader(
                             item.setForeground(QColor("#f85149"))
                         elif state in {"normal", ""}:
                             item.setForeground(QColor("#8b949e"))
+                    elif col == 18:
+                        item.setForeground(QColor("#f85149") if str(text) else QColor("#8b949e"))
         finally:
             self.diagnostic_table.setUpdatesEnabled(True)
+        self._diagnostic_row_to_code = row_to_code
 
         self._diagnostics_dirty_codes.clear()
+        render_detail = getattr(self, "_render_selected_diagnostic_detail", None)
+        if callable(render_detail):
+            render_detail()
+
+    def _selected_diagnostic_code(self) -> str:
+        table = getattr(self, "diagnostic_table", None)
+        if table is None:
+            return ""
+
+        row = -1
+        getter = getattr(table, "currentRow", None)
+        if callable(getter):
+            row = int(getter())
+        if row < 0:
+            selected = getattr(table, "selectedItems", None)
+            if callable(selected):
+                items = selected() or []
+                if items:
+                    row_fn = getattr(items[0], "row", None)
+                    if callable(row_fn):
+                        row = int(row_fn())
+        return str(getattr(self, "_diagnostic_row_to_code", {}).get(row, "") or "")
+
+    def _render_selected_diagnostic_detail(self):
+        panel = getattr(self, "diag_detail_panel", None)
+        if panel is None:
+            return
+        code = self._selected_diagnostic_code()
+        if not code:
+            panel.setPlainText("선택된 종목이 없습니다.")
+            return
+
+        info = self.universe.get(code, {})
+        pending = self._pending_order_state.get(code, {})
+        detail = [
+            f"코드: {code}",
+            f"종목명: {info.get('name', code)}",
+            f"상태: {info.get('status', '')}",
+            f"sync_failed 사유: {info.get('sync_failed_reason', '')}",
+            f"entry_origin: {info.get('entry_origin', '')}",
+            f"time_stop_eligible: {bool(info.get('time_stop_eligible', True))}",
+            f"pending_state: {pending.get('state', '')}",
+            f"pending_side: {pending.get('side', '')}",
+            f"pending_order_no: {pending.get('order_no', '')}",
+            f"pending_submitted_qty: {pending.get('submitted_qty', '')}",
+            f"pending_filled_qty: {pending.get('filled_qty', '')}",
+            f"pending_remaining_qty: {pending.get('remaining_qty', '')}",
+            f"pending_expected_price: {pending.get('expected_price', '')}",
+            f"pending_updated_at: {self._diag_fmt_dt(pending.get('updated_at'))}",
+        ]
+        panel.setPlainText("\n".join(detail))
+
+    def _on_diagnostic_selection_changed(self):
+        self._render_selected_diagnostic_detail()
+
+    def _on_diagnostic_resync_selected(self):
+        code = self._selected_diagnostic_code()
+        if not code:
+            self.log("[진단] 재동기화 대상 종목이 선택되지 않았습니다.")
+            return
+        self._sync_position_from_account(code)
+        self.log(f"[진단] 선택 종목 재동기화 요청: {code}")
+        self._render_selected_diagnostic_detail()
+
+    def _on_diagnostic_release_sync_failed_selected(self):
+        code = self._selected_diagnostic_code()
+        if not code:
+            self.log("[진단] sync_failed 해제 대상 종목이 선택되지 않았습니다.")
+            return
+
+        info = self.universe.get(code, {})
+        in_failed = code in getattr(self, "_sync_failed_codes", set())
+        if str(info.get("status", "")) != "sync_failed" and not in_failed:
+            self.log(f"[진단] {code}는 sync_failed 상태가 아닙니다.")
+            return
+
+        # Safety rule: do not flip status directly. Request resync and recover only on success.
+        self._sync_position_from_account(code)
+        self.log(f"[진단] sync_failed 해제 요청(재동기화 기반): {code}")
+        self._render_selected_diagnostic_detail()
 

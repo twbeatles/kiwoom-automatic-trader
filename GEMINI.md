@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-05
+> **최종 업데이트**: 2026-03-07
 
 ---
 
@@ -206,3 +206,30 @@ pytest -q tests/unit
 4. 최신 검증 결과
 - `python -m pytest tests/unit --disable-warnings`
 - 결과: **68 passed in 1.36s** (2026-03-05)
+
+---
+
+## 2026-03-07 기능 안정화 동기화
+
+1. 주문/포지션 동기화 상태머신
+- `pending_order_state`를 `submitted/partial/filled/cancelled/rejected/sync_failed` 상태로 확장.
+- 주문번호/요청수량/누적체결/잔량/예상가/갱신시각 추적 반영.
+- 부분체결 시 예약금 전액 해제 제거, 체결분만 차감.
+
+2. 리스크/운영 정책 정합화
+- 레짐 사이징 중복 제거(전략 수량 계산 경로로 일원화).
+- 매도 시 시장/섹터 투자금 장부를 원가 기반으로 감소하도록 보정.
+- 세션 인입 포지션은 `TIME_STOP` 제외, 세션 신규 진입 포지션만 적용.
+- 진단 탭에 선택 종목 재동기화/`sync_failed` 해제 요청/상세 사유 패널 추가.
+
+3. 백테스트/저장 안정성
+- 백테스트 다종목 MTM을 심볼별 최신가 캐시 기반으로 보정.
+- 거래내역 저장 경로를 single-writer(순차 저장)로 전환.
+- 종료 flush 시 최신 스냅샷 강제 기록 경로를 추가.
+
+4. 빌드 스펙 점검
+- `KiwoomTrader.spec`의 hiddenimports/datas/collect_submodules 구성을 재검토했고, 이번 변경 범위에서는 추가 수정이 필요하지 않습니다.
+
+5. 최신 검증 결과
+- `python -m pytest -q tests/unit`
+- 결과: **83 passed** (2026-03-07)

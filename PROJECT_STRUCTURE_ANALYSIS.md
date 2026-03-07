@@ -1,6 +1,7 @@
 # Kiwoom Automatic Trader 프로젝트 구조 분석
 
 작성일: 2026-03-05  
+최종 동기화: 2026-03-07  
 분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`
 
 ## 1) 요약
@@ -21,23 +22,23 @@
 
 | 패키지 | py 파일 수 | 라인 수 |
 |---|---:|---:|
-| `app/` | 16 | 6400 |
+| `app/` | 16 | 6818 |
 | `api/` | 5 | 1821 |
-| `strategy_manager.py` | 1 | 1599 |
-| `tests/` | 47 | 3430 |
+| `strategy_manager.py` | 1 | 1603 |
+| `tests/` | 54 | 3984 |
 | `strategies/` | 4 | 475 |
 | `tools/` | 4 | 504 |
-| `backtest/` | 2 | 352 |
+| `backtest/` | 2 | 354 |
 | `data/` | 7 | 298 |
 | `portfolio/` | 2 | 51 |
 
 핵심 파일 Top 5:
 
-1. `strategy_manager.py` (1599)
-2. `app/mixins/trading_session.py` (1136)
-3. `app/mixins/ui_build.py` (1124)
+1. `strategy_manager.py` (1603)
+2. `app/mixins/trading_session.py` (1148)
+3. `app/mixins/ui_build.py` (1156)
 4. `api/rest_client.py` (807)
-5. `app/mixins/persistence_settings.py` (730)
+5. `app/mixins/persistence_settings.py` (793)
 
 ## 3) 엔트리포인트와 조립 구조
 
@@ -189,10 +190,10 @@
 
 ## 8) 테스트/검증 현황
 
-2026-03-05 실행:
+2026-03-07 실행:
 
-- 명령: `python -m pytest tests/unit --disable-warnings`
-- 결과: `68 passed in 1.36s`
+- 명령: `python -m pytest -q tests/unit`
+- 결과: `83 passed`
 
 커버되는 핵심 시나리오:
 
@@ -205,6 +206,9 @@
 - Shock/VI/reopen_cooldown/regime/liquidity/slippage/order-health 가드
 - 진단 컬럼/guard reason 노출
 - 백테스트 guard parity
+- 백테스트 다종목 MTM 최신가 캐시 회귀
+- 거래내역 single-writer 저장 순서 보장
+- 세션 인입 포지션 TIME_STOP 제외 정책
 
 ## 9) 문서-코드 동기화 메모
 

@@ -30,6 +30,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 
+from app.support.worker import Worker
 from config import Config
 from dark_theme import DARK_STYLESHEET
 from light_theme import LIGHT_STYLESHEET
@@ -236,15 +237,32 @@ class PersistenceSettingsMixin:
             self.logger.warning(f"거래 내역 로드 실패: {exc}")
 
     def _save_trade_history(self):
-        """거래 내역 저장 (비동기 처리)."""
+        """거래 내역 저장 (single-writer 비동기)."""
+        history_snapshot = list(self.trade_history)
+
         if not hasattr(self, "threadpool"):
             # 테스트/동기 환경 대응
-            self._save_trade_history_sync()
+            self._save_trade_history_sync(history_snapshot)
             return
 
-        # 현재 히스토리를 얕은 복사하여 백그라운드 스레드로 넘김
-        history_snapshot = list(self.trade_history)
-        worker = Worker(self._save_trade_history_worker, history_snapshot)
+        self._history_save_pending_snapshot = history_snapshot
+        if bool(getattr(self, "_history_save_inflight", False)):
+            return
+        self._start_next_trade_history_save()
+
+    def _start_next_trade_history_save(self):
+        if bool(getattr(self, "_history_save_inflight", False)):
+            return
+
+        snapshot = getattr(self, "_history_save_pending_snapshot", None)
+        if snapshot is None:
+            return
+        self._history_save_pending_snapshot = None
+        self._history_save_inflight = True
+
+        worker = Worker(self._save_trade_history_worker, list(snapshot))
+        worker.signals.result.connect(lambda _res=None: self._on_trade_history_save_done(success=True, error=None))
+        worker.signals.error.connect(lambda err: self._on_trade_history_save_done(success=False, error=err))
         self.threadpool.start(worker)
 
     def _save_trade_history_worker(self, history: list):
@@ -256,14 +274,59 @@ class PersistenceSettingsMixin:
         except OSError as exc:
             self.logger.error(f"거래 내역 저장 실패: {exc}")
 
-    def _save_trade_history_sync(self):
+    def _on_trade_history_save_done(self, success: bool, error=None):
+        self._history_save_inflight = False
+        if not success:
+            self._history_dirty = True
+            if error is not None:
+                self.logger.error(f"거래 내역 저장 실패: {error}")
+            # Keep latest pending snapshot queued for next timer/flush cycle.
+            return
+
+        if getattr(self, "_history_save_pending_snapshot", None) is not None:
+            self._start_next_trade_history_save()
+            return
+        self._history_dirty = False
+
+    def _save_trade_history_sync(self, history_snapshot=None):
         """동기 거래 내역 저장 (테스트용)"""
         try:
+            payload = list(self.trade_history) if history_snapshot is None else list(history_snapshot)
             Path(Config.TRADE_HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.TRADE_HISTORY_FILE, "w", encoding="utf-8") as file:
-                json.dump(self.trade_history, file, ensure_ascii=False, indent=2)
+                json.dump(payload, file, ensure_ascii=False, indent=2)
+            self._history_dirty = False
+            self._history_save_pending_snapshot = None
+            self._history_save_inflight = False
         except OSError as exc:
             self.logger.error(f"거래 내역 동기 저장 실패: {exc}")
+            self._history_dirty = True
+
+    def _flush_trade_history_on_exit(self):
+        if (
+            not bool(getattr(self, "_history_dirty", False))
+            and getattr(self, "_history_save_pending_snapshot", None) is None
+            and not bool(getattr(self, "_history_save_inflight", False))
+        ):
+            return
+
+        cfg = getattr(self, "config", None)
+        flush_sync = bool(
+            getattr(
+                cfg,
+                "sync_history_flush_on_exit",
+                getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+            )
+        )
+        latest_snapshot = list(self.trade_history)
+        if flush_sync:
+            self._save_trade_history_sync(latest_snapshot)
+            return
+
+        self._save_trade_history()
+        # Exit path hardening: if async save may still be inflight, force sync flush with latest snapshot.
+        if bool(getattr(self, "_history_save_inflight", False)) or getattr(self, "_history_save_pending_snapshot", None) is not None:
+            self._save_trade_history_sync(latest_snapshot)
 
     def _save_settings(self):
         settings = {

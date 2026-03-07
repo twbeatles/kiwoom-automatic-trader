@@ -1,7 +1,7 @@
 # 급변동/서킷브레이커 대응 전략 확장 청사진
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-05 (v4 Guard 통합 구현 완료 기준)
+최종 동기화: 2026-03-07 (v4 Guard 통합 + 기능 안정화 반영 기준)
 
 ## 1) 목표
 
@@ -131,6 +131,22 @@
 
 - `python -m pytest tests/unit --disable-warnings`
 - `68 passed in 1.36s`
+
+추가 반영(2026-03-07):
+
+- `tests/unit/test_order_sync_pending_state_machine.py`
+- `tests/unit/test_regime_sizing_single_apply.py`
+- `tests/unit/test_investment_cost_basis_ledger.py`
+- `tests/unit/test_shock_fallback_representative.py`
+- `tests/unit/test_time_stop_session_policy.py`
+- `tests/unit/test_trade_history_single_writer.py`
+- `tests/unit/test_sync_failed_manual_release.py`
+- `tests/unit/test_backtest_engine.py` (다종목 MTM 최신가 캐시 회귀 보강)
+
+최신 검증 결과(2026-03-07):
+
+- `python -m pytest -q tests/unit`
+- `83 passed`
 
 ## 7) 수용 기준 반영 상태
 

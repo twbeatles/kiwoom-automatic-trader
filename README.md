@@ -25,6 +25,7 @@
 - [키보드 단축키](#-키보드-단축키)
 - [매매 전략](#-매매-전략)
 - [리스크 관리](#-리스크-관리)
+- [2026-03-07 기능 안정화 업데이트](#-2026-03-07-기능-안정화-업데이트)
 - [2026-02-19 안정성 동기화 업데이트](#-2026-02-19-안정성-동기화-업데이트)
 - [주의사항](#-주의사항)
 
@@ -170,7 +171,7 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-> 기준: 2026-03-05, `git -c core.quotePath=false ls-files`
+> 기준: 2026-03-07, `git -c core.quotePath=false ls-files`
 
 ```text
 kiwoom-automatic-trader/
@@ -183,7 +184,7 @@ kiwoom-automatic-trader/
 ├── strategies/              # 모듈형 전략팩
 ├── portfolio/               # 포지션 예산 배분
 ├── data/providers/          # 외부 데이터 provider
-├── tests/unit/              # 단위 테스트(2026-03-05 기준 68 passed)
+├── tests/unit/              # 단위 테스트(2026-03-07 기준 83 passed)
 ├── tools/                   # refactor/perf 검증 도구
 ├── config.py
 ├── strategy_manager.py
@@ -291,6 +292,32 @@ python -m pytest -q tests/unit
 ```
 
 - 테스트 결과는 실행 환경/의존성 버전에 따라 달라질 수 있으므로 위 커맨드로 실시간 확인합니다.
+
+---
+
+## 🔄 2026-03-07 기능 안정화 업데이트
+
+이번 업데이트는 `FUNCTIONAL_REVIEW_2026-03-07.md` 제안사항을 코드/테스트 기준으로 반영한 동기화 내용입니다.
+
+### 반영된 핵심 변경
+
+- 레짐 사이징 중복 제거: 수량 계산 경로를 `strategy_manager.py`로 일원화하고 실행 엔진의 중복 스케일 적용 제거
+- 주문 상태머신 강화: `submitted/partial/filled/cancelled/rejected/sync_failed` 상태 및 주문번호/요청수량/체결누계/잔량 추적
+- 부분 체결 예약금 정합화: 체결분만 차감, 잔여 예약금은 주문 종료 시점에만 정리
+- 시장/섹터 투자금 장부 보정: 매도 시 체결대금이 아닌 원가 기반 감소 방식 적용
+- 쇼크 가드 fallback 개선: 인덱스 피드 미지원 시 시장별 대표 종목 1개 시계열만 사용
+- TIME_STOP 정책 분리: 세션 인입 포지션 제외, 세션 신규 진입 포지션에만 적용
+- 진단 탭 최소 확장: 선택 종목 재동기화, `sync_failed` 해제 요청(재동기화 성공 시 복구), 선택 종목 상세 패널 추가
+- 거래내역 저장 안정화: 단일 writer(순차 저장) + 종료 flush 강화
+- 백테스트 신뢰성 개선: 다종목 `last_prices` 캐시 기반 MTM 계산
+
+### 최신 테스트 결과
+
+```bash
+python -m pytest -q tests/unit
+```
+
+- 결과: **83 passed** (2026-03-07)
 
 ---
 
@@ -600,7 +627,7 @@ MIT License
 
 - **작성자**: Kiwoom Pro Algo-Trader
 - **버전**: 4.5
-- **최종 업데이트**: 2026-02-19
+- **최종 업데이트**: 2026-03-07
 
 ---
 

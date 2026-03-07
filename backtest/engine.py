@@ -81,6 +81,7 @@ class EventDrivenBacktestEngine:
         equity_curve: List[float] = []
         trades: List[Dict[str, Any]] = []
         price_history: Dict[str, List[float]] = {}
+        last_prices: Dict[str, float] = {}
         recent_slippage_bps: Deque[float] = deque(maxlen=500)
         order_fail_events: Deque[float] = deque(maxlen=500)
         global_risk_until: Optional[datetime] = None
@@ -97,6 +98,7 @@ class EventDrivenBacktestEngine:
             series.append(float(bar.close))
             if len(series) > 2000:
                 del series[:-2000]
+            last_prices[bar.symbol] = float(bar.close)
 
             symbol_state = positions[bar.symbol]
             signals = signal_fn(bar, positions) or {}
@@ -191,7 +193,7 @@ class EventDrivenBacktestEngine:
                 symbol_state.quantity = 0.0
                 symbol_state.entry_price = 0.0
 
-            equity = cash + self._mark_to_market(positions, {bar.symbol: bar.close})
+            equity = cash + self._mark_to_market(positions, last_prices)
             equity_curve.append(equity)
 
         result = BacktestResult(equity_curve=equity_curve, trades=trades)

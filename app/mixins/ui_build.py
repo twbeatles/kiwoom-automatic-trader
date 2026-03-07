@@ -993,6 +993,16 @@ class UIBuildMixin:
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
+        action_row = QHBoxLayout()
+        self.btn_diag_resync_selected = QPushButton("선택 종목 재동기화")
+        self.btn_diag_resync_selected.clicked.connect(self._on_diagnostic_resync_selected)
+        action_row.addWidget(self.btn_diag_resync_selected)
+        self.btn_diag_release_sync_failed = QPushButton("sync_failed 해제 요청")
+        self.btn_diag_release_sync_failed.clicked.connect(self._on_diagnostic_release_sync_failed_selected)
+        action_row.addWidget(self.btn_diag_release_sync_failed)
+        action_row.addStretch()
+        layout.addLayout(action_row)
+
         self.diagnostic_table = QTableWidget()
         cols = [
             "코드",
@@ -1011,13 +1021,23 @@ class UIBuildMixin:
             "guard reason",
             "risk mode",
             "health mode",
+            "pending state",
+            "pending remaining",
+            "sync_failed reason",
         ]
         self.diagnostic_table.setColumnCount(len(cols))
         self.diagnostic_table.setHorizontalHeaderLabels(cols)
         self.diagnostic_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.diagnostic_table.verticalHeader().setVisible(False)
         self.diagnostic_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.diagnostic_table.itemSelectionChanged.connect(self._on_diagnostic_selection_changed)
         layout.addWidget(self.diagnostic_table)
+
+        self.diag_detail_panel = QPlainTextEdit()
+        self.diag_detail_panel.setReadOnly(True)
+        self.diag_detail_panel.setMaximumHeight(180)
+        self.diag_detail_panel.setPlainText("선택된 종목이 없습니다.")
+        layout.addWidget(self.diag_detail_panel)
 
         info = QLabel("주문/동기화 상태를 실시간으로 진단합니다. (읽기 전용)")
         info.setWordWrap(True)

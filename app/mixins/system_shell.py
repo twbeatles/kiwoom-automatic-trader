@@ -238,7 +238,6 @@ class SystemShellMixin:
 
         if self._history_dirty:
             self._save_trade_history()
-            self._history_dirty = False
 
     def _setup_shortcuts(self):
         """키보드 단축키 설정."""
@@ -392,19 +391,26 @@ class SystemShellMixin:
             if hasattr(self, "tray_icon"):
                 self.tray_icon.hide()
 
-            if self._history_dirty:
-                cfg = getattr(self, "config", None)
-                flush_sync = bool(
-                    getattr(
-                        cfg,
-                        "sync_history_flush_on_exit",
-                        getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
-                    )
-                )
-                if flush_sync and hasattr(self, "_save_trade_history_sync"):
-                    self._save_trade_history_sync()
+            has_pending_history_save = bool(
+                getattr(self, "_history_save_inflight", False)
+                or getattr(self, "_history_save_pending_snapshot", None) is not None
+            )
+            if self._history_dirty or has_pending_history_save:
+                if hasattr(self, "_flush_trade_history_on_exit"):
+                    self._flush_trade_history_on_exit()
                 else:
-                    self._save_trade_history()
+                    cfg = getattr(self, "config", None)
+                    flush_sync = bool(
+                        getattr(
+                            cfg,
+                            "sync_history_flush_on_exit",
+                            getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+                        )
+                    )
+                    if flush_sync and hasattr(self, "_save_trade_history_sync"):
+                        self._save_trade_history_sync()
+                    else:
+                        self._save_trade_history()
 
             event.accept()
         finally:

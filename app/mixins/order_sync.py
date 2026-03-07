@@ -12,6 +12,9 @@ from config import Config
 
 
 class OrderSyncMixin:
+    ACTIVE_PENDING_STATES = {"submitted", "partial"}
+    TERMINAL_PENDING_STATES = {"filled", "cancelled", "rejected", "sync_failed"}
+
     def _manual_pending_map(self):
         mapping = getattr(self, "_manual_pending_state", None)
         if not isinstance(mapping, dict):
@@ -57,6 +60,100 @@ class OrderSyncMixin:
         if amount > 0 and refund and hasattr(self, "virtual_deposit"):
             self.virtual_deposit = max(0, int(getattr(self, "virtual_deposit", 0) or 0) + amount)
         return amount
+
+    def _consume_reserved_cash_safe(self, code: str, amount: int, reason: str = "") -> int:
+        fn = getattr(self, "_consume_reserved_cash", None)
+        if callable(fn):
+            return int(fn(code, amount=amount, reason=reason) or 0)
+
+        mapping = getattr(self, "_reserved_cash_by_code", None)
+        if not isinstance(mapping, dict):
+            return 0
+        current = max(0, int(mapping.get(code, 0) or 0))
+        consume = min(current, max(0, int(amount or 0)))
+        remain = current - consume
+        if remain > 0:
+            mapping[code] = remain
+        else:
+            mapping.pop(code, None)
+        return consume
+
+    def _pending_is_active(self, pending: dict) -> bool:
+        if not isinstance(pending, dict) or not pending:
+            return False
+        state = str(pending.get("state", "submitted") or "submitted").lower()
+        return state in self.ACTIVE_PENDING_STATES
+
+    def _mark_pending_state(self, code: str, state: str):
+        pending = self._pending_order_state.get(code)
+        if not pending:
+            return
+        state_text = str(state or "").strip().lower()
+        if not state_text:
+            return
+        pending["state"] = state_text
+        pending["updated_at"] = datetime.datetime.now()
+        self._diag_touch_safe(
+            code,
+            pending_state=state_text,
+            pending_remaining=str(int(pending.get("remaining_qty", 0) or 0)),
+            pending_side=str(pending.get("side", "")),
+            pending_reason=str(pending.get("reason", "")),
+            pending_until=pending.get("until"),
+        )
+
+    def _update_pending_from_order_event(self, code: str, order_no: str, order_qty: int):
+        pending = self._pending_order_state.get(code)
+        if not isinstance(pending, dict):
+            return
+
+        if order_no and not str(pending.get("order_no", "")).strip():
+            pending["order_no"] = str(order_no).strip()
+
+        if order_qty > 0:
+            submitted = int(pending.get("submitted_qty", 0) or 0)
+            if submitted <= 0:
+                pending["submitted_qty"] = int(order_qty)
+                filled = int(pending.get("filled_qty", 0) or 0)
+                pending["remaining_qty"] = max(0, int(order_qty) - filled)
+
+        pending["updated_at"] = datetime.datetime.now()
+        self._diag_touch_safe(
+            code,
+            pending_state=str(pending.get("state", "submitted")),
+            pending_remaining=str(int(pending.get("remaining_qty", 0) or 0)),
+        )
+
+    def _apply_pending_fill(self, code: str, fill_qty: int) -> tuple[str, int]:
+        pending = self._pending_order_state.get(code)
+        if not isinstance(pending, dict):
+            return "", 0
+        qty = max(0, int(fill_qty or 0))
+        if qty <= 0:
+            return str(pending.get("state", "submitted")), int(pending.get("remaining_qty", 0) or 0)
+
+        submitted = max(0, int(pending.get("submitted_qty", 0) or 0))
+        filled_before = max(0, int(pending.get("filled_qty", 0) or 0))
+        filled_after = filled_before + qty
+        pending["filled_qty"] = filled_after
+
+        if submitted > 0:
+            remaining = max(0, submitted - filled_after)
+        else:
+            remaining = 0
+        pending["remaining_qty"] = remaining
+
+        if submitted > 0 and remaining > 0:
+            pending["state"] = "partial"
+        else:
+            pending["state"] = "filled"
+        pending["updated_at"] = datetime.datetime.now()
+        self._diag_touch_safe(
+            code,
+            pending_state=str(pending.get("state", "")),
+            pending_remaining=str(remaining),
+        )
+        return str(pending.get("state", "")), remaining
 
     def _record_order_failure(self, reason: str, code: str = ""):
         cfg = getattr(self, "config", None)
@@ -166,6 +263,8 @@ class OrderSyncMixin:
             order_type = order_type_map.get(raw_order_type, raw_order_type or "주문")
 
             order_status = str(data.get("order_status") or data.get("ord_st") or data.get("status") or "").strip()
+            order_no = str(data.get("order_no") or data.get("ord_no") or data.get("org_ord_no") or "").strip()
+            order_qty = self._to_int(data.get("ord_qty", data.get("qty", 0)))
             exec_qty = self._to_int(data.get("exec_qty", data.get("qty", 0)))
             display_qty = exec_qty if exec_qty > 0 else self._to_int(data.get("ord_qty", data.get("qty", 0)))
             price = self._to_int(data.get("exec_price", data.get("price", data.get("ord_prc", 0))))
@@ -187,6 +286,9 @@ class OrderSyncMixin:
             elif "매도" in order_type or "sell" in lower_type:
                 side = "sell"
 
+            if code and code in self._pending_order_state:
+                self._update_pending_from_order_event(code, order_no=order_no, order_qty=order_qty)
+
             if code and exec_qty > 0 and side:
                 self._last_exec_event[code] = {
                     "side": side,
@@ -206,7 +308,9 @@ class OrderSyncMixin:
                 self._record_order_failure("ORDER_CANCEL_REJECT", code=code)
                 pending = self._pending_order_state.get(code, {})
                 pending_side = str(pending.get("side", ""))
-                self._clear_pending_order(code)
+                cancelled = ("취소" in order_status) or ("cancel" in status_lower)
+                self._mark_pending_state(code, "cancelled" if cancelled else "rejected")
+                self._clear_pending_order(code, final_state="cancelled" if cancelled else "rejected")
                 if pending_side == "buy":
                     self._release_reserved_cash_safe(code, reason="ORDER_CANCEL_OR_REJECT", refund=True)
                 if code in self.universe:
@@ -237,24 +341,43 @@ class OrderSyncMixin:
         except (ValueError, TypeError):
             return default
 
-    def _set_pending_order(self, code: str, side: str, reason: str, expected_price: int = 0):
+    def _set_pending_order(
+        self,
+        code: str,
+        side: str,
+        reason: str,
+        expected_price: int = 0,
+        submitted_qty: int = 0,
+        order_no: str = "",
+    ):
         if not code:
             return
         pending_until = datetime.datetime.now() + datetime.timedelta(seconds=5)
+        submit_qty = max(0, int(submitted_qty or 0))
         self._pending_order_state[code] = {
             "side": side,
             "reason": reason,
             "until": pending_until,
+            "state": "submitted",
+            "order_no": str(order_no or ""),
+            "submitted_qty": submit_qty,
+            "filled_qty": 0,
+            "remaining_qty": submit_qty,
             "expected_price": int(expected_price or 0),
+            "updated_at": datetime.datetime.now(),
         }
         self._diag_touch_safe(
             code,
             pending_side=side,
             pending_reason=reason,
             pending_until=pending_until,
+            pending_state="submitted",
+            pending_remaining=str(submit_qty),
         )
 
-    def _clear_pending_order(self, code: str):
+    def _clear_pending_order(self, code: str, final_state: str = ""):
+        if final_state and code in self._pending_order_state:
+            self._mark_pending_state(code, final_state)
         self._pending_order_state.pop(code, None)
         self._diag_clear_pending_safe(code)
 
@@ -344,6 +467,7 @@ class OrderSyncMixin:
             was_sync_failed = code_item in sync_failed_codes
             if was_sync_failed and hasattr(self, "_sync_failed_codes"):
                 self._sync_failed_codes.discard(code_item)
+                info["sync_failed_reason"] = ""
                 if hasattr(self, "log"):
                     self.log(f"[복구] {info.get('name', code_item)} 포지션 동기화가 정상 복구되었습니다.")
 
@@ -391,8 +515,12 @@ class OrderSyncMixin:
                 self.strategy.update_sector_investment(code_item, amount, is_buy=True)
                 if self.sound:
                     self.sound.play_buy()
-                # Filled amount is now reflected in real deposit; release reservation without refund.
-                self._release_reserved_cash_safe(code_item, reason="BUY_FILLED", refund=False)
+                # Keep remaining reservation for partial fills; only consume filled portion.
+                self._consume_reserved_cash_safe(code_item, amount=amount, reason="BUY_FILLED_PARTIAL")
+                pending_state, remaining_qty = self._apply_pending_fill(code_item, buy_qty)
+                if pending_state == "filled" or remaining_qty <= 0:
+                    self._release_reserved_cash_safe(code_item, reason="BUY_FILLED_DONE", refund=False)
+                    self._clear_pending_order(code_item, final_state="filled")
 
             elif delta < 0:
                 sell_qty = -delta
@@ -406,6 +534,12 @@ class OrderSyncMixin:
                 amount = max(0, fill_price * sell_qty)
                 profit = (fill_price - prev_buy_price) * sell_qty if prev_buy_price > 0 else 0
                 reason = pending.get("reason", "체결동기화") if pending else "체결동기화"
+                prev_invest_amount = int(info.get("invest_amount", 0) or 0)
+                if prev_held > 0:
+                    unit_cost = prev_invest_amount / prev_held if prev_invest_amount > 0 else float(prev_buy_price)
+                    cost_decrease = max(0, int(round(unit_cost * sell_qty)))
+                else:
+                    cost_decrease = max(0, int(prev_buy_price * sell_qty))
 
                 self._add_trade(
                     {
@@ -420,12 +554,15 @@ class OrderSyncMixin:
                     }
                 )
                 self.strategy.update_consecutive_results(profit > 0)
-                self.strategy.update_market_investment(code_item, amount, is_buy=False)
-                self.strategy.update_sector_investment(code_item, amount, is_buy=False)
+                self.strategy.update_market_investment(code_item, amount, is_buy=False, cost_amount=cost_decrease)
+                self.strategy.update_sector_investment(code_item, amount, is_buy=False, cost_amount=cost_decrease)
                 if self.sound:
                     self.sound.play_sell() if profit > 0 else self.sound.play_loss()
                 if self.telegram:
                     self.telegram.send(f"매도 체결: {info.get('name', code_item)} {sell_qty}주 손익: {profit:+,}원")
+                pending_state, remaining_qty = self._apply_pending_fill(code_item, sell_qty)
+                if pending_state == "filled" or remaining_qty <= 0:
+                    self._clear_pending_order(code_item, final_state="filled")
 
             info["held"] = new_held
             info["buy_price"] = new_buy_price
@@ -436,11 +573,16 @@ class OrderSyncMixin:
                 info["cooldown_until"] = None
                 if not info.get("buy_time"):
                     info["buy_time"] = now
+                if delta > 0 and prev_held <= 0:
+                    info["entry_origin"] = "session_new"
+                    info["time_stop_eligible"] = True
             else:
                 info["status"] = "watch"
                 info["buy_time"] = None
                 info["max_profit_rate"] = 0
                 info["partial_profit_levels"] = set()
+                info["entry_origin"] = "watch"
+                info["time_stop_eligible"] = True
                 if prev_held > 0 and hasattr(self, "chk_use_cooldown") and self.chk_use_cooldown.isChecked():
                     cooldown_minutes = int(self.spin_cooldown_min.value())
                     info["cooldown_until"] = now + datetime.timedelta(minutes=cooldown_minutes)
@@ -450,16 +592,12 @@ class OrderSyncMixin:
             if info.get("held", 0) == 0 and cooldown_until and now < cooldown_until:
                 info["status"] = "cooldown"
 
-            if pending:
-                if delta != 0:
-                    self._clear_pending_order(code_item)
-                elif now < pending.get("until", now):
-                    if pending.get("side") == "buy" and info.get("held", 0) == 0:
-                        info["status"] = "buy_submitted"
-                    elif pending.get("side") == "sell" and info.get("held", 0) > 0:
-                        info["status"] = "sell_submitted"
-                else:
-                    self._clear_pending_order(code_item)
+            pending = self._pending_order_state.get(code_item)
+            if self._pending_is_active(pending):
+                if pending.get("side") == "buy" and info.get("held", 0) == 0:
+                    info["status"] = "buy_submitted"
+                elif pending.get("side") == "sell" and info.get("held", 0) > 0:
+                    info["status"] = "sell_submitted"
 
             if delta != 0:
                 self._last_exec_event.pop(code_item, None)
@@ -476,7 +614,9 @@ class OrderSyncMixin:
         pending_buy = sum(
             1
             for c, state in self._pending_order_state.items()
-            if state.get("side") == "buy" and int(self.universe.get(c, {}).get("held", 0)) == 0
+            if self._pending_is_active(state)
+            and state.get("side") == "buy"
+            and int(self.universe.get(c, {}).get("held", 0)) == 0
         )
         self._holding_or_pending_count = held_count + pending_buy
 
@@ -519,7 +659,8 @@ class OrderSyncMixin:
                 pending = getattr(self, "_pending_order_state", {}).get(code_item, {})
                 side = str(pending.get("side", ""))
                 if hasattr(self, "_pending_order_state"):
-                    self._clear_pending_order(code_item)
+                    self._mark_pending_state(code_item, "sync_failed")
+                    self._clear_pending_order(code_item, final_state="sync_failed")
                 if side == "buy":
                     self._release_reserved_cash_safe(code_item, reason="SYNC_FAILED", refund=True)
                 info = getattr(self, "universe", {}).get(code_item)
@@ -527,6 +668,7 @@ class OrderSyncMixin:
                     continue
                 info["status"] = "sync_failed"
                 info["cooldown_until"] = None
+                info["sync_failed_reason"] = str(error)
                 if hasattr(self, "_sync_failed_codes"):
                     self._sync_failed_codes.add(code_item)
                 if hasattr(self, "_dirty_codes"):
@@ -552,7 +694,9 @@ class OrderSyncMixin:
             pending_buy = sum(
                 1
                 for c, state in pending_state.items()
-                if state.get("side") == "buy" and int(universe.get(c, {}).get("held", 0)) == 0
+                if self._pending_is_active(state)
+                and state.get("side") == "buy"
+                and int(universe.get(c, {}).get("held", 0)) == 0
             )
             self._holding_or_pending_count = held_count + pending_buy
             if hasattr(self, "sig_update_table") and not hasattr(self, "_ui_flush_timer"):

@@ -31,6 +31,25 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertEqual(r1.trades, r2.trades)
         self.assertEqual(r1.metrics, r2.metrics)
 
+    def test_multi_symbol_mtm_uses_latest_price_cache(self):
+        cfg = BacktestConfig(timeframe="1d", commission_bps=0, slippage_bps=0)
+        engine = EventDrivenBacktestEngine(cfg)
+        base = datetime(2025, 1, 1, 9, 0)
+        bars = [
+            BacktestBar(symbol="AAA", ts=base, open=100, high=101, low=99, close=100, volume=1000),
+            BacktestBar(symbol="BBB", ts=base, open=50, high=51, low=49, close=50, volume=1000),
+            BacktestBar(symbol="BBB", ts=base + timedelta(days=1), open=70, high=71, low=69, close=70, volume=1000),
+            BacktestBar(symbol="AAA", ts=base + timedelta(days=2), open=100, high=101, low=99, close=100, volume=1000),
+        ]
+
+        def signal_fn(bar, positions):
+            if bar.ts == base and positions[bar.symbol].side == "flat":
+                return {bar.symbol: "buy"}
+            return {bar.symbol: "hold"}
+
+        result = engine.run(bars, signal_fn, initial_cash=1000, allocation_per_trade=0.5)
+        self.assertAlmostEqual(result.equity_curve[-1], 1100.0, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

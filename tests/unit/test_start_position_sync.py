@@ -116,7 +116,11 @@ class TestStartPositionSync(unittest.TestCase):
         self.assertEqual(reason, "")
         self.assertEqual(trader.universe["005930"]["status"], "holding")
         self.assertEqual(trader.universe["005930"]["held"], 3)
+        self.assertEqual(trader.universe["005930"]["entry_origin"], "session_inbound")
+        self.assertFalse(trader.universe["005930"]["time_stop_eligible"])
         self.assertEqual(trader.universe["000660"]["status"], "watch")
+        self.assertEqual(trader.universe["000660"]["entry_origin"], "watch")
+        self.assertTrue(trader.universe["000660"]["time_stop_eligible"])
         self.assertEqual(trader._holding_or_pending_count, 1)
         self.assertEqual(trader.strategy.reset_called, 1)
 

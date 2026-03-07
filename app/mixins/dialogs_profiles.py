@@ -159,14 +159,28 @@ class DialogsProfilesMixin:
             self.log(f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})")
             side = "buy" if order_type == "매수" else "sell"
             if code in getattr(self, "universe", {}):
-                self._set_pending_order(code, side, "수동주문")
+                submitted_qty = int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0
+                self._set_pending_order(
+                    code,
+                    side,
+                    "수동주문",
+                    expected_price=int(order.get("price", 0) or 0) if isinstance(order, dict) else 0,
+                    submitted_qty=submitted_qty,
+                    order_no=str(getattr(result, "order_no", "") or ""),
+                )
                 self._sync_position_from_account(code)
             else:
                 set_manual_pending = getattr(self, "_set_manual_pending_order", None)
                 if callable(set_manual_pending):
                     set_manual_pending(code, side, "수동주문")
                 else:
-                    self._set_pending_order(code, side, "수동주문")
+                    self._set_pending_order(
+                        code,
+                        side,
+                        "수동주문",
+                        submitted_qty=int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0,
+                        order_no=str(getattr(result, "order_no", "") or ""),
+                    )
         else:
             self.log(f"❌ 수동 주문 실패: {result.message}")
             if code in getattr(self, "universe", {}):

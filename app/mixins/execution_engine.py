@@ -52,6 +52,22 @@ class ExecutionEngineMixin:
             total += self._release_reserved_cash(code, reason=reason, refund=True)
         return total
 
+    def _consume_reserved_cash(self, code: str, amount: int, reason: str = "") -> int:
+        amount = max(0, int(amount or 0))
+        if not code or amount <= 0:
+            return 0
+        mapping = self._reserved_cash_map()
+        current = max(0, int(mapping.get(code, 0) or 0))
+        consumed = min(current, amount)
+        remaining = current - consumed
+        if remaining > 0:
+            mapping[code] = remaining
+        else:
+            mapping.pop(code, None)
+        if consumed > 0 and reason and hasattr(self, "log"):
+            self.log(f"Reserved cash consumed [{code}]: {consumed:,} ({reason})")
+        return consumed
+
     @staticmethod
     def _spread_pct(info: dict) -> float:
         ask = float(info.get("ask_price", 0) or 0)
@@ -157,6 +173,13 @@ class ExecutionEngineMixin:
 
         return True, ""
 
+    @staticmethod
+    def _is_pending_active(pending: dict) -> bool:
+        if not isinstance(pending, dict) or not pending:
+            return False
+        state = str(pending.get("state", "submitted") or "submitted").lower()
+        return state in {"submitted", "partial"}
+
     def _on_execution(self, data: ExecutionData):
         """Handle realtime execution tick and evaluate buy/sell conditions."""
         if not self.is_running:
@@ -210,10 +233,19 @@ class ExecutionEngineMixin:
             # per-market stock price stream for price-based shock detection.
             if callable(index_series_fn):
                 series = index_series_fn(market_key)
-                if series and (now.timestamp() - float(series[-1][0])) > 5.0:
-                    series.append((now.timestamp(), float(current_price)))
-                elif not series:
-                    series.append((now.timestamp(), float(current_price)))
+                rep_map = getattr(self, "_shock_fallback_rep_by_market", None)
+                if not isinstance(rep_map, dict):
+                    rep_map = {}
+                    self._shock_fallback_rep_by_market = rep_map
+                rep_code = str(rep_map.get(market_key, "") or "")
+                if not rep_code or rep_code not in self.universe:
+                    rep_map[market_key] = code
+                    rep_code = code
+                if code == rep_code:
+                    if series and (now.timestamp() - float(series[-1][0])) > 5.0:
+                        series.append((now.timestamp(), float(current_price)))
+                    elif not series:
+                        series.append((now.timestamp(), float(current_price)))
             shock_updater(market_key, now)
         no_buy = now.hour >= Config.NO_ENTRY_HOUR
         held = int(info.get("held", 0))
@@ -222,8 +254,7 @@ class ExecutionEngineMixin:
         status = str(info.get("status", "watch"))
 
         pending = self._pending_order_state.get(code, {})
-        pending_until = pending.get("until")
-        if pending_until and pending_until > now:
+        if self._is_pending_active(pending):
             return
 
         sync_failed_codes = getattr(self, "_sync_failed_codes", set())
@@ -286,7 +317,7 @@ class ExecutionEngineMixin:
                     bool(hasattr(self, "chk_use_time_stop") and self.chk_use_time_stop.isChecked()),
                 )
             )
-            if use_time_stop:
+            if use_time_stop and bool(info.get("time_stop_eligible", True)):
                 buy_time = info.get("buy_time")
                 if buy_time:
                     max_minutes = int(
@@ -390,11 +421,6 @@ class ExecutionEngineMixin:
                     else:
                         quantity = self.strategy._default_position_size(code)
 
-                    if regime in {"elevated", "extreme"}:
-                        regime_fn = getattr(self.strategy, "apply_regime_size_scale", None)
-                        if callable(regime_fn):
-                            quantity = int(regime_fn(code, quantity))
-
                     if quantity > 0:
                         self._execute_buy(code, quantity, current_price)
             elif info.get("breakout_hits"):
@@ -414,7 +440,8 @@ class ExecutionEngineMixin:
         cooldown_until = info.get("cooldown_until")
         if cooldown_until and cooldown_until > now:
             return
-        if self._pending_order_state.get(code, {}).get("side") == "buy":
+        pending = self._pending_order_state.get(code, {})
+        if self._is_pending_active(pending) and pending.get("side") == "buy":
             return
         if info.get("status") in {"buying", "buy_submitted"}:
             return
@@ -481,7 +508,9 @@ class ExecutionEngineMixin:
         pending_buy = sum(
             1
             for c, state in self._pending_order_state.items()
-            if state.get("side") == "buy" and int(self.universe.get(c, {}).get("held", 0)) == 0
+            if self._is_pending_active(state)
+            and state.get("side") == "buy"
+            and int(self.universe.get(c, {}).get("held", 0)) == 0
         )
         self._holding_or_pending_count = held_count + pending_buy
         self._dirty_codes.add(code)
@@ -495,7 +524,14 @@ class ExecutionEngineMixin:
                 self.universe[code]["status"] = "buy_submitted"
                 self.universe[code]["cooldown_until"] = None
                 self.universe[code]["breakout_hits"] = 0
-            self._set_pending_order(code, "buy", "BUY", expected_price=int(price or 0))
+            self._set_pending_order(
+                code,
+                "buy",
+                "BUY",
+                expected_price=int(price or 0),
+                submitted_qty=int(quantity or 0),
+                order_no=str(getattr(result, "order_no", "") or ""),
+            )
             self.log(f"BUY submitted: {name} {quantity} shares")
             self._sync_position_from_account(code)
         else:
@@ -519,7 +555,9 @@ class ExecutionEngineMixin:
             pending_buy = sum(
                 1
                 for c, state in self._pending_order_state.items()
-                if state.get("side") == "buy" and int(self.universe.get(c, {}).get("held", 0)) == 0
+                if self._is_pending_active(state)
+                and state.get("side") == "buy"
+                and int(self.universe.get(c, {}).get("held", 0)) == 0
             )
             self._holding_or_pending_count = held_count + pending_buy
 
@@ -536,7 +574,8 @@ class ExecutionEngineMixin:
         if quantity <= 0:
             self.log(f"SELL quantity invalid [{name}]: {quantity}")
             return
-        if self._pending_order_state.get(code, {}).get("side") == "sell":
+        pending = self._pending_order_state.get(code, {})
+        if self._is_pending_active(pending) and pending.get("side") == "sell":
             return
         if info.get("status") in {"selling", "sell_submitted"}:
             return
@@ -583,7 +622,14 @@ class ExecutionEngineMixin:
         if result.success:
             if code in self.universe:
                 self.universe[code]["status"] = "sell_submitted"
-            self._set_pending_order(code, "sell", reason, expected_price=int(price or 0))
+            self._set_pending_order(
+                code,
+                "sell",
+                reason,
+                expected_price=int(price or 0),
+                submitted_qty=int(quantity or 0),
+                order_no=str(getattr(result, "order_no", "") or ""),
+            )
             self.log(f"SELL submitted: {name} {quantity} shares ({reason})")
             self._sync_position_from_account(code)
         else:

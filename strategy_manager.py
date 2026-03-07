@@ -432,7 +432,8 @@ class StrategyManager:
         
         # 동적 사이징 활성화 체크
         if not use_dynamic:
-            return max(0, int(base_invest / current_price))
+            base_qty = max(0, int(base_invest / current_price))
+            return self.apply_regime_size_scale(code, base_qty)
         
         # Anti-Martingale 적용
         if self.consecutive_losses >= 3:
@@ -456,8 +457,9 @@ class StrategyManager:
         max_invest = self.trader.deposit * 0.2  # 최대 20%
         min_invest = self.trader.deposit * 0.02  # 최소 2%
         adjusted_invest = max(min_invest, min(max_invest, adjusted_invest))
-        
-        return max(0, int(adjusted_invest / current_price))
+
+        base_qty = max(0, int(adjusted_invest / current_price))
+        return self.apply_regime_size_scale(code, base_qty)
     
     def update_consecutive_results(self, is_profit: bool):
         """연속 손익 결과 업데이트"""
@@ -508,13 +510,14 @@ class StrategyManager:
             return 'kospi'
         return 'kosdaq'
     
-    def update_market_investment(self, code, amount, is_buy=True):
+    def update_market_investment(self, code, amount, is_buy=True, cost_amount=None):
         """시장별 투자금 업데이트"""
         market = self._get_stock_market(code)
         if is_buy:
             self.market_investments[market] = self.market_investments.get(market, 0) + amount
         else:
-            self.market_investments[market] = max(0, self.market_investments.get(market, 0) - amount)
+            decrease = cost_amount if cost_amount is not None else amount
+            self.market_investments[market] = max(0, self.market_investments.get(market, 0) - decrease)
 
     # ==================================================================
     # 섹터 제한 (신규)
@@ -560,13 +563,14 @@ class StrategyManager:
             return f"기타({market_type})"
         return '기타'
     
-    def update_sector_investment(self, code, amount, is_buy=True):
+    def update_sector_investment(self, code, amount, is_buy=True, cost_amount=None):
         """섹터별 투자금 업데이트"""
         sector = self._get_stock_sector(code)
         if is_buy:
             self.sector_investments[sector] = self.sector_investments.get(sector, 0) + amount
         else:
-            self.sector_investments[sector] = max(0, self.sector_investments.get(sector, 0) - amount)
+            decrease = cost_amount if cost_amount is not None else amount
+            self.sector_investments[sector] = max(0, self.sector_investments.get(sector, 0) - decrease)
 
     # ==================================================================
     # 변동성 기반 손절 (ATR Stop) (신규)
