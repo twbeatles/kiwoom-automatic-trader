@@ -8,23 +8,24 @@ import json
 import logging
 import asyncio
 import threading
-from typing import Any, Optional, Callable, Dict, List, Set
+from typing import Any, Optional, Callable, Dict, List, Set, cast
 from dataclasses import dataclass
 from functools import partial as _partial
 
+ws_connect: Optional[Callable[..., Any]] = None
 try:
     try:
-        from websockets.asyncio.client import connect as ws_connect
+        import websockets.asyncio.client as websockets_client
     except ImportError:
         try:
-            from websockets.client import connect as ws_connect
+            import websockets.client as websockets_client
         except ImportError:
-            from websockets import connect as ws_connect
+            import websockets as websockets_client
     from websockets.exceptions import ConnectionClosed
-    WEBSOCKETS_AVAILABLE = True
+    ws_connect = cast(Optional[Callable[..., Any]], getattr(websockets_client, "connect", None))
+    WEBSOCKETS_AVAILABLE = ws_connect is not None
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
-    ws_connect = None
     ConnectionClosed = Exception
 
 from .auth import KiwoomAuth
@@ -148,8 +149,11 @@ class KiwoomWebSocketClient:
                 
                 # WebSocket 연결
                 headers = {"Authorization": f"bearer {token}"}
+                connect_fn = ws_connect
+                if connect_fn is None:
+                    raise RuntimeError("websocket connect function unavailable")
                 
-                async with ws_connect(
+                async with connect_fn(
                     self.WS_URL,
                     extra_headers=headers,
                     ping_interval=30,
@@ -169,9 +173,10 @@ class KiwoomWebSocketClient:
                     await self._restore_subscriptions()
                     
                     # 메시지 수신 루프
-                    async for message in ws:
+                    async for raw_message in ws:
                         if self._stop_event.is_set():
                             break
+                        message = raw_message.decode("utf-8", errors="ignore") if isinstance(raw_message, bytes) else str(raw_message)
                         await self._handle_message(message)
                 
             except ConnectionClosed as e:

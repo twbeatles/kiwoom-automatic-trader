@@ -4,6 +4,7 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 경량화 최적화 빌드 설정 (ONEFILE 모드)
 2026-03-05: v4 Guard 확장 모듈은 collect_submodules 경로로 패키징 동기화
 2026-03-07: 주문/동기화 상태머신, 저장 안정화, 백테스트 MTM 보정은 런타임 로직 변경이며 패키징 항목 변경 없음
+2026-03-09: pyright 정리용 type-check helper(`app.mixins._typing`) 추가, 패키징 동작은 동일
 """
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -54,6 +55,7 @@ hiddenimports = [
     'app.mixins.execution_engine',
     'app.mixins.persistence_settings',
     'app.mixins.dialogs_profiles',
+    'app.mixins._typing',
     'app.support',
     'app.support.widgets',
     'app.support.worker',

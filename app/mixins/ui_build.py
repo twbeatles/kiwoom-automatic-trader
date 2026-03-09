@@ -1,13 +1,15 @@
 ﻿"""UI construction mixin for KiwoomProTrader."""
 
+# pyright: reportWildcardImportFromLibrary=false
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import *
 
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
 from dark_theme import DARK_STYLESHEET
+from ._typing import TraderMixinBase
 
-class UIBuildMixin:
+class UIBuildMixin(TraderMixinBase):
     def _init_ui(self):
         self.setWindowTitle("Kiwoom Pro Algo-Trader v4.5 [REST API]")
         self.setGeometry(100, 100, 1400, 950)
@@ -802,7 +804,9 @@ class UIBuildMixin:
         self.chart_table = QTableWidget()
         self.chart_table.setColumnCount(6)
         self.chart_table.setHorizontalHeaderLabels(["날짜", "시가", "고가", "저가", "종가", "거래량"])
-        self.chart_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        chart_header = self.chart_table.horizontalHeader()
+        if chart_header is not None:
+            chart_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.chart_table)
         
         # 차트 정보
@@ -838,8 +842,12 @@ class UIBuildMixin:
         # 매도 호가 테이블
         self.ask_table = QTableWidget(10, 2)
         self.ask_table.setHorizontalHeaderLabels(["매도호가", "잔량"])
-        self.ask_table.verticalHeader().setVisible(False)  # 행 번호 숨김
-        self.ask_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        ask_vertical_header = self.ask_table.verticalHeader()
+        ask_horizontal_header = self.ask_table.horizontalHeader()
+        if ask_vertical_header is not None:
+            ask_vertical_header.setVisible(False)  # 행 번호 숨김
+        if ask_horizontal_header is not None:
+            ask_horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.ask_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.ask_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.ask_table.setFixedHeight(320)
@@ -850,8 +858,12 @@ class UIBuildMixin:
         # 매수 호가 테이블
         self.bid_table = QTableWidget(10, 2)
         self.bid_table.setHorizontalHeaderLabels(["매수호가", "잔량"])
-        self.bid_table.verticalHeader().setVisible(False)  # 행 번호 숨김
-        self.bid_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        bid_vertical_header = self.bid_table.verticalHeader()
+        bid_horizontal_header = self.bid_table.horizontalHeader()
+        if bid_vertical_header is not None:
+            bid_vertical_header.setVisible(False)  # 행 번호 숨김
+        if bid_horizontal_header is not None:
+            bid_horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.bid_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.bid_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.bid_table.setFixedHeight(320)
@@ -900,7 +912,9 @@ class UIBuildMixin:
         self.condition_table = QTableWidget()
         self.condition_table.setColumnCount(5)
         self.condition_table.setHorizontalHeaderLabels(["종목코드", "종목명", "현재가", "등락률", "거래량"])
-        self.condition_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        condition_header = self.condition_table.horizontalHeader()
+        if condition_header is not None:
+            condition_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.condition_table)
         
         self.condition_info = QLabel("조건검색 결과가 여기에 표시됩니다")
@@ -933,7 +947,9 @@ class UIBuildMixin:
         self.ranking_table = QTableWidget()
         self.ranking_table.setColumnCount(6)
         self.ranking_table.setHorizontalHeaderLabels(["순위", "종목코드", "종목명", "현재가", "등락률", "거래량"])
-        self.ranking_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        ranking_header = self.ranking_table.horizontalHeader()
+        if ranking_header is not None:
+            ranking_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.ranking_table)
         
         return widget
@@ -973,7 +989,9 @@ class UIBuildMixin:
         cols = ["시간", "종목", "구분", "가격", "수량", "금액", "손익", "사유"]
         self.history_table.setColumnCount(len(cols))
         self.history_table.setHorizontalHeaderLabels(cols)
-        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        history_header = self.history_table.horizontalHeader()
+        if history_header is not None:
+            history_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.history_table)
         
         btn_layout = QHBoxLayout()
@@ -1027,8 +1045,12 @@ class UIBuildMixin:
         ]
         self.diagnostic_table.setColumnCount(len(cols))
         self.diagnostic_table.setHorizontalHeaderLabels(cols)
-        self.diagnostic_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.diagnostic_table.verticalHeader().setVisible(False)
+        diagnostic_header = self.diagnostic_table.horizontalHeader()
+        diagnostic_vertical_header = self.diagnostic_table.verticalHeader()
+        if diagnostic_header is not None:
+            diagnostic_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        if diagnostic_vertical_header is not None:
+            diagnostic_vertical_header.setVisible(False)
         self.diagnostic_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.diagnostic_table.itemSelectionChanged.connect(self._on_diagnostic_selection_changed)
         layout.addWidget(self.diagnostic_table)
@@ -1115,8 +1137,12 @@ class UIBuildMixin:
         cols = ["종목명", "현재가", "목표가", "상태", "보유", "매입가", "수익률", "최고수익", "투자금"]
         self.table.setColumnCount(len(cols))
         self.table.setHorizontalHeaderLabels(cols)
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        table_vertical_header = self.table.verticalHeader()
+        table_horizontal_header = self.table.horizontalHeader()
+        if table_vertical_header is not None:
+            table_vertical_header.setVisible(False)
+        if table_horizontal_header is not None:
+            table_horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         splitter.addWidget(self.table)
@@ -1148,9 +1174,12 @@ class UIBuildMixin:
             border-radius: 10px;
         """)
         
-        self.statusBar().addWidget(self.status_time)
-        self.statusBar().addWidget(QLabel("  "))  # 간격
-        self.statusBar().addWidget(self.status_trading)
-        self.statusBar().addPermanentWidget(QLabel("v4.5 REST API"))
+        status_bar = self.statusBar()
+        if status_bar is None:
+            return
+        status_bar.addWidget(self.status_time)
+        status_bar.addWidget(QLabel("  "))  # 간격
+        status_bar.addWidget(self.status_trading)
+        status_bar.addPermanentWidget(QLabel("v4.5 REST API"))
 
 

@@ -3,19 +3,28 @@
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import List, TypedDict
+
+
+class OhlcvRow(TypedDict):
+    ts: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
 
 
 class CsvProvider:
     def __init__(self, base_dir: str = "data"):
         self.base_dir = Path(base_dir)
 
-    def load_ohlcv(self, relative_path: str) -> List[Dict[str, float]]:
+    def load_ohlcv(self, relative_path: str) -> List[OhlcvRow]:
         path = self.base_dir / relative_path
         if not path.exists():
             return []
 
-        rows: List[Dict[str, float]] = []
+        rows: List[OhlcvRow] = []
         with open(path, "r", encoding="utf-8-sig", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:

@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 
 from app.mixins.system_shell import SystemShellMixin
 
@@ -51,7 +52,7 @@ class TestShutdownFlushPolicy(unittest.TestCase):
         trader = _Harness(sync_flush=True)
         event = _DummyEvent()
 
-        trader.closeEvent(event)
+        trader.closeEvent(cast(Any, event))
 
         self.assertTrue(event.accepted)
         self.assertEqual(trader.sync_save_count, 1)
@@ -61,7 +62,7 @@ class TestShutdownFlushPolicy(unittest.TestCase):
         trader = _Harness(sync_flush=False)
         event = _DummyEvent()
 
-        trader.closeEvent(event)
+        trader.closeEvent(cast(Any, event))
 
         self.assertTrue(event.accepted)
         self.assertEqual(trader.sync_save_count, 0)

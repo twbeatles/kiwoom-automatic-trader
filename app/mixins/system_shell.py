@@ -15,9 +15,10 @@ from config import Config
 from dark_theme import DARK_STYLESHEET
 from light_theme import LIGHT_STYLESHEET
 from ui_dialogs import HelpDialog
+from ._typing import TraderMixinBase
 
 
-class SystemShellMixin:
+class SystemShellMixin(TraderMixinBase):
     def _setup_logging(self):
         Path(Config.LOG_DIR).mkdir(exist_ok=True)
         self.logger = logging.getLogger("KiwoomTrader")
@@ -59,8 +60,10 @@ class SystemShellMixin:
 
     def _create_menu(self):
         menubar = self.menuBar()
+        assert menubar is not None
 
         file_menu = menubar.addMenu("파일")
+        assert file_menu is not None
         file_menu.addAction("설정 저장", self._save_settings)
         file_menu.addAction("설정 불러오기", self._load_settings)
         file_menu.addSeparator()
@@ -69,6 +72,7 @@ class SystemShellMixin:
         file_menu.addAction("종료", self.close)
 
         trading_menu = menubar.addMenu("매매")
+        assert trading_menu is not None
         trading_menu.addAction("매매 시작", self.start_trading)
         trading_menu.addAction("매매 중지", self.stop_trading)
         trading_menu.addSeparator()
@@ -77,6 +81,7 @@ class SystemShellMixin:
         trading_menu.addAction("수동 주문", self._open_manual_order)
 
         tools_menu = menubar.addMenu("도구")
+        assert tools_menu is not None
         tools_menu.addAction("프리셋 관리", self._open_presets)
         tools_menu.addAction("프로필 관리", self._open_profile_manager)
         tools_menu.addSeparator()
@@ -86,11 +91,13 @@ class SystemShellMixin:
         tools_menu.addAction("계좌 새로고침", lambda: self._on_account_changed(self.current_account))
 
         view_menu = menubar.addMenu("보기")
+        assert view_menu is not None
         view_menu.addAction("테마 전환", self._toggle_theme)
         view_menu.addSeparator()
         view_menu.addAction("사운드 켜기/끄기", self._toggle_sound)
 
         help_menu = menubar.addMenu("도움말")
+        assert help_menu is not None
         help_menu.addAction("사용 가이드", lambda: HelpDialog(self).exec())
         help_menu.addAction("단축키 목록", self._show_shortcuts)
         help_menu.addSeparator()
@@ -350,7 +357,10 @@ class SystemShellMixin:
                 )
             cursor.removeSelectedText()
 
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
+        if a0 is None:
+            return
+        event = a0
         force_quit = getattr(self, "_force_quit_requested", False)
         if getattr(self, "_shutdown_in_progress", False):
             event.accept()

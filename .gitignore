@@ -52,6 +52,8 @@ log/
 *.sqlite3
 *.db-journal
 !requirements.txt
+# Keep the repo-wide static-analysis baseline tracked.
+!pyrightconfig.json
 !docs/refactor/baseline_manifest.json
 !docs/refactor/post_refactor_manifest.json
 

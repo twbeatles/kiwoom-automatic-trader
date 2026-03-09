@@ -1,7 +1,8 @@
 import unittest
+from typing import Literal, overload
 from unittest.mock import patch
 
-from app.mixins.trading_session import TradingSessionMixin
+from app.mixins.trading_session import BackgroundUniversePayload, TradingSessionMixin
 from config import TradingConfig
 
 
@@ -58,11 +59,20 @@ class _Harness(TradingSessionMixin):
     def _confirm_live_trading_guard(self):
         return True
 
-    def _init_universe(self, _codes):
-        self.init_calls += 1
-        return ["005930"]
+    @overload
+    def _init_universe(self, codes, background: Literal[False] = False) -> list[str]: ...
 
-    def _sync_positions_snapshot(self, _codes):
+    @overload
+    def _init_universe(self, codes, background: Literal[True]) -> BackgroundUniversePayload: ...
+
+    def _init_universe(self, codes, background: bool = False) -> list[str] | BackgroundUniversePayload:
+        self.init_calls += 1
+        initialized_codes = ["005930"]
+        if background:
+            return initialized_codes, {}, []
+        return initialized_codes
+
+    def _sync_positions_snapshot(self, codes):
         return True, ""
 
 

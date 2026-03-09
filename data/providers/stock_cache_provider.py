@@ -54,7 +54,7 @@ class StockMasterCacheProvider:
         payload = self.load()
         items: List[Dict[str, Any]] = payload.get("items", [])
 
-        normalized = {
+        normalized: Dict[str, Any] = {
             "code": code,
             "name": str(name or code),
             "market": str(market or "UNKNOWN"),

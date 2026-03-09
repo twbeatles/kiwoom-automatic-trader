@@ -233,10 +233,14 @@ class StockSearchDialog(QDialog):
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(5)
         self.result_table.setHorizontalHeaderLabels(["선택", "종목코드", "종목명", "현재가", "출처"])
-        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        result_header = self.result_table.horizontalHeader()
+        if result_header is not None:
+            result_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.result_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.result_table.setAlternatingRowColors(True)
-        self.result_table.verticalHeader().setVisible(False)
+        result_vertical_header = self.result_table.verticalHeader()
+        if result_vertical_header is not None:
+            result_vertical_header.setVisible(False)
         self.result_table.setStyleSheet("""
             QTableWidget { border: 1px solid #30363d; border-radius: 8px; }
             QHeaderView::section { background: #161b22; padding: 8px; border: none; }
@@ -343,7 +347,7 @@ class StockSearchDialog(QDialog):
         self.selected_codes = []
         for i in range(self.result_table.rowCount()):
             chk = self.result_table.cellWidget(i, 0)
-            if chk and chk.isChecked():
+            if isinstance(chk, QCheckBox) and chk.isChecked():
                 code_item = self.result_table.item(i, 1)
                 if code_item:
                     self.selected_codes.append(code_item.text())

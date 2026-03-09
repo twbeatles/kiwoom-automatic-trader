@@ -6,9 +6,10 @@ Sound Notifier for Kiwoom Pro Algo-Trader
 import threading
 import queue
 import os
-from typing import Optional
+from typing import Any, Optional
 from pathlib import Path
 
+winsound: Any | None = None
 try:
     import winsound
     HAS_WINSOUND = True
@@ -70,6 +71,9 @@ class SoundNotifier:
         """실제 사운드 재생"""
         if not self.enabled or not HAS_WINSOUND:
             return
+        module = winsound
+        if module is None:
+            return
         
         try:
             if self.use_custom:
@@ -85,7 +89,7 @@ class SoundNotifier:
                 }
                 freq = freq_map.get(sound_type, 600)
                 duration = 150 if sound_type in ['buy', 'sell'] else 300
-                winsound.Beep(freq, duration)
+                module.Beep(freq, duration)
             else:
                 # 시스템 사운드
                 sound_map = {
@@ -98,7 +102,7 @@ class SoundNotifier:
                     'success': self.SOUND_SUCCESS,
                 }
                 sound = sound_map.get(sound_type, self.SOUND_SUCCESS)
-                winsound.PlaySound(sound, winsound.SND_ALIAS | winsound.SND_ASYNC)
+                module.PlaySound(sound, module.SND_ALIAS | module.SND_ASYNC)
         except Exception:
             pass
     

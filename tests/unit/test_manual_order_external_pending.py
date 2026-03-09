@@ -21,7 +21,7 @@ class _Harness(DialogsProfilesMixin, OrderSyncMixin):
         self.sync_calls = 0
         self.logs = []
 
-    def _sync_position_from_account(self, _code):
+    def _sync_position_from_account(self, code):
         self.sync_calls += 1
 
     def log(self, msg):
@@ -31,7 +31,7 @@ class _Harness(DialogsProfilesMixin, OrderSyncMixin):
 class TestManualOrderExternalPending(unittest.TestCase):
     def test_external_manual_order_uses_manual_pending_map_only(self):
         trader = _Harness()
-        trader._on_manual_order_result(_OrderResult(success=True), "매수", "123456")
+        trader._on_manual_order_result(_OrderResult(success=True), {"qty": 0, "price": 0}, "매수", "123456")
 
         self.assertIn("123456", trader._manual_pending_state)
         self.assertNotIn("123456", trader._pending_order_state)

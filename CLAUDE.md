@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-07
+> **최종 업데이트**: 2026-03-09
 
 ---
 
@@ -14,6 +14,7 @@
 ├── app/
 │   ├── main_window.py         # KiwoomProTrader 클래스(조립)
 │   ├── mixins/
+│   │   ├── _typing.py
 │   │   ├── ui_build.py
 │   │   ├── market_data_tabs.py
 │   │   ├── system_shell.py
@@ -39,7 +40,9 @@
 │   ├── refactor_manifest.py
 │   └── refactor_verify.py
 ├── docs/refactor/
-│   └── baseline_manifest.json
+│   ├── baseline_manifest.json
+│   └── post_refactor_manifest.json
+├── pyrightconfig.json
 └── KiwoomTrader.spec
 ```
 
@@ -47,6 +50,7 @@
 - `키움증권 자동매매.py`는 더 이상 모놀리식 본체가 아닙니다.
 - 실제 클래스는 `app.main_window.KiwoomProTrader` 입니다.
 - 기능별 구현은 믹스인으로 분리되어 있습니다.
+- 정적 분석 시 믹스인은 `app/mixins/_typing.py`의 `TraderMixinBase`를 공통 베이스로 사용합니다.
 
 ---
 
@@ -150,16 +154,26 @@
 - 조건검색/순위/계좌조회는 Worker 비동기 패턴 유지
 - API 연결도 동기 호출로 되돌리지 않음
 
+5. 믹스인 타입 체계 유지:
+- 새 믹스인을 추가할 때도 `app/mixins/_typing.py`의 `TraderMixinBase` 상속 패턴을 유지합니다.
+- 런타임 MRO를 바꾸지 않고 pyright만 안정화하는 것이 목적입니다.
+
 ---
 
 ## 검증 커맨드
 
 ```bash
+# 정적 분석
+pyright .
+
 # 문법 검증
 python -c "import py_compile, pathlib; py_compile.compile('키움증권 자동매매.py', doraise=True); [py_compile.compile(str(p), doraise=True) for p in pathlib.Path('app').rglob('*.py')]"
 
 # 분할 동등성 검증
 python tools/refactor_verify.py
+
+# 단위 테스트
+python -m pytest -q tests/unit
 ```
 
 ---
@@ -185,6 +199,30 @@ pyinstaller KiwoomTrader.spec
 
 3. 실거래 가드 우회
 - `start_trading()`의 실거래 보호 흐름은 제거/우회 금지입니다.
+
+---
+
+## 2026-03-09 정적 분석/문서 동기화 메모
+
+1. pyright 기준 고정
+- 루트 `pyrightconfig.json`을 추적하며, 분석 기준은 `pythonVersion = 3.14`입니다.
+- 전역 진단 완화 없이 cache 디렉터리만 제외합니다.
+
+2. 동적 Qt mixin 타입 보강
+- `app/mixins/_typing.py`의 `TraderMixinBase`가 type-check 전용 `QMainWindow` 베이스 역할을 합니다.
+- mixin 내부의 동적 UI 속성 접근은 이 베이스를 통해 pyright에 설명됩니다.
+
+3. 패키징/문서 정합성
+- `KiwoomTrader.spec` hiddenimports에 `app.mixins._typing`을 명시했습니다.
+- `.gitignore`는 `pyrightconfig.json`을 예외로 유지해 정적 분석 설정을 버전 관리합니다.
+
+4. 최신 검증 결과
+```bash
+pyright .
+python -m pytest -q tests/unit
+```
+- 결과: `0 errors, 0 warnings`
+- 결과: `83 passed` (2026-03-09)
 
 ---
 
@@ -241,7 +279,7 @@ python tools/perf_smoke.py
 - pending state/잔량/sync_failed 사유와 선택 종목 상세 패널을 노출하도록 진단 탭을 확장했습니다.
 
 5. 빌드 스펙 점검(`KiwoomTrader.spec`)
-- hiddenimports/datas/collect_submodules 구성을 점검했으며, 이번 변경은 런타임 로직 중심이라 패키징 항목 추가는 필요하지 않습니다.
+- 당시 변경은 런타임 로직 중심이었고, 이후 2026-03-09 정적 분석 helper 모듈(`app.mixins._typing`) hiddenimport가 추가되었습니다.
 
 6. 최신 테스트 기준
 ```bash

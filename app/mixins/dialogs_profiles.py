@@ -17,8 +17,9 @@ from ui_dialogs import (
     ScheduleDialog,
     StockSearchDialog,
 )
+from ._typing import TraderMixinBase
 
-class DialogsProfilesMixin:
+class DialogsProfilesMixin(TraderMixinBase):
     def _open_presets(self):
         current = {"k": self.spin_k.value(), "ts_start": self.spin_ts_start.value(),
                    "ts_stop": self.spin_ts_stop.value(), "loss": self.spin_loss.value(),
@@ -149,11 +150,13 @@ class DialogsProfilesMixin:
                     args = (self.current_account, code, qty, price)
 
             worker = Worker(func, *args)
-            worker.signals.result.connect(lambda res: self._on_manual_order_result(res, order_type, code))
+            worker.signals.result.connect(
+                lambda res, submitted_order=order: self._on_manual_order_result(res, submitted_order, order_type, code)
+            )
             worker.signals.error.connect(lambda e: self.log(f"❌ 수동 주문 오류: {e}"))
             self.threadpool.start(worker)
 
-    def _on_manual_order_result(self, result, order_type, code):
+    def _on_manual_order_result(self, result, order, order_type, code):
         """수동 주문 결과 처리"""
         if result.success:
             self.log(f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})")

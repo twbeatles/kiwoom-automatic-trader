@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 from unittest.mock import mock_open, patch
 
 from ui_dialogs import PresetDialog
@@ -28,7 +29,7 @@ class TestPresetIOErrors(unittest.TestCase):
         with patch("ui_dialogs.os.path.exists", return_value=True), patch(
             "builtins.open", mock_open(read_data="{")
         ), patch("ui_dialogs.QMessageBox.warning") as mock_warning:
-            presets = PresetDialog._load_presets(dialog)
+            presets = PresetDialog._load_presets(cast(Any, dialog))
 
         self.assertTrue(mock_warning.called)
         self.assertTrue(dialog.logger.warnings)
@@ -39,7 +40,7 @@ class TestPresetIOErrors(unittest.TestCase):
         with patch("builtins.open", side_effect=OSError("disk full")), patch(
             "ui_dialogs.QMessageBox.warning"
         ) as mock_warning:
-            PresetDialog._save_presets(dialog)
+            PresetDialog._save_presets(cast(Any, dialog))
 
         self.assertTrue(mock_warning.called)
         self.assertTrue(dialog.logger.errors)

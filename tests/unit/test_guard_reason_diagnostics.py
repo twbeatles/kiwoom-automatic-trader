@@ -76,9 +76,18 @@ class TestGuardReasonDiagnostics(unittest.TestCase):
         with patch("app.main_window.QTableWidgetItem", _DummyItem):
             trader._refresh_diagnostics()
 
-        self.assertEqual(trader.diagnostic_table.item(0, 12).text(), "normal")
-        self.assertEqual(trader.diagnostic_table.item(0, 13).text(), "shock_guard")
-        self.assertEqual(trader.diagnostic_table.item(0, 14).text(), "shock")
+        market_state_item = trader.diagnostic_table.item(0, 12)
+        guard_reason_item = trader.diagnostic_table.item(0, 13)
+        risk_mode_item = trader.diagnostic_table.item(0, 14)
+        self.assertIsNotNone(market_state_item)
+        self.assertIsNotNone(guard_reason_item)
+        self.assertIsNotNone(risk_mode_item)
+        assert market_state_item is not None
+        assert guard_reason_item is not None
+        assert risk_mode_item is not None
+        self.assertEqual(market_state_item.text(), "normal")
+        self.assertEqual(guard_reason_item.text(), "shock_guard")
+        self.assertEqual(risk_mode_item.text(), "shock")
 
 
 if __name__ == "__main__":

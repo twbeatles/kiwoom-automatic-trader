@@ -1,7 +1,7 @@
 # 급변동/서킷브레이커 대응 전략 확장 청사진
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-07 (v4 Guard 통합 + 기능 안정화 반영 기준)
+최종 동기화: 2026-03-09 (v4 Guard 통합 + 기능 안정화 + 정적 분석/문서 동기화 반영 기준)
 
 ## 1) 목표
 
@@ -107,6 +107,7 @@
 - `strategy_manager.py`: guard 조건/metrics 확장 + 레짐 스케일 훅
 - `strategies/pack.py`: risk overlay 가드 확장(fail-closed)
 - `api/models.py`, `api/websocket_client.py`, `api/rest_client.py`: 상태/인덱스 확장
+- `app/mixins/_typing.py`: 동적 Qt mixin 정적 분석용 type-only 베이스
 - `app/mixins/persistence_settings.py`, `app/mixins/dialogs_profiles.py`: v4 키 parity
 - `backtest/engine.py`: guard parity 평가 입력 반영
 
@@ -147,6 +148,13 @@
 
 - `python -m pytest -q tests/unit`
 - `83 passed`
+
+추가 동기화(2026-03-09):
+
+- `pyrightconfig.json`을 루트 추적 파일로 추가하여 repo-wide 정적 분석 기준을 고정
+- `pyright .` -> `0 errors, 0 warnings`
+- `KiwoomTrader.spec` / 문서 / `.gitignore`를 `app/mixins/_typing.py` 및 현재 구조 기준으로 동기화
+- UTF-8 인코딩 스캔 결과 디코드 실패 및 `U+FFFD` 없음
 
 ## 7) 수용 기준 반영 상태
 

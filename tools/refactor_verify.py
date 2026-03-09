@@ -76,7 +76,11 @@ def _collect_settings_access_keys(func_node: ast.FunctionDef) -> Set[str]:
 
 def _source_of_node(path: Path, node: ast.AST) -> str:
     lines = _read(path).splitlines(keepends=True)
-    return "".join(lines[node.lineno - 1:node.end_lineno])
+    start = getattr(node, "lineno", None)
+    end = getattr(node, "end_lineno", None)
+    if start is None or end is None:
+        raise RuntimeError("node is missing source location information")
+    return "".join(lines[start - 1:end])
 
 
 def _collect_mixin_class_files(main_mod: ast.Module) -> Dict[str, Path]:

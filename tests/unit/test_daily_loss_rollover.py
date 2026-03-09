@@ -92,7 +92,7 @@ class _SystemShellHarness(SystemShellMixin):
     def stop_trading(self):
         self.stopped += 1
 
-    def log(self, _msg):
+    def log(self, msg):
         return None
 
 
@@ -134,7 +134,7 @@ class _BasisHarness(SystemShellMixin):
     def stop_trading(self):
         self.stopped += 1
 
-    def log(self, _msg):
+    def log(self, msg):
         return None
 
 

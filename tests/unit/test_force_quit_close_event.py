@@ -1,4 +1,5 @@
 ﻿import unittest
+from typing import Any, cast
 from unittest.mock import patch
 
 from PyQt6.QtWidgets import QMessageBox
@@ -40,6 +41,7 @@ class _Harness(SystemShellMixin):
 
     def close(self):
         self.close_called += 1
+        return True
 
     def stop_trading(self):
         self.stop_called += 1
@@ -59,7 +61,7 @@ class TestForceQuitCloseEvent(unittest.TestCase):
         self.assertEqual(trader.close_called, 1)
 
         event = _DummyEvent()
-        trader.closeEvent(event)
+        trader.closeEvent(cast(Any, event))
 
         self.assertTrue(event.accepted)
         self.assertFalse(event.ignored)

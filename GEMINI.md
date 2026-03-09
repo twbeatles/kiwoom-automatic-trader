@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-07
+> **최종 업데이트**: 2026-03-09
 
 ---
 
@@ -13,6 +13,7 @@
 - 실행 진입점: `키움증권 자동매매.py`
 - 실구현 클래스: `app/main_window.py`의 `KiwoomProTrader`
 - 기능 모듈: `app/mixins/*.py`
+- 타입 보조: `app/mixins/_typing.py`의 `TraderMixinBase`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
 - 주문 라우팅 지원: `app/support/execution_policy.py`
 
@@ -52,6 +53,9 @@ app/mixins/persistence_settings.py
 
 app/mixins/dialogs_profiles.py
   - 프리셋/프로필/수동주문/예약 다이얼로그
+
+app/mixins/_typing.py
+  - pyright용 type-only Qt mixin 베이스
 ```
 
 ---
@@ -84,8 +88,10 @@ app/mixins/dialogs_profiles.py
 2. 변경 후 최소 검증
 
 ```bash
+pyright .
 python -c "import py_compile, pathlib; py_compile.compile('키움증권 자동매매.py', doraise=True); [py_compile.compile(str(p), doraise=True) for p in pathlib.Path('app').rglob('*.py')]"
 python tools/refactor_verify.py
+python -m pytest -q tests/unit
 ```
 
 3. 설정 키 변경 시
@@ -128,7 +134,32 @@ pyinstaller KiwoomTrader.spec
 1. `키움증권 자동매매.py`에 비즈니스 로직을 다시 붙이지 않습니다.
 2. 믹스인 간 책임을 넘나드는 수정은 최소화합니다.
 3. 메서드/시그널/설정키 누락 여부는 `tools/refactor_verify.py`로 확인합니다.
-4. 실거래 가드 및 주문 중복 방지 로직은 유지합니다.
+4. 새 믹스인은 `TraderMixinBase` 상속 패턴을 유지해 런타임 MRO와 pyright 정합성을 함께 보장합니다.
+5. 실거래 가드 및 주문 중복 방지 로직은 유지합니다.
+
+---
+
+## 2026-03-09 정적 분석/문서 동기화
+
+1. 정적 분석 기준
+- 루트 `pyrightconfig.json`을 추적하며 `pythonVersion = 3.14` 기준으로 repo 전체를 검사합니다.
+- cache 디렉터리만 제외하고 테스트/도구 폴더도 포함합니다.
+
+2. 동적 믹스인 타입 안정화
+- `app/mixins/_typing.py`의 `TraderMixinBase`로 동적 UI 속성과 `QMainWindow` 성격을 type-check 단계에서만 부여합니다.
+- 런타임 동작을 바꾸지 않고 pyright 오류를 줄이는 것이 목적입니다.
+
+3. 최신 검증 결과
+```bash
+pyright .
+python -m pytest -q tests/unit
+```
+- 결과: `0 errors, 0 warnings`
+- 결과: `83 passed` (2026-03-09)
+
+4. 패키징/무시 규칙 동기화
+- `KiwoomTrader.spec` hiddenimports에 `app.mixins._typing`이 포함됩니다.
+- `.gitignore`는 `pyrightconfig.json`을 예외로 유지합니다.
 
 ---
 
@@ -228,7 +259,7 @@ pytest -q tests/unit
 - 종료 flush 시 최신 스냅샷 강제 기록 경로를 추가.
 
 4. 빌드 스펙 점검
-- `KiwoomTrader.spec`의 hiddenimports/datas/collect_submodules 구성을 재검토했고, 이번 변경 범위에서는 추가 수정이 필요하지 않습니다.
+- 당시 변경은 런타임 로직 중심이었고, 이후 2026-03-09 정적 분석 helper 모듈(`app.mixins._typing`) hiddenimport가 추가되었습니다.
 
 5. 최신 검증 결과
 - `python -m pytest -q tests/unit`

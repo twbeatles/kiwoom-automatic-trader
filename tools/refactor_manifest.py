@@ -204,9 +204,11 @@ def main() -> None:
             raise
 
     output_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    raw_signals = manifest.get("signals", [])
+    signals = [str(signal) for signal in raw_signals] if isinstance(raw_signals, list) else []
     print(f"[OK] Manifest written: {output_path}")
     print(f"  Methods: {manifest['method_count']}")
-    print(f"  Signals: {', '.join(manifest['signals'])}")
+    print(f"  Signals: {', '.join(signals)}")
 
 
 if __name__ == "__main__":

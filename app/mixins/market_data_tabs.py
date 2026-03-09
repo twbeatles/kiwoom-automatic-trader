@@ -3,9 +3,10 @@
 from PyQt6.QtWidgets import QPushButton, QTableWidgetItem
 
 from app.support.worker import Worker
+from ._typing import TraderMixinBase
 
 
-class MarketDataTabsMixin:
+class MarketDataTabsMixin(TraderMixinBase):
     def _load_chart(self):
         """차트 데이터 조회 (비동기)."""
         if not self.rest_client:
@@ -143,7 +144,8 @@ class MarketDataTabsMixin:
             self.log("API 연결 필요")
             return
 
-        btn = self.sender() if isinstance(self.sender(), QPushButton) else None
+        sender = self.sender()
+        btn = sender if isinstance(sender, QPushButton) else None
         if btn:
             btn.setEnabled(False)
             btn.setText("조회 중...")
@@ -178,7 +180,8 @@ class MarketDataTabsMixin:
         if not cond_data:
             return
 
-        btn = self.sender() if isinstance(self.sender(), QPushButton) else None
+        sender = self.sender()
+        btn = sender if isinstance(sender, QPushButton) else None
         if btn:
             btn.setEnabled(False)
             btn.setText("검색 중...")
@@ -246,7 +249,8 @@ class MarketDataTabsMixin:
         market_idx = self.ranking_market.currentIndex()
         market = str(market_idx)
 
-        btn = self.sender() if isinstance(self.sender(), QPushButton) else None
+        sender = self.sender()
+        btn = sender if isinstance(sender, QPushButton) else None
         if btn:
             btn.setEnabled(False)
             btn.setText("조회 중...")

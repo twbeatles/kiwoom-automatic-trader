@@ -58,6 +58,8 @@ class _DummyConfig:
         self.backtest_config = {}
         self.feature_flags = {}
         self.execution_policy = "market"
+        self.daily_loss_basis = "total_equity"
+        self.sync_history_flush_on_exit = True
 
 
 class _Harness(PersistenceSettingsMixin):
@@ -97,7 +99,7 @@ class _Harness(PersistenceSettingsMixin):
     def log(self, _msg):
         pass
 
-    def setStyleSheet(self, _style):
+    def setStyleSheet(self, styleSheet):
         pass
 
 

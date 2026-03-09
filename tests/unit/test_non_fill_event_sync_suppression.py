@@ -23,7 +23,7 @@ class _Harness(OrderSyncMixin):
     def log(self, _msg):
         return None
 
-    def _sync_position_from_account(self, _code):
+    def _sync_position_from_account(self, code):
         self.sync_calls += 1
 
 

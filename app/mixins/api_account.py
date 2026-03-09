@@ -18,9 +18,10 @@ from api import KiwoomAuth, KiwoomRESTClient, KiwoomWebSocketClient
 from app.support.worker import Worker
 from config import Config
 from telegram_notifier import TelegramNotifier
+from ._typing import TraderMixinBase
 
 
-class APIAccountMixin:
+class APIAccountMixin(TraderMixinBase):
     def connect_api(self):
         if getattr(self, "_connect_inflight", False):
             self.log("API 연결이 이미 진행 중입니다.")
@@ -31,7 +32,8 @@ class APIAccountMixin:
         is_mock = self.chk_mock.isChecked()
 
         if not app_key or not secret_key:
-            tabs = self.centralWidget().findChild(QTabWidget)
+            central = self.centralWidget()
+            tabs = central.findChild(QTabWidget) if central is not None else None
             if tabs:
                 tabs.setCurrentIndex(8)
 

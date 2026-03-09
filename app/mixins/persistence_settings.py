@@ -34,9 +34,10 @@ from app.support.worker import Worker
 from config import Config
 from dark_theme import DARK_STYLESHEET
 from light_theme import LIGHT_STYLESHEET
+from ._typing import TraderMixinBase
 
 
-class PersistenceSettingsMixin:
+class PersistenceSettingsMixin(TraderMixinBase):
     @staticmethod
     def _v4_guard_defaults() -> dict:
         return {

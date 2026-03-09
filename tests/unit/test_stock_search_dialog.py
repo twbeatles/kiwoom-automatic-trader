@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any, cast
 
 from data.providers.stock_cache_provider import StockMasterCacheProvider
 from ui_dialogs import StockSearchDialog
@@ -41,17 +42,23 @@ class _DummyRestClient:
         return None
 
 
+class _Harness:
+    _search_code_via_api = StockSearchDialog._search_code_via_api
+
+    def __init__(self, keyword, cache_provider, rest_client=None):
+        self.rest_client = rest_client
+        self.cache_provider = cache_provider
+        self.search_input = _DummyInput(keyword)
+        self.search_status = _DummyStatus()
+        self._last_results = []
+        self.rendered_rows = []
+
+    def _render_results(self, rows):
+        self.rendered_rows = list(rows)
+
+
 def _build_harness(keyword, cache_provider, rest_client=None):
-    harness = type("Harness", (), {})()
-    harness.rest_client = rest_client
-    harness.cache_provider = cache_provider
-    harness.search_input = _DummyInput(keyword)
-    harness.search_status = _DummyStatus()
-    harness._last_results = []
-    harness.rendered_rows = []
-    harness._render_results = lambda rows: setattr(harness, "rendered_rows", list(rows))
-    harness._search_code_via_api = StockSearchDialog._search_code_via_api.__get__(harness, object)
-    return harness
+    return _Harness(keyword, cache_provider, rest_client=rest_client)
 
 
 class TestStockSearchDialog(unittest.TestCase):
@@ -62,7 +69,7 @@ class TestStockSearchDialog(unittest.TestCase):
             rest_client = _DummyRestClient()
             harness = _build_harness("005930", cache_provider, rest_client)
 
-            StockSearchDialog._search(harness)
+            StockSearchDialog._search(cast(Any, harness))
 
             self.assertEqual(rest_client.calls, ["005930"])
             self.assertEqual(len(harness.rendered_rows), 1)
@@ -81,7 +88,7 @@ class TestStockSearchDialog(unittest.TestCase):
             cache_provider.upsert("000660", "SK하이닉스", "KOSPI", 120000)
 
             harness = _build_harness("삼성", cache_provider, rest_client=None)
-            StockSearchDialog._search(harness)
+            StockSearchDialog._search(cast(Any, harness))
 
             self.assertEqual(len(harness.rendered_rows), 1)
             self.assertEqual(harness.rendered_rows[0]["code"], "005930")

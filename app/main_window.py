@@ -4,9 +4,9 @@ from collections import deque
 import datetime
 from typing import Any, Deque, Dict, Optional, Set
 
-from PyQt6.QtCore import *
+from PyQt6.QtCore import QThreadPool, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import *
+from PyQt6.QtWidgets import QMainWindow, QTableWidgetItem
 
 from config import Config, TradingConfig
 from profile_manager import ProfileManager
@@ -615,15 +615,19 @@ class KiwoomProTrader(
         row = -1
         getter = getattr(table, "currentRow", None)
         if callable(getter):
-            row = int(getter())
+            current_row = getter()
+            if isinstance(current_row, int):
+                row = current_row
         if row < 0:
             selected = getattr(table, "selectedItems", None)
             if callable(selected):
-                items = selected() or []
-                if items:
-                    row_fn = getattr(items[0], "row", None)
+                selected_items = selected()
+                if isinstance(selected_items, list) and selected_items:
+                    row_fn = getattr(selected_items[0], "row", None)
                     if callable(row_fn):
-                        row = int(row_fn())
+                        row_value = row_fn()
+                        if isinstance(row_value, int):
+                            row = row_value
         return str(getattr(self, "_diagnostic_row_to_code", {}).get(row, "") or "")
 
     def _render_selected_diagnostic_detail(self):

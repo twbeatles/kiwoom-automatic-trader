@@ -26,7 +26,7 @@ class TestRegimeSizingSingleApply(unittest.TestCase):
         trader = _Trader()
         cfg = TradingConfig(use_dynamic_sizing=True, betting_ratio=10)
         manager = StrategyManager(trader, cfg)
-        manager.get_regime_profile = lambda _code: ("extreme", 0.4, 5.0)
+        manager.get_regime_profile = lambda code: ("extreme", 0.4, 5.0)
 
         qty = manager.calculate_dynamic_position_size("005930")
         self.assertEqual(qty, 40)
@@ -35,7 +35,7 @@ class TestRegimeSizingSingleApply(unittest.TestCase):
         trader = _Trader()
         cfg = TradingConfig(betting_ratio=10)
         manager = StrategyManager(trader, cfg)
-        manager.get_regime_profile = lambda _code: ("extreme", 0.4, 5.0)
+        manager.get_regime_profile = lambda code: ("extreme", 0.4, 5.0)
 
         qty = manager._default_position_size("005930")
         self.assertEqual(qty, 40)
@@ -44,7 +44,7 @@ class TestRegimeSizingSingleApply(unittest.TestCase):
         trader = _Trader()
         cfg = TradingConfig(betting_ratio=10)
         manager = StrategyManager(trader, cfg)
-        manager.get_regime_profile = lambda _code: ("extreme", 0.4, 5.0)
+        manager.get_regime_profile = lambda code: ("extreme", 0.4, 5.0)
         manager.calculate_atr = lambda *_args, **_kwargs: 10.0
 
         qty = manager.calculate_position_size("005930", risk_percent=1.0, atr_multiplier=2.0)

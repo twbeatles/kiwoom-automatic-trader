@@ -92,12 +92,30 @@ class TestDiagnosticsExternalColumns(unittest.TestCase):
         with patch("app.main_window.QTableWidgetItem", _DummyItem):
             trader._refresh_diagnostics()
 
-        status = trader.diagnostic_table.item(0, 9).text()
-        updated = trader.diagnostic_table.item(0, 10).text()
-        age = trader.diagnostic_table.item(0, 11).text()
-        market_state = trader.diagnostic_table.item(0, 12).text()
-        guard_reason = trader.diagnostic_table.item(0, 13).text()
-        risk_mode = trader.diagnostic_table.item(0, 14).text()
+        status_item = trader.diagnostic_table.item(0, 9)
+        updated_item = trader.diagnostic_table.item(0, 10)
+        age_item = trader.diagnostic_table.item(0, 11)
+        market_state_item = trader.diagnostic_table.item(0, 12)
+        guard_reason_item = trader.diagnostic_table.item(0, 13)
+        risk_mode_item = trader.diagnostic_table.item(0, 14)
+        self.assertIsNotNone(status_item)
+        self.assertIsNotNone(updated_item)
+        self.assertIsNotNone(age_item)
+        self.assertIsNotNone(market_state_item)
+        self.assertIsNotNone(guard_reason_item)
+        self.assertIsNotNone(risk_mode_item)
+        assert status_item is not None
+        assert updated_item is not None
+        assert age_item is not None
+        assert market_state_item is not None
+        assert guard_reason_item is not None
+        assert risk_mode_item is not None
+        status = status_item.text()
+        updated = updated_item.text()
+        age = age_item.text()
+        market_state = market_state_item.text()
+        guard_reason = guard_reason_item.text()
+        risk_mode = risk_mode_item.text()
 
         self.assertEqual(status, "fresh")
         self.assertTrue(updated)

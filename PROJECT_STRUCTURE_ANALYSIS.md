@@ -1,7 +1,7 @@
 # Kiwoom Automatic Trader 프로젝트 구조 분석
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-07  
+최종 동기화: 2026-03-09  
 분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`
 
 ## 1) 요약
@@ -22,23 +22,23 @@
 
 | 패키지 | py 파일 수 | 라인 수 |
 |---|---:|---:|
-| `app/` | 16 | 6818 |
-| `api/` | 5 | 1821 |
-| `strategy_manager.py` | 1 | 1603 |
-| `tests/` | 54 | 3984 |
-| `strategies/` | 4 | 475 |
-| `tools/` | 4 | 504 |
-| `backtest/` | 2 | 354 |
-| `data/` | 7 | 298 |
-| `portfolio/` | 2 | 51 |
+| `app/` | 17 | 6240 |
+| `api/` | 5 | 1755 |
+| `strategy_manager.py` | 1 | 1519 |
+| `tests/` | 54 | 3105 |
+| `strategies/` | 4 | 401 |
+| `tools/` | 4 | 405 |
+| `backtest/` | 2 | 309 |
+| `data/` | 7 | 257 |
+| `portfolio/` | 2 | 39 |
 
 핵심 파일 Top 5:
 
-1. `strategy_manager.py` (1603)
-2. `app/mixins/trading_session.py` (1148)
-3. `app/mixins/ui_build.py` (1156)
-4. `api/rest_client.py` (807)
-5. `app/mixins/persistence_settings.py` (793)
+1. `strategy_manager.py` (1519)
+2. `app/mixins/ui_build.py` (1081)
+3. `app/mixins/trading_session.py` (1030)
+4. `api/rest_client.py` (792)
+5. `app/mixins/persistence_settings.py` (737)
 
 ## 3) 엔트리포인트와 조립 구조
 
@@ -53,6 +53,7 @@
 
 - `app/main_window.py`
   - `KiwoomProTrader`는 9개 믹스인을 다중상속으로 조립
+  - 정적 분석 시 `app/mixins/_typing.py`의 `TraderMixinBase`를 통해 `QMainWindow` 성격과 동적 속성 접근을 타입으로 보강
   - 시그널:
     - `sig_log`
     - `sig_execution`
@@ -190,10 +191,13 @@
 
 ## 8) 테스트/검증 현황
 
-2026-03-07 실행:
+2026-03-09 실행:
 
 - 명령: `python -m pytest -q tests/unit`
 - 결과: `83 passed`
+- 명령: `pyright .`
+- 결과: `0 errors, 0 warnings`
+- 인코딩 점검: UTF-8 디코드 실패 없음, `U+FFFD` 없음
 
 커버되는 핵심 시나리오:
 
@@ -212,10 +216,11 @@
 
 ## 9) 문서-코드 동기화 메모
 
-`README.md`/`CLAUDE.md`/`GEMINI.md`/`STRATEGY_EXPANSION_BLUEPRINT.md` 기준으로 v4 guard 정책과 설정 스키마를 동기화했습니다.
+`README.md`/`CLAUDE.md`/`GEMINI.md`/`STRATEGY_EXPANSION_BLUEPRINT.md` 기준으로 v4 guard 정책, 정적 분석 기준, 설정 스키마를 동기화했습니다.
 
 - canonical 설정 스키마: `settings_version = 4`
 - 신규 가드 기본값/진단 컬럼/KPI 항목 문서 반영
+- `pyrightconfig.json` 추적 및 `app/mixins/_typing.py` 역할을 문서에 반영
 - README 구조 트리와 테스트 현황을 현재 기준으로 정리
 
 ## 10) 후속 고도화 지점

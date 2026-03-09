@@ -1,7 +1,8 @@
 ﻿import unittest
+from typing import Literal, overload
 from unittest.mock import patch
 
-from app.mixins.trading_session import TradingSessionMixin
+from app.mixins.trading_session import BackgroundUniversePayload, TradingSessionMixin
 
 
 class _DummyLineEdit:
@@ -47,9 +48,18 @@ class _Harness(TradingSessionMixin):
     def _confirm_live_trading_guard(self):
         return True
 
-    def _init_universe(self, codes):
+    @overload
+    def _init_universe(self, codes, background: Literal[False] = False) -> list[str]: ...
+
+    @overload
+    def _init_universe(self, codes, background: Literal[True]) -> BackgroundUniversePayload: ...
+
+    def _init_universe(self, codes, background: bool = False) -> list[str] | BackgroundUniversePayload:
         self.init_called_with = list(codes)
-        return list(self._init_result)
+        initialized_codes = list(self._init_result)
+        if background:
+            return initialized_codes, {}, []
+        return initialized_codes
 
     def _sync_positions_snapshot(self, codes):
         self.snapshot_called_with = list(codes)

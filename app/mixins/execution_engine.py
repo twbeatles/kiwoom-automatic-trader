@@ -1,14 +1,16 @@
 ﻿"""Execution engine mixin for KiwoomProTrader."""
 
 import datetime
+from collections import deque
 
 from api.models import ExecutionData
 from app.support.execution_policy import ExecutionPolicy
 from app.support.worker import Worker
 from config import Config
+from ._typing import TraderMixinBase
 
 
-class ExecutionEngineMixin:
+class ExecutionEngineMixin(TraderMixinBase):
     def _reserved_cash_map(self):
         mapping = getattr(self, "_reserved_cash_by_code", None)
         if not isinstance(mapping, dict):
@@ -118,7 +120,10 @@ class ExecutionEngineMixin:
         fn = getattr(manager, "get_regime_profile", None)
         if not callable(fn):
             return default
-        regime, scale, _atr_pct = fn(code)
+        result = fn(code)
+        if not (isinstance(result, tuple) and len(result) == 3):
+            return default
+        regime, scale, _atr_pct = result
         regime_text = str(regime or "normal")
         if regime_text == "extreme":
             return regime_text, float(scale), 2
@@ -232,7 +237,11 @@ class ExecutionEngineMixin:
             # Fallback: when official index feed is unavailable, use representative
             # per-market stock price stream for price-based shock detection.
             if callable(index_series_fn):
-                series = index_series_fn(market_key)
+                series_obj = index_series_fn(market_key)
+                if isinstance(series_obj, deque):
+                    series = series_obj
+                else:
+                    series = deque(maxlen=1800)
                 rep_map = getattr(self, "_shock_fallback_rep_by_market", None)
                 if not isinstance(rep_map, dict):
                     rep_map = {}

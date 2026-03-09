@@ -9,9 +9,10 @@ from PyQt6.QtCore import QTimer
 from api.models import ExecutionData
 from app.support.worker import Worker
 from config import Config
+from ._typing import TraderMixinBase
 
 
-class OrderSyncMixin:
+class OrderSyncMixin(TraderMixinBase):
     ACTIVE_PENDING_STATES = {"submitted", "partial"}
     TERMINAL_PENDING_STATES = {"filled", "cancelled", "rejected", "sync_failed"}
 
@@ -50,13 +51,15 @@ class OrderSyncMixin:
     def _release_reserved_cash_safe(self, code: str, reason: str, refund: bool):
         fn = getattr(self, "_release_reserved_cash", None)
         if callable(fn):
-            return int(fn(code, reason=reason, refund=refund) or 0)
+            result = fn(code, reason=reason, refund=refund)
+            return int(result) if isinstance(result, (int, float, str)) else 0
 
         # Fallback for tests that do not include ExecutionEngineMixin.
         mapping = getattr(self, "_reserved_cash_by_code", None)
         if not isinstance(mapping, dict):
             return 0
-        amount = int(mapping.pop(code, 0) or 0)
+        raw_amount = mapping.pop(code, 0)
+        amount = int(raw_amount) if isinstance(raw_amount, (int, float, str)) else 0
         if amount > 0 and refund and hasattr(self, "virtual_deposit"):
             self.virtual_deposit = max(0, int(getattr(self, "virtual_deposit", 0) or 0) + amount)
         return amount
@@ -64,12 +67,14 @@ class OrderSyncMixin:
     def _consume_reserved_cash_safe(self, code: str, amount: int, reason: str = "") -> int:
         fn = getattr(self, "_consume_reserved_cash", None)
         if callable(fn):
-            return int(fn(code, amount=amount, reason=reason) or 0)
+            result = fn(code, amount=amount, reason=reason)
+            return int(result) if isinstance(result, (int, float, str)) else 0
 
         mapping = getattr(self, "_reserved_cash_by_code", None)
         if not isinstance(mapping, dict):
             return 0
-        current = max(0, int(mapping.get(code, 0) or 0))
+        raw_current = mapping.get(code, 0)
+        current = max(0, int(raw_current)) if isinstance(raw_current, (int, float, str)) else 0
         consume = min(current, max(0, int(amount or 0)))
         remain = current - consume
         if remain > 0:

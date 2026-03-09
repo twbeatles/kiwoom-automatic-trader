@@ -14,6 +14,13 @@
 - `python tools/refactor_verify.py` -> parity 통과
 - `python tools/perf_smoke.py` -> 정상
 
+## 2026-03-09 후속 동기화 메모
+
+- 이 문서는 2026-03-07 시점의 기능 구현 점검 리포트이며, 아래 항목은 이후 코드/문서 동기화 결과입니다.
+- repo 전반 정적 분석 기준을 `pyrightconfig.json`으로 고정했고 `pyright .` 결과는 `0 errors, 0 warnings`입니다.
+- 동적 Qt mixin 정적 분석용 helper로 `app/mixins/_typing.py`가 추가되었으며 런타임 동작 변경 목적은 아닙니다.
+- `KiwoomTrader.spec`, `.gitignore`, 주요 `.md` 문서는 현재 구조와 검증 절차 기준으로 동기화되었습니다.
+
 ## 반영 완료 현황 (2026-03-07)
 
 - 단계 1(실거래 코어 안정화) 반영 완료

@@ -3,7 +3,7 @@
 from collections import deque
 import datetime
 import time
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Literal, Optional, Tuple, overload
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
@@ -11,9 +11,13 @@ from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
 
 from app.support.worker import Worker
 from config import Config
+from ._typing import TraderMixinBase
 
 
-class TradingSessionMixin:
+BackgroundUniversePayload = Tuple[List[str], Dict[str, Dict[str, Any]], List[str]]
+
+
+class TradingSessionMixin(TraderMixinBase):
     def _rollover_daily_metrics(self, now: Optional[datetime.datetime] = None, reset_baseline: bool = False):
         now_dt = now or datetime.datetime.now()
         today = now_dt.date()
@@ -788,7 +792,7 @@ class TradingSessionMixin:
             self.log(f"유니버스 초기화 중... ({len(valid_codes)}개 종목)")
             worker = Worker(self._init_universe, valid_codes, True)
 
-            def on_result(payload: Tuple[List[str], Dict[str, Dict], List[str]]):
+            def on_result(payload: BackgroundUniversePayload):
                 try:
                     initialized_codes, universe, failed_codes = payload
                     if not initialized_codes:
@@ -874,7 +878,8 @@ class TradingSessionMixin:
             self._guard_reason_by_code.clear()
         release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
         if callable(release_all_reserved):
-            released_total = int(release_all_reserved(reason="STOP_TRADING") or 0)
+            released = release_all_reserved(reason="STOP_TRADING")
+            released_total = int(released) if isinstance(released, (int, float, str)) else 0
             if released_total > 0 and hasattr(self, "log"):
                 self.log(f"Reserved cash reconciled on stop: +{released_total:,}")
 
@@ -907,10 +912,16 @@ class TradingSessionMixin:
             if self.telegram:
                 self.telegram.send(f"장마감 청산: {liquidated_count}개 종목")
 
-    def _init_universe(self, codes, background: bool = False):
-        target_universe: Dict[str, Dict] = {}
-        failed_codes = []
-        initialized_codes = []
+    @overload
+    def _init_universe(self, codes: List[str], background: Literal[False] = False) -> List[str]: ...
+
+    @overload
+    def _init_universe(self, codes: List[str], background: Literal[True]) -> BackgroundUniversePayload: ...
+
+    def _init_universe(self, codes: List[str], background: bool = False) -> List[str] | BackgroundUniversePayload:
+        target_universe: Dict[str, Dict[str, Any]] = {}
+        failed_codes: List[str] = []
+        initialized_codes: List[str] = []
 
         for code in codes:
             try:

@@ -1006,7 +1006,12 @@ class StrategyManager:
         short_ma_prev = self.calculate_ma(prices[:-1], short_period)
         long_ma_prev = self.calculate_ma(prices[:-1], long_period)
         
-        if None in [short_ma_now, long_ma_now, short_ma_prev, long_ma_prev]:
+        if (
+            short_ma_now is None
+            or long_ma_now is None
+            or short_ma_prev is None
+            or long_ma_prev is None
+        ):
             return None
         
         if short_ma_prev <= long_ma_prev and short_ma_now > long_ma_now:

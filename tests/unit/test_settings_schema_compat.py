@@ -89,8 +89,8 @@ class _Harness(PersistenceSettingsMixin):
     def log(self, msg):
         self.logged.append(msg)
 
-    def setStyleSheet(self, style):
-        self.applied_styles.append(style)
+    def setStyleSheet(self, styleSheet):
+        self.applied_styles.append(styleSheet)
 
 
 class TestSettingsSchemaCompat(unittest.TestCase):

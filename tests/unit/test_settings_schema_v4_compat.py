@@ -121,7 +121,7 @@ class _Harness(PersistenceSettingsMixin):
     def log(self, _msg):
         return None
 
-    def setStyleSheet(self, _style):
+    def setStyleSheet(self, styleSheet):
         return None
 
 
