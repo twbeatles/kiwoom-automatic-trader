@@ -1,5 +1,6 @@
 ﻿"""Persistence/settings mixin for KiwoomProTrader."""
 
+import copy
 import csv
 import datetime
 import json
@@ -66,6 +67,18 @@ class PersistenceSettingsMixin(TraderMixinBase):
             "order_health_cooldown_sec": int(getattr(Config, "DEFAULT_ORDER_HEALTH_COOLDOWN_SEC", 180)),
         }
 
+    @staticmethod
+    def _secret_field_names() -> tuple[tuple[str, str], ...]:
+        return (
+            ("app_key", "app_key"),
+            ("secret_key", "secret_key"),
+            ("naver_client_id", "naver_client_id"),
+            ("naver_client_secret", "naver_client_secret"),
+            ("dart_api_key", "dart_api_key"),
+            ("fred_api_key", "fred_api_key"),
+            ("ai_api_key", "ai_api_key"),
+        )
+
     def _apply_settings_schema_migration(self, settings: dict):
         version = int(settings.get("settings_version", 1))
         if version < 3:
@@ -93,7 +106,12 @@ class PersistenceSettingsMixin(TraderMixinBase):
         for key, default in self._v4_guard_defaults().items():
             settings.setdefault(key, default)
 
-        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 4))
+        settings.setdefault(
+            "market_intelligence",
+            copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})),
+        )
+
+        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 5))
 
     def _add_trade(self, record: dict):
         """거래 기록 추가."""
@@ -330,8 +348,11 @@ class PersistenceSettingsMixin(TraderMixinBase):
             self._save_trade_history_sync(latest_snapshot)
 
     def _save_settings(self):
+        update_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+        if callable(update_market_intel):
+            update_market_intel()
         settings = {
-            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 4)),
+            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 5)),
             "is_mock": self.chk_mock.isChecked(),
             "auto_start": self.chk_auto_start.isChecked(),
             "codes": self.input_codes.text(),
@@ -469,6 +490,9 @@ class PersistenceSettingsMixin(TraderMixinBase):
         settings["execution_policy"] = str(
             getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
         )
+        settings["market_intelligence"] = copy.deepcopy(
+            getattr(cfg, "market_intelligence", getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+        )
         if hasattr(self, "combo_strategy_pack"):
             settings["strategy_pack"]["primary_strategy"] = str(self.combo_strategy_pack.currentText())
         if hasattr(self, "combo_portfolio_mode"):
@@ -494,44 +518,42 @@ class PersistenceSettingsMixin(TraderMixinBase):
         if hasattr(self, "chk_feature_external_data"):
             settings["feature_flags"]["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
 
-        app_key = self.input_app_key.text().strip()
-        secret_key = self.input_secret.text().strip()
+        secret_values = {
+            "app_key": self.input_app_key.text().strip() if hasattr(self, "input_app_key") else "",
+            "secret_key": self.input_secret.text().strip() if hasattr(self, "input_secret") else "",
+            "naver_client_id": self.input_naver_client_id.text().strip() if hasattr(self, "input_naver_client_id") else "",
+            "naver_client_secret": self.input_naver_client_secret.text().strip()
+            if hasattr(self, "input_naver_client_secret")
+            else "",
+            "dart_api_key": self.input_dart_api_key.text().strip() if hasattr(self, "input_dart_api_key") else "",
+            "fred_api_key": self.input_fred_api_key.text().strip() if hasattr(self, "input_fred_api_key") else "",
+            "ai_api_key": self.input_ai_api_key.text().strip() if hasattr(self, "input_ai_api_key") else "",
+        }
 
         if KEYRING_AVAILABLE:
-            settings.pop("app_key", None)
-            settings.pop("secret_key", None)
+            for setting_name, _secret_name in self._secret_field_names():
+                settings.pop(setting_name, None)
         else:
-            if app_key:
-                settings["app_key"] = app_key
-            else:
-                settings.pop("app_key", None)
-            if secret_key:
-                settings["secret_key"] = secret_key
-            else:
-                settings.pop("secret_key", None)
+            for setting_name, _secret_name in self._secret_field_names():
+                value = secret_values.get(setting_name, "")
+                if value:
+                    settings[setting_name] = value
+                else:
+                    settings.pop(setting_name, None)
         try:
-            if app_key:
-                try:
-                    keyring.set_password("KiwoomTrader", "app_key", app_key)
-                except Exception as e:
-                    self.logger.warning(f"Keyring app_key 저장 실패 (OS 환경 이슈일 수 있음): {e}")
-                    settings["app_key"] = app_key
-            else:
-                try:
-                    keyring.delete_password("KiwoomTrader", "app_key")
-                except Exception as e:
-                    self.logger.warning(f"Keyring app_key 삭제 실패 (무시 가능): {e}")
-            if secret_key:
-                try:
-                    keyring.set_password("KiwoomTrader", "secret_key", secret_key)
-                except Exception as e:
-                    self.logger.warning(f"Keyring secret_key 저장 실패 (OS 환경 이슈일 수 있음): {e}")
-                    settings["secret_key"] = secret_key
-            else:
-                try:
-                    keyring.delete_password("KiwoomTrader", "secret_key")
-                except Exception as e:
-                    self.logger.warning(f"Keyring secret_key 삭제 실패 (무시 가능): {e}")
+            for setting_name, secret_name in self._secret_field_names():
+                value = secret_values.get(setting_name, "")
+                if value:
+                    try:
+                        keyring.set_password("KiwoomTrader", secret_name, value)
+                    except Exception as e:
+                        self.logger.warning(f"Keyring {secret_name} 저장 실패 (OS 환경 이슈일 수 있음): {e}")
+                        settings[setting_name] = value
+                else:
+                    try:
+                        keyring.delete_password("KiwoomTrader", secret_name)
+                    except Exception as e:
+                        self.logger.warning(f"Keyring {secret_name} 삭제 실패 (무시 가능): {e}")
 
             Path(Config.SETTINGS_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(Config.SETTINGS_FILE, "w", encoding="utf-8") as file:
@@ -554,25 +576,29 @@ class PersistenceSettingsMixin(TraderMixinBase):
                 settings = json.load(file)
             self._apply_settings_schema_migration(settings)
 
+            secret_values = {}
+            for setting_name, secret_name in self._secret_field_names():
+                value = ""
+                try:
+                    value = keyring.get_password("KiwoomTrader", secret_name) or ""
+                except Exception as exc:
+                    self.logger.warning(f"Keyring {secret_name} 로드 실패: {exc}")
+                if not value and setting_name in settings:
+                    value = settings[setting_name]
+                secret_values[setting_name] = value
 
-            app_key = ""
-            secret_key = ""
-            try:
-                app_key = keyring.get_password("KiwoomTrader", "app_key") or ""
-            except Exception as exc:
-                self.logger.warning(f"Keyring app_key 로드 실패: {exc}")
-            try:
-                secret_key = keyring.get_password("KiwoomTrader", "secret_key") or ""
-            except Exception as exc:
-                self.logger.warning(f"Keyring secret_key 로드 실패: {exc}")
-
-            if not app_key and "app_key" in settings:
-                app_key = settings["app_key"]
-            if not secret_key and "secret_key" in settings:
-                secret_key = settings["secret_key"]
-
-            self.input_app_key.setText(app_key)
-            self.input_secret.setText(secret_key)
+            self.input_app_key.setText(secret_values.get("app_key", ""))
+            self.input_secret.setText(secret_values.get("secret_key", ""))
+            if hasattr(self, "input_naver_client_id"):
+                self.input_naver_client_id.setText(secret_values.get("naver_client_id", ""))
+            if hasattr(self, "input_naver_client_secret"):
+                self.input_naver_client_secret.setText(secret_values.get("naver_client_secret", ""))
+            if hasattr(self, "input_dart_api_key"):
+                self.input_dart_api_key.setText(secret_values.get("dart_api_key", ""))
+            if hasattr(self, "input_fred_api_key"):
+                self.input_fred_api_key.setText(secret_values.get("fred_api_key", ""))
+            if hasattr(self, "input_ai_api_key"):
+                self.input_ai_api_key.setText(secret_values.get("ai_api_key", ""))
 
             self.chk_mock.setChecked(settings.get("is_mock", False))
             self.chk_auto_start.setChecked(settings.get("auto_start", False))
@@ -755,6 +781,61 @@ class PersistenceSettingsMixin(TraderMixinBase):
                 self.chk_feature_backtest.setChecked(bool(flags.get("enable_backtest", True)))
             if hasattr(self, "chk_feature_external_data"):
                 self.chk_feature_external_data.setChecked(bool(flags.get("enable_external_data", True)))
+            market_intelligence = (
+                copy.deepcopy(settings.get("market_intelligence", {}))
+                if isinstance(settings.get("market_intelligence"), dict)
+                else copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+            )
+            if hasattr(self, "chk_market_intel_enabled"):
+                self.chk_market_intel_enabled.setChecked(bool(market_intelligence.get("enabled", True)))
+            providers = (
+                market_intelligence.get("providers", {})
+                if isinstance(market_intelligence.get("providers"), dict)
+                else {}
+            )
+            if hasattr(self, "chk_market_news"):
+                self.chk_market_news.setChecked(bool(providers.get("news", True)))
+            if hasattr(self, "chk_market_dart"):
+                self.chk_market_dart.setChecked(bool(providers.get("dart", True)))
+            if hasattr(self, "chk_market_datalab"):
+                self.chk_market_datalab.setChecked(bool(providers.get("datalab", True)))
+            if hasattr(self, "chk_market_macro"):
+                self.chk_market_macro.setChecked(bool(providers.get("macro", True)))
+            refresh_sec = (
+                market_intelligence.get("refresh_sec", {})
+                if isinstance(market_intelligence.get("refresh_sec"), dict)
+                else {}
+            )
+            if hasattr(self, "spin_market_news_refresh"):
+                self.spin_market_news_refresh.setValue(
+                    int(refresh_sec.get("news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60)))
+                )
+            if hasattr(self, "spin_market_macro_refresh"):
+                self.spin_market_macro_refresh.setValue(
+                    int(refresh_sec.get("macro", getattr(Config, "MARKET_INTEL_MACRO_REFRESH_SEC", 300)))
+                )
+            scoring = (
+                market_intelligence.get("scoring", {})
+                if isinstance(market_intelligence.get("scoring"), dict)
+                else {}
+            )
+            if hasattr(self, "spin_market_news_block"):
+                self.spin_market_news_block.setValue(abs(int(scoring.get("news_block_threshold", -60))))
+            if hasattr(self, "spin_market_news_boost"):
+                self.spin_market_news_boost.setValue(abs(int(scoring.get("news_boost_threshold", 60))))
+            ai_cfg = market_intelligence.get("ai", {}) if isinstance(market_intelligence.get("ai"), dict) else {}
+            if hasattr(self, "chk_market_ai_enabled"):
+                self.chk_market_ai_enabled.setChecked(bool(ai_cfg.get("enabled", False)))
+            if hasattr(self, "combo_market_ai_provider"):
+                self.combo_market_ai_provider.setCurrentText(str(ai_cfg.get("provider", "gemini")))
+            if hasattr(self, "input_market_ai_model"):
+                self.input_market_ai_model.setText(str(ai_cfg.get("model", "gemini-2.5-flash-lite")))
+            if hasattr(self, "spin_market_ai_daily_calls"):
+                self.spin_market_ai_daily_calls.setValue(int(ai_cfg.get("max_calls_per_day", 30)))
+            if hasattr(self, "spin_market_ai_symbol_calls"):
+                self.spin_market_ai_symbol_calls.setValue(int(ai_cfg.get("max_calls_per_symbol", 3)))
+            if hasattr(self, "spin_market_ai_budget"):
+                self.spin_market_ai_budget.setValue(int(ai_cfg.get("daily_budget_krw", 1000)))
 
             cfg = getattr(self, "config", None)
             if cfg is not None:
@@ -766,6 +847,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
                 cfg.backtest_config = dict(settings.get("backtest_config", getattr(cfg, "backtest_config", {})))
                 cfg.feature_flags = dict(settings.get("feature_flags", getattr(cfg, "feature_flags", {})))
                 cfg.execution_policy = str(settings.get("execution_policy", getattr(cfg, "execution_policy", "market")))
+                cfg.market_intelligence = market_intelligence
                 cfg.max_daily_loss = float(
                     settings.get("max_daily_loss", settings.get("max_loss", getattr(cfg, "max_daily_loss", 3.0)))
                 )
@@ -787,6 +869,9 @@ class PersistenceSettingsMixin(TraderMixinBase):
                 )
                 for key, default in self._v4_guard_defaults().items():
                     setattr(cfg, key, settings.get(key, getattr(cfg, key, default)))
+            sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+            if callable(sync_market_intel):
+                sync_market_intel()
 
             self.log("📂 설정 불러옴")
         except (json.JSONDecodeError, FileNotFoundError, OSError) as exc:

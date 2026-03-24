@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-09
+> **최종 업데이트**: 2026-03-24
 
 ---
 
@@ -47,6 +47,9 @@ app/mixins/order_sync.py
 
 app/mixins/execution_engine.py
   - 매수/매도 실행 및 콜백
+
+app/mixins/market_intelligence.py
+  - 뉴스/공시/검색트렌드/매크로 수집, 브리핑, 경보, 인텔리전스 탭
 
 app/mixins/persistence_settings.py
   - 거래내역, 통계, 설정 저장/복원
@@ -126,6 +129,27 @@ pyinstaller KiwoomTrader.spec
 | `kiwoom_presets.json` | 프리셋 저장(필요 시 생성) |
 | `kiwoom_token_cache.json` | 인증 토큰 캐시 |
 | `data/*.json` | 프로필 데이터 |
+| `data/market_intelligence_events.jsonl` | 시장 인텔리전스 이벤트 로그 |
+| `data/dart_corp_codes.json` | OpenDART 종목코드 캐시 |
+
+---
+
+## 2026-03-24 시장 인텔리전스 동기화
+
+1. 현재 canonical 설정 스키마는 `settings_version = 5` 입니다.
+2. `TradingConfig.market_intelligence`와 `universe[code]["market_intel"]`가 현재 시장 인텔리전스 상태의 기준 필드입니다.
+3. 신규 provider:
+   - `data/providers/news_provider.py`
+   - `data/providers/naver_trend_provider.py`
+   - `data/providers/ai_provider.py`
+4. 전략/전략팩/백테스트는 다음 guard/filter를 공유합니다.
+   - `news_risk_guard`
+   - `disclosure_event_guard`
+   - `macro_regime_guard`
+   - `theme_heat_filter`
+   - `intel_fresh_guard`
+5. 패키징은 `KiwoomTrader.spec`의 explicit hiddenimports + `collect_submodules('app')`, `collect_submodules('data.providers')`로 동기화됩니다.
+6. 최신 검증 결과는 `python -m pytest tests/unit --disable-warnings` 기준 **90 passed in 0.53s** (2026-03-24) 입니다.
 
 ---
 
@@ -154,12 +178,13 @@ pyinstaller KiwoomTrader.spec
 pyright .
 python -m pytest -q tests/unit
 ```
-- 결과: `0 errors, 0 warnings`
+- 결과: `0 errors, 0 warnings` (2026-03-09 당시 환경)
 - 결과: `83 passed` (2026-03-09)
 
 4. 패키징/무시 규칙 동기화
 - `KiwoomTrader.spec` hiddenimports에 `app.mixins._typing`이 포함됩니다.
 - `.gitignore`는 `pyrightconfig.json`을 예외로 유지합니다.
+- 현재 워크스페이스에서 `pyright .`를 다시 실행하려면 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성이 필요합니다.
 
 ---
 
@@ -171,12 +196,12 @@ python -m pytest -q tests/unit
   - `strategies/`
   - `backtest/`
   - `portfolio/`
-  - `data/providers/`
+  - `data/providers/` (`kiwoom`, `dart`, `macro`, `csv`, `news`, `naver_trend`, `ai`)
 - `tools/perf_smoke.py`로 전략 평가 성능 스모크 테스트를 수행할 수 있습니다.
 
 ### 2) 설정 스키마 기준
-- 현재 canonical 스키마는 `settings_version = 4` 입니다.
-- `settings_version < 4` 파일은 로드 시 v4 가드 키가 자동 보강됩니다.
+- 현재 canonical 스키마는 `settings_version = 5` 입니다.
+- `settings_version < 5` 파일은 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다.
 
 ### 3) 테스트 기준
 ```bash
@@ -261,6 +286,6 @@ pytest -q tests/unit
 4. 빌드 스펙 점검
 - 당시 변경은 런타임 로직 중심이었고, 이후 2026-03-09 정적 분석 helper 모듈(`app.mixins._typing`) hiddenimport가 추가되었습니다.
 
-5. 최신 검증 결과
+5. 당시 검증 결과 (2026-03-07)
 - `python -m pytest -q tests/unit`
 - 결과: **83 passed** (2026-03-07)

@@ -1,4 +1,5 @@
 ﻿import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -96,7 +97,8 @@ class _Harness(PersistenceSettingsMixin):
 class TestSettingsSchemaCompat(unittest.TestCase):
     def test_loads_legacy_betting_key(self):
         trader = _Harness()
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(
                 json.dumps({"betting": 12.5, "codes": "005930"}, ensure_ascii=False),
@@ -107,12 +109,15 @@ class TestSettingsSchemaCompat(unittest.TestCase):
                 "app.mixins.persistence_settings.keyring.get_password", side_effect=RuntimeError("no keyring")
             ):
                 trader._load_settings()
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
         self.assertEqual(trader.spin_betting.value(), 12.5)
 
     def test_prefers_betting_ratio_and_normalizes_schedule(self):
         trader = _Harness()
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(
                 json.dumps(
@@ -130,6 +135,8 @@ class TestSettingsSchemaCompat(unittest.TestCase):
                 "app.mixins.persistence_settings.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
         self.assertEqual(trader.spin_betting.value(), 7.5)
         self.assertEqual(

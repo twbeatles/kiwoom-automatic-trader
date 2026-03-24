@@ -3,6 +3,7 @@
 Phase-1 target: deterministic daily simulation with minute extensibility.
 """
 
+import json
 from dataclasses import dataclass, field
 from collections import deque
 from datetime import datetime, time
@@ -18,6 +19,20 @@ class BacktestBar:
     low: float
     close: float
     volume: float = 0.0
+
+
+@dataclass
+class BacktestIntelligenceEvent:
+    ts: datetime
+    scope: str = "symbol"
+    symbol: str = ""
+    source: str = ""
+    event_type: str = ""
+    score: float = 0.0
+    tags: List[str] = field(default_factory=list)
+    summary: str = ""
+    blocking: bool = False
+    raw_ref: Any = ""
 
 
 @dataclass
@@ -56,6 +71,9 @@ class BacktestConfig:
     order_health_fail_count: int = 5
     order_health_window_sec: int = 60
     order_health_cooldown_sec: int = 180
+    news_block_threshold: float = -60.0
+    macro_block_threshold: float = -40.0
+    theme_heat_threshold: float = 60.0
 
 
 @dataclass
@@ -75,6 +93,7 @@ class EventDrivenBacktestEngine:
         signal_fn: Callable[[BacktestBar, Dict[str, PositionState]], Dict[str, str]],
         initial_cash: float = 100000000.0,
         allocation_per_trade: float = 0.1,
+        intelligence_events: Optional[Iterable[BacktestIntelligenceEvent]] = None,
     ) -> BacktestResult:
         cash = float(initial_cash)
         positions: Dict[str, PositionState] = {}
@@ -86,11 +105,18 @@ class EventDrivenBacktestEngine:
         order_fail_events: Deque[float] = deque(maxlen=500)
         global_risk_until: Optional[datetime] = None
         order_health_until: Optional[datetime] = None
+        intelligence_state: Dict[str, Dict[str, Any]] = {}
 
         ordered = sorted(bars, key=lambda b: (b.ts, b.symbol))
+        ordered_events = sorted(list(intelligence_events or []), key=lambda e: (e.ts, e.symbol, e.event_type))
+        event_idx = 0
         for bar in ordered:
             if self.config.timeframe.endswith("m") and not self._is_tradable_time(bar.ts):
                 continue
+
+            while event_idx < len(ordered_events) and ordered_events[event_idx].ts <= bar.ts:
+                self._apply_intelligence_event(intelligence_state, ordered_events[event_idx])
+                event_idx += 1
 
             if bar.symbol not in positions:
                 positions[bar.symbol] = PositionState()
@@ -105,6 +131,8 @@ class EventDrivenBacktestEngine:
             meta = signals.get("__meta__", {}) if isinstance(signals, dict) else {}
             if not isinstance(meta, dict):
                 meta = {}
+            meta = dict(meta)
+            meta["market_intel"] = dict(intelligence_state.get(bar.symbol, {}))
             action = (signals.get(bar.symbol) or "hold").lower()
             action = self._apply_entry_guards(
                 action=action,
@@ -140,6 +168,7 @@ class EventDrivenBacktestEngine:
                 risk_cash = max(0.0, cash * allocation_per_trade)
                 if self.config.use_regime_sizing:
                     risk_cash *= self._regime_scale(series)
+                risk_cash *= self._market_intel_allocation_scale(intelligence_state.get(bar.symbol, {}))
                 qty = (risk_cash / fill_price) if fill_price > 0 else 0.0
                 if qty > 0:
                     cost = qty * fill_price
@@ -169,6 +198,7 @@ class EventDrivenBacktestEngine:
                 risk_cash = max(0.0, cash * allocation_per_trade)
                 if self.config.use_regime_sizing:
                     risk_cash *= self._regime_scale(series)
+                risk_cash *= self._market_intel_allocation_scale(intelligence_state.get(bar.symbol, {}))
                 qty = (risk_cash / fill_price) if fill_price > 0 else 0.0
                 if qty > 0:
                     cash += qty * fill_price
@@ -263,6 +293,24 @@ class EventDrivenBacktestEngine:
         if action not in {"buy", "short"}:
             return action
 
+        intelligence = meta.get("market_intel", {}) if isinstance(meta.get("market_intel", {}), dict) else {}
+        news_score = float(intelligence.get("news_score", 0.0) or 0.0)
+        dart_risk = str(intelligence.get("dart_risk_level", "normal") or "normal")
+        macro_regime = str(intelligence.get("macro_regime", "neutral") or "neutral")
+        theme_score = float(intelligence.get("theme_score", 0.0) or 0.0)
+        intel_status = str(intelligence.get("intel_status", "idle") or "idle")
+
+        if news_score <= float(self.config.news_block_threshold):
+            return "hold"
+        if dart_risk == "high" or bool(intelligence.get("blocking", False)):
+            return "hold"
+        if macro_regime == "risk_off" and news_score <= float(self.config.macro_block_threshold):
+            return "hold"
+        if intel_status not in {"idle", "disabled", "fresh"}:
+            return "hold"
+        if intelligence.get("require_theme_heat", False) and theme_score < float(self.config.theme_heat_threshold):
+            return "hold"
+
         if self.config.use_shock_guard and global_risk_until and bar.ts < global_risk_until:
             return "hold"
 
@@ -289,6 +337,54 @@ class EventDrivenBacktestEngine:
             return "hold"
 
         return action
+
+    @staticmethod
+    def _market_intel_allocation_scale(intelligence: Dict[str, Any]) -> float:
+        if str(intelligence.get("macro_regime", "neutral") or "neutral") == "risk_off":
+            return 0.7
+        return 1.0
+
+    def _apply_intelligence_event(
+        self,
+        intelligence_state: Dict[str, Dict[str, Any]],
+        event: BacktestIntelligenceEvent,
+    ):
+        symbol = str(event.symbol or "")
+        if not symbol:
+            return
+        state = intelligence_state.setdefault(symbol, {})
+        state["intel_status"] = "fresh"
+        state["last_event_ts"] = event.ts
+        state["blocking"] = bool(event.blocking)
+        payload: Dict[str, Any] = {}
+        if isinstance(event.raw_ref, dict):
+            payload = dict(event.raw_ref)
+        elif isinstance(event.raw_ref, str) and event.raw_ref:
+            try:
+                parsed = json.loads(event.raw_ref)
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except Exception:
+                payload = {}
+        if payload:
+            state.update(payload)
+        if event.source == "news":
+            state["news_score"] = float(payload.get("news_score", event.score))
+            if event.event_type == "headline_velocity":
+                state["headline_velocity"] = int(payload.get("headline_velocity", max(1, int(abs(event.score) or len(event.tags)))))
+        elif event.source == "dart":
+            state["dart_risk_level"] = "high" if event.blocking or float(event.score or 0.0) <= -60 else str(payload.get("dart_risk_level", "normal"))
+        elif event.source == "macro":
+            if "macro_regime" in payload:
+                state["macro_regime"] = str(payload.get("macro_regime", "neutral"))
+            elif event.blocking or float(event.score or 0.0) < 0:
+                state["macro_regime"] = "risk_off"
+            elif float(event.score or 0.0) > 0:
+                state["macro_regime"] = "risk_on"
+            else:
+                state["macro_regime"] = "neutral"
+        elif event.source == "theme":
+            state["theme_score"] = float(payload.get("theme_score", event.score))
 
     @staticmethod
     def _avg_abs_bps(values: Deque[float], window: int = 0) -> float:

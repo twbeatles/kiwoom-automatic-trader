@@ -279,6 +279,7 @@ class DialogsProfilesMixin(TraderMixinBase):
                 "enable_backtest": self.chk_feature_backtest.isChecked() if hasattr(self, "chk_feature_backtest") else True,
                 "enable_external_data": self.chk_feature_external_data.isChecked() if hasattr(self, "chk_feature_external_data") else True,
             },
+            "market_intelligence": dict(getattr(self.config, "market_intelligence", {})) if hasattr(self, "config") else {},
             "use_shock_guard": self.chk_use_shock_guard.isChecked() if hasattr(self, "chk_use_shock_guard") else True,
             "shock_1m_pct": self.spin_shock_1m.value() if hasattr(self, "spin_shock_1m") else getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5),
             "shock_5m_pct": self.spin_shock_5m.value() if hasattr(self, "spin_shock_5m") else getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8),
@@ -467,6 +468,47 @@ class DialogsProfilesMixin(TraderMixinBase):
                 self.chk_feature_external_data.setChecked(bool(flags.get('enable_external_data', True)))
             if hasattr(self, "config"):
                 self.config.feature_flags = dict(flags)
+        if isinstance(settings.get('market_intelligence'), dict):
+            mi = settings['market_intelligence']
+            if hasattr(self, "config"):
+                self.config.market_intelligence = dict(mi)
+            if hasattr(self, "chk_market_intel_enabled"):
+                self.chk_market_intel_enabled.setChecked(bool(mi.get('enabled', True)))
+            providers = mi.get('providers', {}) if isinstance(mi.get('providers'), dict) else {}
+            if hasattr(self, "chk_market_news"):
+                self.chk_market_news.setChecked(bool(providers.get('news', True)))
+            if hasattr(self, "chk_market_dart"):
+                self.chk_market_dart.setChecked(bool(providers.get('dart', True)))
+            if hasattr(self, "chk_market_datalab"):
+                self.chk_market_datalab.setChecked(bool(providers.get('datalab', True)))
+            if hasattr(self, "chk_market_macro"):
+                self.chk_market_macro.setChecked(bool(providers.get('macro', True)))
+            refresh_sec = mi.get('refresh_sec', {}) if isinstance(mi.get('refresh_sec'), dict) else {}
+            if hasattr(self, "spin_market_news_refresh"):
+                self.spin_market_news_refresh.setValue(int(refresh_sec.get('news', 60)))
+            if hasattr(self, "spin_market_macro_refresh"):
+                self.spin_market_macro_refresh.setValue(int(refresh_sec.get('macro', 300)))
+            scoring = mi.get('scoring', {}) if isinstance(mi.get('scoring'), dict) else {}
+            if hasattr(self, "spin_market_news_block"):
+                self.spin_market_news_block.setValue(abs(int(scoring.get('news_block_threshold', -60))))
+            if hasattr(self, "spin_market_news_boost"):
+                self.spin_market_news_boost.setValue(abs(int(scoring.get('news_boost_threshold', 60))))
+            ai_cfg = mi.get('ai', {}) if isinstance(mi.get('ai'), dict) else {}
+            if hasattr(self, "chk_market_ai_enabled"):
+                self.chk_market_ai_enabled.setChecked(bool(ai_cfg.get('enabled', False)))
+            if hasattr(self, "combo_market_ai_provider"):
+                self.combo_market_ai_provider.setCurrentText(str(ai_cfg.get('provider', 'gemini')))
+            if hasattr(self, "input_market_ai_model"):
+                self.input_market_ai_model.setText(str(ai_cfg.get('model', 'gemini-2.5-flash-lite')))
+            if hasattr(self, "spin_market_ai_daily_calls"):
+                self.spin_market_ai_daily_calls.setValue(int(ai_cfg.get('max_calls_per_day', 30)))
+            if hasattr(self, "spin_market_ai_symbol_calls"):
+                self.spin_market_ai_symbol_calls.setValue(int(ai_cfg.get('max_calls_per_symbol', 3)))
+            if hasattr(self, "spin_market_ai_budget"):
+                self.spin_market_ai_budget.setValue(int(ai_cfg.get('daily_budget_krw', 1000)))
+            sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+            if callable(sync_market_intel):
+                sync_market_intel()
         if hasattr(self, "config"):
             for key in (
                 "use_shock_guard",

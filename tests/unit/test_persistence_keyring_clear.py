@@ -1,4 +1,5 @@
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -74,7 +75,8 @@ class TestPersistenceKeyringClear(unittest.TestCase):
     def test_save_settings_empty_credentials_deletes_keyring_entries(self):
         trader = _Harness()
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(
                 json.dumps({"app_key": "legacy", "secret_key": "legacy"}, ensure_ascii=False),
@@ -86,10 +88,12 @@ class TestPersistenceKeyringClear(unittest.TestCase):
             ), patch("app.mixins.persistence_settings.keyring.delete_password") as mock_delete:
                 trader._save_settings()
 
-            self.assertEqual(mock_delete.call_count, 2)
+            self.assertEqual(mock_delete.call_count, 7)
             payload = json.loads(settings_path.read_text(encoding="utf-8"))
             self.assertNotIn("app_key", payload)
             self.assertNotIn("secret_key", payload)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 if __name__ == "__main__":

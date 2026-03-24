@@ -51,6 +51,7 @@ class StrategyPackEngine:
             and external_age_sec <= stale_limit
             and external_status not in {"error", "disabled"}
         )
+        market_intel = self.manager.get_market_intel_snapshot(context.code, now_ts=context.now_ts)
 
         conditions: Dict[str, bool] = {}
         metrics: Dict[str, float] = {
@@ -64,6 +65,14 @@ class StrategyPackEngine:
             "estimated_slippage_bps": 0.0,
             "guard_blocked": 0.0,
             "regime": 0.0,
+            "news_score": float(market_intel.get("news_score", 0.0) or 0.0),
+            "theme_score": float(market_intel.get("theme_score", 0.0) or 0.0),
+            "headline_velocity": float(market_intel.get("headline_velocity", 0.0) or 0.0),
+            "macro_score": {
+                "risk_off": -1.0,
+                "neutral": 0.0,
+                "risk_on": 1.0,
+            }.get(str(market_intel.get("macro_regime", "neutral") or "neutral"), 0.0),
         }
         signals: List[Signal] = []
 
@@ -130,6 +139,9 @@ class StrategyPackEngine:
                 "risk:shock_mode_guard",
                 "risk:shock_guard",
                 "risk:vi_guard",
+                "risk:news_risk_guard",
+                "risk:disclosure_event_guard",
+                "risk:macro_regime_guard",
                 "risk:liquidity_stress_guard",
                 "risk:slippage_guard",
                 "risk:order_health_guard",
@@ -306,6 +318,12 @@ class StrategyPackEngine:
             _, gap_ratio = self.manager.analyze_gap(code)
             return self.manager.check_gap_condition(code), gap_ratio
 
+        if name == "theme_heat_filter":
+            return self.manager.check_market_theme_heat_filter(code, now_ts=context.now_ts)
+
+        if name == "intel_fresh_guard":
+            return self.manager.check_market_intel_fresh_guard(code, now_ts=context.now_ts)
+
         # Unknown filter is considered pass-through for forward compatibility.
         return True, None
 
@@ -368,6 +386,18 @@ class StrategyPackEngine:
 
         if name == "regime_guard":
             return True
+
+        if name == "news_risk_guard":
+            passed, _score = self.manager.check_market_news_risk_guard(code, now_ts=context.now_ts)
+            return passed
+
+        if name == "disclosure_event_guard":
+            passed, _level = self.manager.check_market_disclosure_event_guard(code, now_ts=context.now_ts)
+            return passed
+
+        if name == "macro_regime_guard":
+            passed, _regime = self.manager.check_market_macro_regime_guard(code, now_ts=context.now_ts)
+            return passed
 
         if name == "liquidity_stress_guard":
             if not bool(getattr(cfg, "use_liquidity_stress_guard", True)):

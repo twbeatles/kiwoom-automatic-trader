@@ -10,6 +10,73 @@ from typing import Any, List, Dict, Set, Optional
 
 _BASE_PATH = Path(__file__).resolve().parent
 
+
+def _default_market_intelligence_config() -> Dict[str, Any]:
+    return {
+        "enabled": True,
+        "providers": {
+            "news": True,
+            "dart": True,
+            "datalab": True,
+            "macro": True,
+        },
+        "refresh_sec": {
+            "news": 60,
+            "dart": 60,
+            "datalab": 60,
+            "macro": 300,
+        },
+        "briefing_time": "08:50",
+        "alert_channels": {
+            "ui": True,
+            "telegram": True,
+        },
+        "scoring": {
+            "news_block_threshold": -60,
+            "news_boost_threshold": 60,
+            "macro_block_threshold": -40,
+            "headline_velocity_threshold": 5,
+            "theme_heat_threshold": 60,
+            "weights": {
+                "keyword_frequency": 50,
+                "datalab_change": 30,
+                "ranking_intersection": 20,
+            },
+        },
+        "ai": {
+            "enabled": False,
+            "provider": "gemini",
+            "model": "gemini-2.5-flash-lite",
+            "fallback_model": "gpt-5-mini",
+            "daily_budget_krw": 1000,
+            "max_calls_per_day": 30,
+            "max_calls_per_symbol": 3,
+            "min_score_to_call": 60,
+        },
+        "macro_series": ["VIXCLS", "DGS10"],
+    }
+
+
+def _default_market_intel_state() -> Dict[str, Any]:
+    return {
+        "news_score": 0.0,
+        "news_sentiment": "neutral",
+        "news_headlines": [],
+        "headline_velocity": 0,
+        "dart_events": [],
+        "dart_risk_level": "normal",
+        "dart_block_until": None,
+        "theme_score": 0.0,
+        "theme_keywords": [],
+        "macro_regime": "neutral",
+        "briefing_summary": "",
+        "intel_updated_at": None,
+        "intel_status": "idle",
+        "intel_error": "",
+        "last_alert": "",
+        "ai_summary": {},
+    }
+
 @dataclass
 class TradingConfig:
     """실시간 트레이딩 설정 (UI와 로직 분리용)"""
@@ -106,6 +173,7 @@ class TradingConfig:
         "enable_backtest": True,
         "enable_external_data": True,
     })
+    market_intelligence: Dict[str, Any] = field(default_factory=_default_market_intelligence_config)
 
     # 실행 정책/추가 리스크 옵션 (기존 UI/설정과 정합)
     execution_policy: str = "market"
@@ -506,6 +574,12 @@ class Config:
     EXTERNAL_FLOW_REFRESH_SEC = 10
     EXTERNAL_FLOW_STALE_SEC = 30
     EXTERNAL_FLOW_ON_DEMAND_DEBOUNCE_SEC = 5
+    MARKET_INTEL_REFRESH_SEC = 60
+    MARKET_INTEL_MACRO_REFRESH_SEC = 300
+    MARKET_INTEL_STALE_SEC = 180
+    MARKET_INTEL_ALERT_DEDUP_SEC = 600
+    MARKET_INTEL_BRIEFING_TIME = "08:50"
+    MARKET_INTELLIGENCE_EVENTS_FILE = str(_BASE_PATH / "data" / "market_intelligence_events.jsonl")
     
     # =========================================================================
     # 기본 프리셋 정의
@@ -642,7 +716,7 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         """
     }
 
-    SETTINGS_SCHEMA_VERSION = 4
+    SETTINGS_SCHEMA_VERSION = 5
     # =========================================================================
     # 전략팩/백테스트/실행 정책 (v5.0)
     # =========================================================================
@@ -666,6 +740,43 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         "use_modular_strategy_pack": True,
         "enable_backtest": True,
         "enable_external_data": True,
+    }
+    DEFAULT_MARKET_INTELLIGENCE_CONFIG = _default_market_intelligence_config()
+    DEFAULT_MARKET_INTEL_STATE = _default_market_intel_state()
+    MARKET_INTELLIGENCE_HIGH_RISK_KEYWORDS = {
+        "유상증자",
+        "전환사채",
+        "cb",
+        "bw",
+        "신주인수권부사채",
+        "감사의견",
+        "거래정지",
+        "횡령",
+        "배임",
+        "실적정정",
+    }
+    MARKET_INTELLIGENCE_POSITIVE_KEYWORDS = {
+        "수주",
+        "계약",
+        "실적 개선",
+        "가이던스 상향",
+        "자사주",
+        "배당 확대",
+        "신제품",
+        "파트너십",
+    }
+    MARKET_INTELLIGENCE_NEGATIVE_KEYWORDS = {
+        "유상증자",
+        "전환사채",
+        "bw",
+        "신주인수권부사채",
+        "실적 하향",
+        "감사의견",
+        "거래정지",
+        "소송",
+        "횡령",
+        "배임",
+        "리콜",
     }
     DEFAULT_EXECUTION_POLICY = "market"
     STRATEGY_CAPABILITIES: Dict[str, Dict[str, bool]] = {

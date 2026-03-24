@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-09
+> **최종 업데이트**: 2026-03-24
 
 ---
 
@@ -22,6 +22,7 @@
 │   │   ├── trading_session.py
 │   │   ├── order_sync.py
 │   │   ├── execution_engine.py
+│   │   ├── market_intelligence.py
 │   │   ├── persistence_settings.py
 │   │   └── dialogs_profiles.py
 │   └── support/
@@ -78,6 +79,7 @@
 | `app/mixins/trading_session.py` | 시작/중지/유니버스/강제청산 |
 | `app/mixins/order_sync.py` | 실시간 주문 상태 동기화 |
 | `app/mixins/execution_engine.py` | 매수/매도 실행 엔진 |
+| `app/mixins/market_intelligence.py` | 뉴스/공시/트렌드/매크로 수집, 브리핑, 경보, 인텔리전스 탭 |
 | `app/mixins/persistence_settings.py` | 내역/통계/설정 저장·복원 |
 | `app/mixins/dialogs_profiles.py` | 프리셋/프로필/검색/수동주문/예약 |
 
@@ -116,17 +118,25 @@
 - `TradingConfig` 신규 필드:
   - `use_entry_scoring: bool`
   - `entry_score_threshold: int`
+  - `market_intelligence: Dict[str, Any]`
 
 - `Config` 실거래 가드:
   - `LIVE_GUARD_ENABLED`
   - `LIVE_GUARD_PHRASE`
   - `LIVE_GUARD_TIMEOUT_SEC`
 
-- 설정 스키마(v4):
-  - canonical은 `settings_version: 4`
+- 설정 스키마(v5):
+  - canonical은 `settings_version: 5`
   - `betting_ratio`를 canonical로 사용
   - `betting`은 legacy 호환용으로 병행 저장/로드
-  - `settings_version < 4` 파일은 로드 시 v4 가드 키 자동 보강
+  - `settings_version < 5` 파일은 로드 시 v4 가드 키 + `market_intelligence` 블록 자동 보강
+
+- 시장 인텔리전스 핵심 키:
+  - `universe[code]["market_intel"]`
+  - `news_score`, `news_sentiment`, `news_headlines`
+  - `dart_events`, `dart_risk_level`, `dart_block_until`
+  - `theme_score`, `theme_keywords`, `macro_regime`
+  - `briefing_summary`, `intel_updated_at`, `intel_status`, `intel_error`, `ai_summary`
 
 - 유니버스 표준 키:
   - `prev_high`, `prev_low`
@@ -178,6 +188,37 @@ python -m pytest -q tests/unit
 
 ---
 
+## 2026-03-24 시장 인텔리전스 동기화 메모
+
+1. 신규 믹스인/탭
+- `app/mixins/market_intelligence.py`를 추가했습니다.
+- API 탭에 시장 인텔리전스 설정 그룹이 생겼고, 메인 탭에 `🧠 인텔리전스` 탭이 추가되었습니다.
+
+2. 외부 데이터 계층 확장
+- 기존 `external_data` 경로를 유지하면서 `market_intelligence` canonical state를 병행합니다.
+- `external_status`/`external_updated_at`는 하위 호환용으로 유지되고, `market_intel` 결과를 mirror 업데이트합니다.
+
+3. provider 계층 확장
+- 신규: `data/providers/news_provider.py`, `naver_trend_provider.py`, `ai_provider.py`
+- 확장: `dart_provider.py`(최근 공시 + corp code 캐시), `macro_provider.py`(FRED bundle/latest values)
+
+4. 전략/백테스트 동기화
+- `strategy_manager.py`와 `strategies/pack.py`에 `news_risk_guard`, `disclosure_event_guard`, `macro_regime_guard`, `theme_heat_filter`, `intel_fresh_guard`가 추가되었습니다.
+- 현재 워크스페이스 검증 기준으로 `python -m pytest tests/unit --disable-warnings`는 `90 passed in 0.53s`이며, `pyright .` 재실행에는 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 설치가 필요합니다.
+- `backtest/engine.py`는 `BacktestIntelligenceEvent` sidecar replay를 지원합니다.
+
+5. 패키징/로그
+- `KiwoomTrader.spec`는 새 믹스인/프로바이더를 explicit import + `collect_submodules`로 함께 수집합니다.
+- 이벤트 로그는 `data/market_intelligence_events.jsonl`, DART corp code 캐시는 `data/dart_corp_codes.json`을 사용합니다.
+
+6. 최신 검증 결과
+```bash
+python -m pytest tests/unit --disable-warnings
+```
+- 결과: **90 passed in 0.53s** (2026-03-24)
+
+---
+
 ## 빌드
 
 ```bash
@@ -216,12 +257,12 @@ pyinstaller KiwoomTrader.spec
 - `KiwoomTrader.spec` hiddenimports에 `app.mixins._typing`을 명시했습니다.
 - `.gitignore`는 `pyrightconfig.json`을 예외로 유지해 정적 분석 설정을 버전 관리합니다.
 
-4. 최신 검증 결과
+4. 당시 검증 결과 (2026-03-09)
 ```bash
 pyright .
 python -m pytest -q tests/unit
 ```
-- 결과: `0 errors, 0 warnings`
+- 결과: `0 errors, 0 warnings` (2026-03-09 당시 환경)
 - 결과: `83 passed` (2026-03-09)
 
 ---
@@ -229,15 +270,15 @@ python -m pytest -q tests/unit
 ## 2026-03-05 추가 동기화 메모
 
 1. 설정 스키마 기준
-- 현재 canonical은 `settings_version = 4`입니다.
-- `settings_version < 4` 로드 시 v4 가드 키가 자동 보강됩니다(기존 값 우선, 누락 키만 default 주입).
+- 현재 canonical은 `settings_version = 5`입니다.
+- `settings_version < 5` 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다(기존 값 우선, 누락 키만 default 주입).
 
 2. 누락되기 쉬운 실제 모듈
 - `app/support/execution_policy.py` (market/limit 주문 라우팅)
 - `strategies/` (모듈형 전략팩 엔진)
 - `backtest/engine.py` (이벤트 드리븐 백테스트)
 - `portfolio/allocator.py` (리스크 예산 배분)
-- `data/providers/` (`kiwoom`, `dart`, `macro`, `csv`)
+- `data/providers/` (`kiwoom`, `dart`, `macro`, `csv`, `news`, `naver_trend`, `ai`)
 
 3. 테스트 기준 업데이트
 - 실행 기준: `python -m pytest -q tests/unit`
@@ -281,7 +322,7 @@ python tools/perf_smoke.py
 5. 빌드 스펙 점검(`KiwoomTrader.spec`)
 - 당시 변경은 런타임 로직 중심이었고, 이후 2026-03-09 정적 분석 helper 모듈(`app.mixins._typing`) hiddenimport가 추가되었습니다.
 
-6. 최신 테스트 기준
+6. 당시 테스트 기준 (2026-03-07)
 ```bash
 python -m pytest -q tests/unit
 ```

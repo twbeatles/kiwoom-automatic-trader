@@ -778,6 +778,9 @@ class TradingSessionMixin(TraderMixinBase):
                 else:
                     self._last_time_strategy_phase = None
                 self._start_external_refresh_loop(initialized_codes)
+                start_market_intel = getattr(self, "_start_market_intelligence_loop", None)
+                if callable(start_market_intel):
+                    start_market_intel(initialized_codes)
                 if self.ws_client:
                     self.ws_client.connect()
                     self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
@@ -814,6 +817,9 @@ class TradingSessionMixin(TraderMixinBase):
                     else:
                         self._last_time_strategy_phase = None
                     self._start_external_refresh_loop(initialized_codes)
+                    start_market_intel = getattr(self, "_start_market_intelligence_loop", None)
+                    if callable(start_market_intel):
+                        start_market_intel(initialized_codes)
 
                     self._dirty_codes.update(initialized_codes)
                     self.sig_update_table.emit()
@@ -869,6 +875,9 @@ class TradingSessionMixin(TraderMixinBase):
         self._last_exec_event.clear()
         self._last_time_strategy_phase = None
         self._stop_external_refresh_loop()
+        stop_market_intel = getattr(self, "_stop_market_intelligence_loop", None)
+        if callable(stop_market_intel):
+            stop_market_intel()
         self._stop_index_feed()
         self._global_risk_mode = "normal"
         self._global_risk_until = None
@@ -1022,6 +1031,9 @@ class TradingSessionMixin(TraderMixinBase):
                     "entry_origin": "watch",
                     "sync_failed_reason": "",
                 }
+                ensure_market_intel = getattr(self, "_ensure_market_intel_state", None)
+                if callable(ensure_market_intel):
+                    ensure_market_intel(target_universe[code])
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):
                     diag_touch(code, sync_status="watch", retry_count=0, last_sync_error="")

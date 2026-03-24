@@ -1,7 +1,13 @@
 # 급변동/서킷브레이커 대응 전략 확장 청사진
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-09 (v4 Guard 통합 + 기능 안정화 + 정적 분석/문서 동기화 반영 기준)
+최종 동기화: 2026-03-24 (v4 Guard 유지 + v5 설정 스키마 + 시장 인텔리전스 통합 반영 기준)
+
+추가 동기화: 2026-03-24
+
+- 프로젝트 canonical 설정 스키마는 현재 `settings_version = 5`입니다.
+- v4 guard 자체는 유지되며, `market_intelligence` 계층이 전략팩/백테스트에 추가 통합되었습니다.
+- 본 문서는 v4 guard 확장 청사진/구현 이력을 설명하는 문서로 유지합니다.
 
 ## 1) 목표
 
@@ -18,7 +24,7 @@
 - 범위: `F1~F8` 전부 반영 완료
 - 정책: `Fail-Closed` (불확실/오류 시 신규 진입 차단, 청산 허용)
 - 감지: 가격기반 1차 + 공식 상태연동 탐색(지원 시 우선, 미지원 시 proxy 폴백)
-- 스키마: `settings_version = 4` canonical
+- 스키마: 현재 canonical은 `settings_version = 5`, v4 guard 필드는 그대로 유지
 - 동기화: 라이브/전략팩/백테스트 guard 의미 일치
 
 ## 3) F1~F8 구현 결과
@@ -72,7 +78,7 @@
 - 진단 컬럼 확장: `market state`, `guard reason`, `risk mode`, `health mode`
 - KPI 필드: `guard_block_count_by_reason`, `shock_mode_minutes`, `order_health_degraded_count`, `avg_slippage_bps`
 
-## 4) 데이터 모델/설정 스키마(v4)
+## 4) 데이터 모델/설정 스키마(v5 current)
 
 ### 4.1 TradingConfig / Config 신규 필드(반영됨)
 
@@ -92,8 +98,8 @@
 
 ### 4.3 설정 마이그레이션(반영됨)
 
-- canonical: `settings_version = 4`
-- `settings_version < 4` 로드 시 누락 키 자동 보강
+- canonical: `settings_version = 5`
+- `settings_version < 5` 로드 시 v4 guard 키와 `market_intelligence` 블록 자동 보강
 - 기존 값 우선, 신규 키만 default 주입
 
 ## 5) 파일별 반영 지점
@@ -144,17 +150,22 @@
 - `tests/unit/test_sync_failed_manual_release.py`
 - `tests/unit/test_backtest_engine.py` (다종목 MTM 최신가 캐시 회귀 보강)
 
-최신 검증 결과(2026-03-07):
+최신 검증 결과(2026-03-24):
 
-- `python -m pytest -q tests/unit`
-- `83 passed`
+- `python -m pytest tests/unit --disable-warnings`
+- `90 passed in 0.53s`
 
 추가 동기화(2026-03-09):
 
 - `pyrightconfig.json`을 루트 추적 파일로 추가하여 repo-wide 정적 분석 기준을 고정
-- `pyright .` -> `0 errors, 0 warnings`
+- `pyright .` -> `0 errors, 0 warnings` (2026-03-09 당시 환경)
 - `KiwoomTrader.spec` / 문서 / `.gitignore`를 `app/mixins/_typing.py` 및 현재 구조 기준으로 동기화
 - UTF-8 인코딩 스캔 결과 디코드 실패 및 `U+FFFD` 없음
+
+추가 메모(2026-03-24):
+
+- 현재 워크스페이스에서 `pyright .`를 다시 실행하려면 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성 설치가 필요
+- `KiwoomTrader.spec`는 시장 인텔리전스 신규 provider/mixin을 hiddenimport에 반영했고, 런타임 JSON/JSONL 산출물은 번들에서 제외
 
 ## 7) 수용 기준 반영 상태
 

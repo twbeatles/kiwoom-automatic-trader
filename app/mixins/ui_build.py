@@ -172,6 +172,8 @@ class UIBuildMixin(TraderMixinBase):
         tabs.addTab(self._create_ranking_tab(), "🏆 순위")
         tabs.addTab(self._create_stats_tab(), "📊 통계")
         tabs.addTab(self._create_history_tab(), "📝 내역")
+        if hasattr(self, "_create_market_intelligence_tab"):
+            tabs.addTab(self._create_market_intelligence_tab(), "🧠 인텔리전스")
         tabs.addTab(self._create_diagnostics_tab(), "🩺 진단")
         tabs.addTab(self._create_api_tab(), "🔑 API")
         return tabs
@@ -1116,6 +1118,10 @@ class UIBuildMixin(TraderMixinBase):
 
         group3.setLayout(form3)
         layout.addWidget(group3)
+
+        market_group_builder = getattr(self, "_create_market_intelligence_api_group", None)
+        if callable(market_group_builder):
+            layout.addWidget(market_group_builder())
         
         btn_save = QPushButton("💾 설정 저장")
         btn_save.clicked.connect(self._save_settings)

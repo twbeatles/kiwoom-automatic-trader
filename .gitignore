@@ -47,6 +47,7 @@ log/
 # User-requested exclusions: text/json/db artifacts
 *.txt
 *.json
+*.jsonl
 *.db
 *.sqlite
 *.sqlite3
@@ -61,7 +62,9 @@ log/
 data/*.db
 data/*.sqlite*
 data/*.json
+data/*.jsonl
 !data/stock_master_cache.json
+!docs/refactor/*.json
 tmp/
 temp/
 *.bak

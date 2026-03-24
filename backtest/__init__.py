@@ -1,8 +1,9 @@
-﻿from .engine import BacktestBar, BacktestConfig, BacktestResult, EventDrivenBacktestEngine
+from .engine import BacktestBar, BacktestConfig, BacktestIntelligenceEvent, BacktestResult, EventDrivenBacktestEngine
 
 __all__ = [
     "BacktestBar",
     "BacktestConfig",
+    "BacktestIntelligenceEvent",
     "BacktestResult",
     "EventDrivenBacktestEngine",
 ]

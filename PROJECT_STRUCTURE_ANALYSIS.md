@@ -1,7 +1,7 @@
 # Kiwoom Automatic Trader 프로젝트 구조 분석
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-09  
+최종 동기화: 2026-03-24  
 분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`
 
 ## 1) 요약
@@ -12,6 +12,7 @@
 - UI/상태: `app/main_window.py` + `app/mixins/ui_build.py`
 - 세션/수명주기: `app/mixins/trading_session.py`
 - 체결 기반 매매 엔진: `app/mixins/execution_engine.py`
+- 시장 인텔리전스: `app/mixins/market_intelligence.py`
 - 주문/계좌 동기화 Fail-safe: `app/mixins/order_sync.py`
 - 전략 평가: `strategy_manager.py` + `strategies/pack.py`
 - API 통신: `api/rest_client.py`, `api/websocket_client.py`
@@ -52,7 +53,7 @@
 ### 조립 클래스
 
 - `app/main_window.py`
-  - `KiwoomProTrader`는 9개 믹스인을 다중상속으로 조립
+  - `KiwoomProTrader`는 10개 믹스인을 다중상속으로 조립
   - 정적 분석 시 `app/mixins/_typing.py`의 `TraderMixinBase`를 통해 `QMainWindow` 성격과 동적 속성 접근을 타입으로 보강
   - 시그널:
     - `sig_log`
@@ -66,6 +67,7 @@
 - `api_account.py`: API 연결, 계좌정보, 실거래 가드
 - `trading_session.py`: 시작/중지, 유니버스 초기화, 시간청산
 - `execution_engine.py`: 틱 이벤트 기반 매수/매도 의사결정 및 주문 실행
+- `market_intelligence.py`: 뉴스/공시/검색트렌드/매크로 수집, 브리핑, 경보, 전용 탭
 - `order_sync.py`: 주문/체결 이벤트 반영, 포지션 동기화, sync 실패 차단
 - `persistence_settings.py`: 설정/내역 저장, 스키마 호환
 - `dialogs_profiles.py`: 프리셋/프로필/수동주문/예약
@@ -133,6 +135,7 @@
 - 포지션: `held`, `buy_price`, `invest_amount`, `buy_time`
 - 리스크/상태: `status`, `max_profit_rate`, `cooldown_until`, `breakout_hits`, `partial_profit_levels`
 - 외부데이터: `investor_net`, `program_net`, `external_status`, `external_updated_at`, `external_error`
+- 시장 인텔리전스: `market_intel.news_score`, `market_intel.dart_risk_level`, `market_intel.theme_score`, `market_intel.macro_regime`, `market_intel.intel_status`
 
 ### 상태(state) 흐름
 
@@ -191,12 +194,11 @@
 
 ## 8) 테스트/검증 현황
 
-2026-03-09 실행:
+2026-03-24 실행:
 
-- 명령: `python -m pytest -q tests/unit`
-- 결과: `83 passed`
-- 명령: `pyright .`
-- 결과: `0 errors, 0 warnings`
+- 명령: `python -m pytest tests/unit --disable-warnings`
+- 결과: `90 passed in 0.53s`
+- 정적 분석 메모: `pyright .`는 현재 워크스페이스에서 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성 설치 후 재실행 필요
 - 인코딩 점검: UTF-8 디코드 실패 없음, `U+FFFD` 없음
 
 커버되는 핵심 시나리오:
@@ -216,11 +218,12 @@
 
 ## 9) 문서-코드 동기화 메모
 
-`README.md`/`CLAUDE.md`/`GEMINI.md`/`STRATEGY_EXPANSION_BLUEPRINT.md` 기준으로 v4 guard 정책, 정적 분석 기준, 설정 스키마를 동기화했습니다.
+`README.md`/`CLAUDE.md`/`GEMINI.md`/`STRATEGY_EXPANSION_BLUEPRINT.md`/`MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md` 기준으로 v4 guard 정책, v5 설정 스키마, market intelligence 구현, 정적 분석 선행 의존성을 동기화했습니다.
 
-- canonical 설정 스키마: `settings_version = 4`
+- canonical 설정 스키마: `settings_version = 5`
 - 신규 가드 기본값/진단 컬럼/KPI 항목 문서 반영
 - `pyrightconfig.json` 추적 및 `app/mixins/_typing.py` 역할을 문서에 반영
+- `app/mixins/market_intelligence.py`, 신규 provider, 인텔리전스 탭/이벤트 로그를 문서에 반영
 - README 구조 트리와 테스트 현황을 현재 기준으로 정리
 
 ## 10) 후속 고도화 지점

@@ -1,3 +1,4 @@
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -63,7 +64,8 @@ def _build_harness(keyword, cache_provider, rest_client=None):
 
 class TestStockSearchDialog(unittest.TestCase):
     def test_stock_search_code_query_uses_rest_quote(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             cache_path = Path(tmpdir) / "stock_master_cache.json"
             cache_provider = StockMasterCacheProvider(str(cache_path))
             rest_client = _DummyRestClient()
@@ -79,9 +81,12 @@ class TestStockSearchDialog(unittest.TestCase):
 
             cached = cache_provider.search("005930")
             self.assertTrue(any(row.get("code") == "005930" for row in cached))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def test_stock_search_name_query_uses_local_cache(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             cache_path = Path(tmpdir) / "stock_master_cache.json"
             cache_provider = StockMasterCacheProvider(str(cache_path))
             cache_provider.upsert("005930", "삼성전자", "KOSPI", 71000)
@@ -94,6 +99,8 @@ class TestStockSearchDialog(unittest.TestCase):
             self.assertEqual(harness.rendered_rows[0]["code"], "005930")
             self.assertEqual(harness.rendered_rows[0]["source"], "cache")
             self.assertIn("캐시 검색 1건", harness.search_status.text_value)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 ﻿import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -128,7 +129,8 @@ class _Harness(PersistenceSettingsMixin):
 class TestSettingsSchemaV4Compat(unittest.TestCase):
     def test_v3_file_loads_with_v4_guard_defaults(self):
         trader = _Harness()
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(json.dumps({"settings_version": 3, "codes": "005930"}), encoding="utf-8")
 
@@ -136,12 +138,15 @@ class TestSettingsSchemaV4Compat(unittest.TestCase):
                 "app.mixins.persistence_settings.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
         self.assertTrue(trader.chk_use_shock_guard.isChecked())
         self.assertTrue(trader.chk_use_vi_guard.isChecked())
         self.assertTrue(trader.chk_use_order_health_guard.isChecked())
         self.assertGreater(float(trader.spin_max_slippage_bps.value()), 0.0)
         self.assertTrue(getattr(trader.config, "use_shock_guard", False))
+        self.assertIsInstance(getattr(trader.config, "market_intelligence", {}), dict)
 
 
 if __name__ == "__main__":

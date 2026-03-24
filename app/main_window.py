@@ -20,6 +20,7 @@ from .mixins.api_account import APIAccountMixin
 from .mixins.dialogs_profiles import DialogsProfilesMixin
 from .mixins.execution_engine import ExecutionEngineMixin
 from .mixins.market_data_tabs import MarketDataTabsMixin
+from .mixins.market_intelligence import MarketIntelligenceMixin
 from .mixins.order_sync import OrderSyncMixin
 from .mixins.persistence_settings import PersistenceSettingsMixin
 from .mixins.system_shell import SystemShellMixin
@@ -32,6 +33,7 @@ class KiwoomProTrader(
     MarketDataTabsMixin,
     SystemShellMixin,
     APIAccountMixin,
+    MarketIntelligenceMixin,
     TradingSessionMixin,
     OrderSyncMixin,
     ExecutionEngineMixin,
@@ -79,6 +81,15 @@ class KiwoomProTrader(
         self._external_refresh_inflight: Set[str] = set()
         self._external_last_fetch_ts: Dict[str, float] = {}
         self._external_refresh_timer: Optional[QTimer] = None
+        self._market_intel_timer: Optional[QTimer] = None
+        self._market_intel_sources: Dict[str, Dict[str, Any]] = {}
+        self._market_intel_dirty_codes: Set[str] = set()
+        self._market_intel_row_to_code: Dict[int, str] = {}
+        self._last_market_intel_fetch_ts = 0.0
+        self._market_intel_alert_ts: Dict[str, float] = {}
+        self._market_ai_usage: Dict[str, Any] = {}
+        self._market_briefing_sent_day = ""
+        self._market_macro_cache: Dict[str, Any] = {"values": {}, "ts": 0.0}
         self._last_time_strategy_phase: Optional[str] = None
         self._force_quit_requested = False
         self._shutdown_in_progress = False
@@ -138,6 +149,7 @@ class KiwoomProTrader(
         self.sig_order_execution.connect(self._on_order_execution)
         self.sig_update_table.connect(self._refresh_table)
         self.sig_update_table.connect(self._refresh_diagnostics)
+        self.sig_update_table.connect(self._refresh_market_intelligence_table)
         
         # 전략 매니저 (Config 전달)
         self.strategy = StrategyManager(self, self.config)
@@ -334,6 +346,9 @@ class KiwoomProTrader(
             self.chk_use_order_health_guard.toggled.connect(
                 lambda v: setattr(self.config, "use_order_health_guard", bool(v))
             )
+        bind_market_intel = getattr(self, "_bind_market_intelligence_signals", None)
+        if callable(bind_market_intel):
+            bind_market_intel()
 
         # 현재 UI 값으로 config 초기 동기화
         self.config.betting_ratio = self.spin_betting.value()
@@ -446,6 +461,9 @@ class KiwoomProTrader(
             self.config.max_slippage_bps = float(self.spin_max_slippage_bps.value())
         if hasattr(self, "chk_use_order_health_guard"):
             self.config.use_order_health_guard = bool(self.chk_use_order_health_guard.isChecked())
+        sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+        if callable(sync_market_intel):
+            sync_market_intel()
 
     def _diag_touch(self, code: str, **fields: Any):
         if not code:

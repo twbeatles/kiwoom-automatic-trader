@@ -1,4 +1,5 @@
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -109,7 +110,8 @@ class _Harness(PersistenceSettingsMixin):
 class TestSettingsDefaultConsistency(unittest.TestCase):
     def test_missing_market_sector_defaults_follow_config_constants(self):
         trader = _Harness()
-        with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(
                 json.dumps({"settings_version": 4, "codes": "005930"}, ensure_ascii=False),
@@ -119,6 +121,8 @@ class TestSettingsDefaultConsistency(unittest.TestCase):
                 "app.mixins.persistence_settings.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
         self.assertEqual(trader.spin_market_limit.value(), Config.DEFAULT_MARKET_LIMIT)
         self.assertEqual(trader.spin_sector_limit.value(), Config.DEFAULT_SECTOR_LIMIT)

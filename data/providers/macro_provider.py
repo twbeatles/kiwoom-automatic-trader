@@ -1,7 +1,6 @@
 ﻿"""Macro data provider (FRED free API)."""
 
 import os
-from datetime import datetime
 from typing import Dict, List
 
 import requests
@@ -48,3 +47,23 @@ class MacroProvider:
                 except ValueError:
                     continue
         return 0.0
+
+    def get_series_bundle(
+        self, series_ids: List[str], start_date: str = "", end_date: str = ""
+    ) -> Dict[str, List[Dict[str, str]]]:
+        bundle: Dict[str, List[Dict[str, str]]] = {}
+        for series_id in series_ids:
+            sid = str(series_id or "").strip()
+            if not sid:
+                continue
+            bundle[sid] = self.get_series(sid, start_date=start_date, end_date=end_date)
+        return bundle
+
+    def latest_values(self, series_ids: List[str]) -> Dict[str, float]:
+        values: Dict[str, float] = {}
+        for series_id in series_ids:
+            sid = str(series_id or "").strip()
+            if not sid:
+                continue
+            values[sid] = self.latest_value(sid)
+        return values
