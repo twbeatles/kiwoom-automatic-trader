@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
+from app.support.ui_text import combo_value, set_combo_value
 from app.support.worker import Worker
 from config import Config
 from dark_theme import DARK_STYLESHEET
@@ -226,7 +227,7 @@ class DialogsProfilesMixin(TraderMixinBase):
             "use_volume": self.chk_use_volume.isChecked(),
             "volume_mult": self.spin_volume_mult.value(),
             "use_risk": self.chk_use_risk.isChecked(),
-            "daily_loss_basis": self.combo_daily_loss_basis.currentText() if hasattr(self, "combo_daily_loss_basis") else "total_equity",
+            "daily_loss_basis": combo_value(self.combo_daily_loss_basis, "total_equity") if hasattr(self, "combo_daily_loss_basis") else "total_equity",
             "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked() if hasattr(self, "chk_sync_history_flush_on_exit") else True,
             "codes": self.input_codes.text(),
             "use_ma": self.chk_use_ma.isChecked(),
@@ -265,12 +266,12 @@ class DialogsProfilesMixin(TraderMixinBase):
             "entry_score_threshold": self.spin_entry_score_threshold.value(),
             "strategy_pack": dict(getattr(self.config, "strategy_pack", {})) if hasattr(self, "config") else {},
             "strategy_params": dict(getattr(self.config, "strategy_params", {})) if hasattr(self, "config") else {},
-            "portfolio_mode": self.combo_portfolio_mode.currentText() if hasattr(self, "combo_portfolio_mode") else "single_strategy",
+            "portfolio_mode": combo_value(self.combo_portfolio_mode, "single_strategy") if hasattr(self, "combo_portfolio_mode") else "single_strategy",
             "short_enabled": self.chk_short_enabled.isChecked() if hasattr(self, "chk_short_enabled") else False,
-            "asset_scope": self.combo_asset_scope.currentText() if hasattr(self, "combo_asset_scope") else "kr_stock_live",
-            "execution_policy": self.combo_execution_policy.currentText() if hasattr(self, "combo_execution_policy") else "market",
+            "asset_scope": combo_value(self.combo_asset_scope, "kr_stock_live") if hasattr(self, "combo_asset_scope") else "kr_stock_live",
+            "execution_policy": combo_value(self.combo_execution_policy, "market") if hasattr(self, "combo_execution_policy") else "market",
             "backtest_config": {
-                "timeframe": self.combo_backtest_timeframe.currentText() if hasattr(self, "combo_backtest_timeframe") else "1d",
+                "timeframe": combo_value(self.combo_backtest_timeframe, "1d") if hasattr(self, "combo_backtest_timeframe") else "1d",
                 "lookback_days": self.spin_backtest_lookback.value() if hasattr(self, "spin_backtest_lookback") else 365,
                 "commission_bps": self.spin_backtest_commission.value() if hasattr(self, "spin_backtest_commission") else 5.0,
                 "slippage_bps": self.spin_backtest_slippage.value() if hasattr(self, "spin_backtest_slippage") else 3.0,
@@ -339,7 +340,7 @@ class DialogsProfilesMixin(TraderMixinBase):
         if 'use_risk' in settings:
             self.chk_use_risk.setChecked(settings['use_risk'])
         if 'daily_loss_basis' in settings and hasattr(self, "combo_daily_loss_basis"):
-            self.combo_daily_loss_basis.setCurrentText(str(settings['daily_loss_basis']))
+            set_combo_value(self.combo_daily_loss_basis, str(settings['daily_loss_basis']))
         if 'sync_history_flush_on_exit' in settings and hasattr(self, "chk_sync_history_flush_on_exit"):
             self.chk_sync_history_flush_on_exit.setChecked(bool(settings['sync_history_flush_on_exit']))
         if 'use_ma' in settings:
@@ -433,16 +434,16 @@ class DialogsProfilesMixin(TraderMixinBase):
         if 'use_order_health_guard' in settings and hasattr(self, "chk_use_order_health_guard"):
             self.chk_use_order_health_guard.setChecked(bool(settings['use_order_health_guard']))
         if 'portfolio_mode' in settings and hasattr(self, "combo_portfolio_mode"):
-            self.combo_portfolio_mode.setCurrentText(str(settings['portfolio_mode']))
+            set_combo_value(self.combo_portfolio_mode, str(settings['portfolio_mode']))
         if 'short_enabled' in settings and hasattr(self, "chk_short_enabled"):
             self.chk_short_enabled.setChecked(bool(settings['short_enabled']))
         if 'asset_scope' in settings and hasattr(self, "combo_asset_scope"):
-            self.combo_asset_scope.setCurrentText(str(settings['asset_scope']))
+            set_combo_value(self.combo_asset_scope, str(settings['asset_scope']))
         if 'execution_policy' in settings and hasattr(self, "combo_execution_policy"):
-            self.combo_execution_policy.setCurrentText(str(settings['execution_policy']))
+            set_combo_value(self.combo_execution_policy, str(settings['execution_policy']))
         if isinstance(settings.get('strategy_pack'), dict):
             if hasattr(self, "combo_strategy_pack"):
-                self.combo_strategy_pack.setCurrentText(str(settings['strategy_pack'].get('primary_strategy', 'volatility_breakout')))
+                set_combo_value(self.combo_strategy_pack, str(settings['strategy_pack'].get('primary_strategy', 'volatility_breakout')))
             if hasattr(self, "config"):
                 self.config.strategy_pack = dict(settings['strategy_pack'])
         if isinstance(settings.get('strategy_params'), dict) and hasattr(self, "config"):
@@ -450,7 +451,7 @@ class DialogsProfilesMixin(TraderMixinBase):
         if isinstance(settings.get('backtest_config'), dict):
             bt = settings['backtest_config']
             if hasattr(self, "combo_backtest_timeframe"):
-                self.combo_backtest_timeframe.setCurrentText(str(bt.get('timeframe', '1d')))
+                set_combo_value(self.combo_backtest_timeframe, str(bt.get('timeframe', '1d')))
             if hasattr(self, "spin_backtest_lookback"):
                 self.spin_backtest_lookback.setValue(int(bt.get('lookback_days', 365)))
             if hasattr(self, "spin_backtest_commission"):
@@ -504,7 +505,7 @@ class DialogsProfilesMixin(TraderMixinBase):
             if hasattr(self, "chk_market_ai_enabled"):
                 self.chk_market_ai_enabled.setChecked(bool(ai_cfg.get('enabled', False)))
             if hasattr(self, "combo_market_ai_provider"):
-                self.combo_market_ai_provider.setCurrentText(str(ai_cfg.get('provider', 'gemini')))
+                set_combo_value(self.combo_market_ai_provider, str(ai_cfg.get('provider', 'gemini')))
             if hasattr(self, "input_market_ai_model"):
                 self.input_market_ai_model.setText(str(ai_cfg.get('model', 'gemini-2.5-flash-lite')))
             if hasattr(self, "spin_market_ai_daily_calls"):

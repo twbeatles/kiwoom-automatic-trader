@@ -1,7 +1,7 @@
 # 시장 인텔리전스 자동매매 확장 부록
 
 작성일: 2026-03-25  
-기준: 현재 코드베이스 실구현
+기준: 현재 코드베이스 실구현 + 한글 UI 개편 반영
 
 ## 1) 목적
 
@@ -12,13 +12,13 @@
 | 항목 | 상태 | 현재 구현 내용 |
 |---|---|---|
 | 설정/상태 스키마 | 완료 | `settings_version = 6`, `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay` |
-| provider 상태 분리 | 완료 | `ok_with_data`, `ok_empty`, `error` 구분과 핵심 소스 실패 보수 처리 |
+| provider 상태 분리 | 완료 | `ok_with_data`, `ok_empty`, `error`, `partial` 구분과 핵심 소스 실패 보수 처리 |
 | 구조화 이벤트 로그 | 완료 | `market/sector/theme/symbol` scope 이벤트와 payload 기반 replay |
 | soft-scale sizing | 완료 | `size_multiplier`, `portfolio_budget_scale`가 실제 진입 수량에 반영 |
 | 보유 포지션 방어 | 완료 | `watch_only`, `reduce_size`, `tighten_exit`, `force_exit` |
 | bounded AI overlay | 완료 | 임계치/예산/호출 수 제한, 보조 정책만 허용 |
 | 감사 로그 | 완료 | `data/decision_audit.jsonl` |
-| 리플레이 뷰어 | 완료 | `📼 리플레이` 탭 |
+| 리플레이 뷰어 | 완료 | `📼 인텔리전스 리플레이` 탭 |
 | candidate universe | 완료 | dual-source 승격과 TTL 기반 활성 후보 유지 |
 
 ## 3) 실제 주문 연결 방식
@@ -44,23 +44,26 @@
 - 핵심 소스 오류 시 상태를 억지로 `fresh` 처리하지 않는다.
 - 긍정 뉴스는 단독 매수 신호가 아니라 수량/우선순위 보정용이다.
 
-## 5) 운영 관점에서 바로 확인해야 할 파일
+## 5) 운영 관점에서 바로 확인해야 할 위치
+
+파일:
 
 - `data/market_intelligence_events.jsonl`
 - `data/decision_audit.jsonl`
 - `REAL_API_PREPARATION_GUIDE.md`
 
-실제 앱에서는 아래 화면을 본다.
+실제 앱 화면:
 
-- `🧠 인텔리전스` 탭
-- 진단 탭
-- `📼 리플레이` 탭
+- `🧠 인텔리전스 설정`
+- `🧠 인텔리전스 현황`
+- `🩺 시스템 진단`
+- `📼 인텔리전스 리플레이`
 
 ## 6) 실거래 전 rollout 권장 순서
 
 1. 시장 인텔리전스만 켜고 실주문은 끈 상태로 로그를 하루 이상 수집한다.
 2. `decision_audit.jsonl`에서 차단 사유와 수량 조정이 기대대로 기록되는지 확인한다.
-3. `📼 리플레이` 탭으로 이벤트와 감사 로그가 한 세션 동안 일관되게 보이는지 확인한다.
+3. `📼 인텔리전스 리플레이` 탭으로 이벤트와 감사 로그가 한 세션 동안 일관되게 보이는지 확인한다.
 4. AI는 끈 상태에서 NAVER/DART/FRED 품질을 먼저 검증한다.
 5. 이후 AI를 예산 제한 하에 점진적으로 켠다.
 6. 실거래 전에는 `REAL_API_PREPARATION_GUIDE.md` 체크리스트를 끝까지 점검한다.

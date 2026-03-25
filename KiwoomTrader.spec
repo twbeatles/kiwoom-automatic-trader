@@ -7,6 +7,7 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-03-09: pyright 정리용 type-check helper(`app.mixins._typing`) 추가, 패키징 동작은 동일
 2026-03-24: 시장 인텔리전스 믹스인/프로바이더/백테스트 sidecar 확장 반영, collect_submodules + explicit import 동기화
 2026-03-25: 리플레이 탭/decision audit 로그/viewer 추가 반영, 신규 런타임 JSONL 산출물은 계속 번들 제외
+2026-03-25: 초보자 친화 한글 UI, 전용 인텔리전스 설정 탭, ui_text 표시 헬퍼 반영
 """
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -64,6 +65,7 @@ hiddenimports = [
     'app.support.widgets',
     'app.support.worker',
     'app.support.execution_policy',
+    'app.support.ui_text',
     'config',
     'strategy_manager',
     'sound_notifier',

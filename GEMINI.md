@@ -16,6 +16,7 @@
 - 타입 보조: `app/mixins/_typing.py`의 `TraderMixinBase`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
 - 주문 라우팅 지원: `app/support/execution_policy.py`
+- UI 텍스트/콤보 표시값 헬퍼: `app/support/ui_text.py`
 
 ---
 
@@ -139,11 +140,11 @@ pyinstaller KiwoomTrader.spec
 
 1. 현재 canonical 설정 스키마는 `settings_version = 6` 입니다.
 2. `TradingConfig.market_intelligence`는 `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함합니다.
-3. 메인 UI에는 `🧠 인텔리전스` 탭과 `📼 리플레이` 탭이 있으며, 감사 로그는 `data/decision_audit.jsonl`에 기록됩니다.
+3. 메인 UI는 `🎯 핵심 설정`, `🛠 상세 설정`, `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`, `🔐 API/알림` 구조이며, 감사 로그는 `data/decision_audit.jsonl`에 기록됩니다.
 4. 운영 문서:
    - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`
    - `REAL_API_PREPARATION_GUIDE.md`
-5. 최신 검증 결과는 `python -m pytest -q tests/unit` 기준 `tests/unit` 전체 103개 테스트 통과 (2026-03-25 재실행 기준) 입니다.
+5. 최신 검증 결과는 `python -m pytest -q tests/unit` 기준 `tests/unit` 전체 104개 테스트 통과 (2026-03-25 재실행 기준) 입니다.
 
 ---
 
@@ -250,7 +251,7 @@ pytest -q tests/unit
 ## 2026-03-02 UI/UX 리팩토링 및 다크 테마 고도화
 
 ### 1) UI 레이아웃 개선
-- `ui_build.py`의 고급 설정 탭을 6개의 QGroupBox(기술 지표, 리스크 관리, 진입 전략 등)로 그룹화하여 사용성 강화.
+- `ui_build.py`의 상세 설정을 6개 하위 탭(진입 판단, 리스크 관리, 주문/청산, 전략팩/백테스트, 시장 급변동 보호, 시스템)으로 재구성하여 사용성 강화.
 - 위젯 객체명과 시그널은 그대로 유지하여 비즈니스 로직(특히 설정 및 체결 동기화 로직)에 영향을 주지 않도록 설계되었습니다.
 
 ### 2) 다크 테마 및 버전 통합

@@ -106,7 +106,7 @@ class SystemShellMixin(TraderMixinBase):
             lambda: QMessageBox.information(
                 self,
                 "정보",
-                "Kiwoom Pro Algo-Trader v4.5\nREST API 기반 + 안정성/UX 개선",
+                "키움 자동매매 도우미 v4.5\nKiwoom Pro Algo-Trader\nREST API 기반 + 초보자 친화 UI 개편",
             ),
         )
 
@@ -116,7 +116,7 @@ class SystemShellMixin(TraderMixinBase):
             return
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setIcon(QIcon("icon.png"))
-        self.tray_icon.setToolTip("Kiwoom Pro Algo-Trader v4.5")
+        self.tray_icon.setToolTip("키움 자동매매 도우미 v4.5")
 
         tray_menu = QMenu()
         action_show = QAction("열기", self)

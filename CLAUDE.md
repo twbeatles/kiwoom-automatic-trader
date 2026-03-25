@@ -197,8 +197,8 @@ python -m pytest -q tests/unit
 - `market_intelligence`는 `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함하는 운영 스키마입니다.
 
 2. UI/감사 로그
-- 메인 탭에 `📼 리플레이` 탭이 추가되어 `data/market_intelligence_events.jsonl`, `data/decision_audit.jsonl`를 직접 열람합니다.
-- `🧠 인텔리전스` 탭과 진단 탭에는 `source health`, `action policy`, `size multiplier`, `exit policy`, `last event id`가 반영됩니다.
+- 메인 탭에 `📼 인텔리전스 리플레이` 탭이 추가되어 `data/market_intelligence_events.jsonl`, `data/decision_audit.jsonl`를 직접 열람합니다.
+- `🧠 인텔리전스 현황` 탭과 `🩺 시스템 진단` 탭에는 `소스 상태`, `자동매매 정책`, `수량 배수`, `청산 정책`, `마지막 이벤트 ID`가 반영됩니다.
 
 3. 운영 문서
 - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`는 시장 인텔리전스 자동매매 연결 상태와 운영 rollout을 설명합니다.
@@ -208,7 +208,7 @@ python -m pytest -q tests/unit
 ```bash
 python -m pytest -q tests/unit
 ```
-- 결과: `tests/unit` 전체 103개 테스트 통과 (2026-03-25 재실행 기준)
+- 결과: `tests/unit` 전체 104개 테스트 통과 (2026-03-25 재실행 기준)
 
 ---
 
@@ -216,7 +216,7 @@ python -m pytest -q tests/unit
 
 1. 신규 믹스인/탭
 - `app/mixins/market_intelligence.py`를 추가했습니다.
-- API 탭에 시장 인텔리전스 설정 그룹이 생겼고, 메인 탭에 `🧠 인텔리전스` 탭과 `📼 리플레이` 탭이 추가되었습니다.
+- 현재 기준 메인 탭에는 `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`가 분리되어 있고, `🔐 API/알림` 탭은 인증/알림 전용으로 정리되었습니다.
 
 2. 외부 데이터 계층 확장
 - 기존 `external_data` 경로를 유지하면서 `market_intelligence` canonical state를 병행합니다.
@@ -353,8 +353,8 @@ python -m pytest -q tests/unit
 
 ## 2026-03-02 UI/UX 리팩토링 및 다크 테마 고도화
 
-1. 고급 설정 탭 재조직 (`ui_build.py`):
-- 기존 평면적 폼을 6개의 QGroupBox(기술지표, 리스크관리, 진입전략, 주문실행, v5.0, 시스템)로 분리해 가독성 강화.
+1. 상세 설정 탭 재조직 (`ui_build.py`):
+- 현재 기준 `🛠 상세 설정`은 6개 하위 탭(진입 판단, 리스크 관리, 주문/청산, 전략팩/백테스트, 시장 급변동 보호, 시스템)으로 분리되어 있습니다.
 - 기존 위젯 변수명과 시그널을 동일하게 유지해 하위 로직 호환성 100% 보장.
 
 2. 프리미엄 다크 테마 적용 (`dark_theme.py`):

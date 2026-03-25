@@ -138,7 +138,8 @@ v4.5는 **보안(Security)** 및 **시스템 통합(Integration)** 중심의 메
 | **실시간 체결** | WebSocket 주문 체결(Chejan) 연동 | 즉각적인 잔고/주문 상태 동기화 |
 
 ### 🎨 프리미엄 UI/UX 리팩토링
-- **모던 레이아웃**: 고급 설정 탭을 6개의 직관적인 그룹박스(기술지표, 리스크 등)로 재조직
+- **초보자 친화 정보구조**: `🎯 핵심 설정`과 `🛠 상세 설정`을 분리하고, 상세 설정은 6개 하위 탭으로 재구성
+- **전용 인텔리전스 설정 탭**: `🧠 인텔리전스 설정`을 별도 탭으로 분리해 API/알림 화면과 역할을 명확히 구분
 - **프리미엄 테마**: QSplitter, ToolTip 등 18종의 위젯 스타일 전체 보완 및 v4.5 테마 일원화
 - **사용자 경험(UX)**: 가독성, 컨트롤 그루핑, 대시보드 시인성 고도화
 
@@ -185,7 +186,7 @@ kiwoom-automatic-trader/
 │   ├── mixins/
 │   │   ├── _typing.py       # pyright용 type-only Qt base
 │   │   └── ...              # UI/세션/인텔리전스/실행/동기화/저장/프로필
-│   └── support/             # worker/widgets/execution_policy
+│   └── support/             # worker/widgets/execution_policy/ui_text
 ├── backtest/                # 이벤트 드리븐 백테스트 엔진
 ├── strategies/              # 모듈형 전략팩
 ├── portfolio/               # 포지션 예산 배분
@@ -284,7 +285,7 @@ python -m pytest -q tests/unit
 
 - canonical 설정 스키마 기준을 `settings_version = 6`으로 문서 전반에 통일
 - 시장 인텔리전스 자동매매 확장에 맞춰 `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay` 하위 설정과 `action_policy`/`size_multiplier`/`exit_policy` 흐름을 문서화
-- 메인 UI의 `📼 리플레이` 탭과 `data/decision_audit.jsonl` 감사 로그를 README에 반영
+- 메인 UI의 `📼 인텔리전스 리플레이` 탭과 `data/decision_audit.jsonl` 감사 로그를 README에 반영
 - 삭제 상태였던 `STRATEGY_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`를 현재 코드 기준 문서로 복원
 - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`, `REAL_API_PREPARATION_GUIDE.md`를 운영 문서로 추가
 - `KiwoomTrader.spec`, `.gitignore`를 런타임 로그/감사 로그/리플레이 산출물 기준으로 재검토
@@ -295,7 +296,7 @@ python -m pytest -q tests/unit
 python -m pytest -q tests/unit
 ```
 
-- 결과: **`tests/unit` 전체 103개 테스트 통과** (2026-03-25 재실행 기준)
+- 결과: **`tests/unit` 전체 104개 테스트 통과** (2026-03-25 재실행 기준)
 - 로컬 재실행 시간: **약 21.44초**
 
 ---
@@ -308,7 +309,7 @@ python -m pytest -q tests/unit
 
 - 설정 스키마를 `market_intelligence` 포함 구조로 확장했고, 현재 canonical 스키마는 `settings_version = 6`
 - `app/mixins/market_intelligence.py`를 추가해 뉴스/공시/검색트렌드/매크로 수집 루프, 브리핑, 경보, JSONL 이벤트 로그를 분리
-- API 탭에 `시장 인텔리전스` 설정 그룹을 추가하고, 전용 `🧠 인텔리전스` 탭과 `📼 리플레이` 탭에서 소스 상태/종목 점수/상세 요약/감사 로그를 표시
+- 메인 탭에 `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`를 분리하고, `🔐 API/알림` 탭은 인증/알림 전용으로 재정리
 - 신규 provider 추가:
   - `data/providers/news_provider.py`
   - `data/providers/naver_trend_provider.py`
@@ -423,12 +424,12 @@ python -m pytest -q tests/unit
 
 ## 📚 사용 방법
 
-### 1단계: API 설정
+### 1단계: API/알림 설정
 
 1. 키움증권에서 REST API 신청
 2. App Key / Secret Key 발급
-3. 프로그램 실행 후 **API 설정** 탭에서 키 입력
-4. **🔗 API 연결** 버튼 클릭 (또는 `Ctrl+L`)
+3. 프로그램 실행 후 **🔐 API/알림** 탭에서 키 입력
+4. 상단 **🔌 API 연결** 버튼 클릭 (또는 `Ctrl+L`)
 
 ### 2단계: 종목 선택
 
@@ -442,7 +443,7 @@ python -m pytest -q tests/unit
 - 6자리 종목코드는 API로 즉시 확인
 - 검색 결과 클릭하여 추가
 
-### 3단계: 전략 설정
+### 3단계: 핵심 설정 확인
 
 #### 프리셋 사용 (초보자 권장)
 - **🛡️ 보수적** - 안정적인 수익, 낮은 리스크
@@ -450,23 +451,23 @@ python -m pytest -q tests/unit
 - **🔥 공격적** - 높은 수익, 높은 리스크
 - **⚡ 스캘핑** - 빠른 진입/청산
 
-#### 수동 설정 (고급 사용자)
-- **K값** (0.3 ~ 0.5) - 변동성 돌파 계수
-- **베팅 비율** (5% ~ 20%) - 종목당 투자 비율
-- **트레일링 스톱** (발동: 3%, 하락: 1.5%)
-- **손절률** (2%)
-- **RSI 상한** (70)
-- **최대 보유 종목** (5개)
+#### 초보자 우선 확인 항목
+- **한 종목 투자 비중** (5% ~ 20%)
+- **목표가 민감도(K)** (0.3 ~ 0.5)
+- **이익 보호 시작** (예: 3%)
+- **추적 손절 폭** (예: 1.5%)
+- **최대 손절률** (예: 2%)
+- 세부 필터는 **🛠 상세 설정**에서 천천히 조정
 
 ### 4단계: 매매 시작
 
-- **🚀 매매 시작** 버튼 클릭 (또는 `Ctrl+S`)
+- **🚀 자동매매 시작** 버튼 클릭 (또는 `Ctrl+S`)
 - 실시간 로그 모니터링
 - 보유 종목 및 수익률 확인
 
 ### 5단계: 매매 중지
 
-- **⏹️ 매매 중지** 버튼 클릭 (또는 `Ctrl+Q`)
+- **⏹️ 중지** 버튼 클릭 (또는 `Ctrl+Q`)
 - **🚨 긴급 청산** (또는 `Ctrl+Shift+X`) - 모든 보유 종목 즉시 매도 🆕
 
 ---
@@ -600,7 +601,7 @@ python -m pytest -q tests/unit
 
 ---
 
-## ⚙️ 고급 설정
+## ⚙️ 상세 설정
 
 ### 진입 점수 시스템 🆕
 
@@ -694,8 +695,8 @@ python -m pytest -q tests/unit
 - Slippage guard: 최근 체결 슬리피지 평균 bps 초과 시 진입 차단
 - Order health guard: 주문 실패 급증 시 degraded 모드로 진입 차단
 
-진단 탭 컬럼(v4):
-- `market state`, `guard reason`, `risk mode`, `health mode`
+진단 탭 핵심 컬럼(v4):
+- `시장 상태`, `보호 사유`, `시장 위험 모드`, `주문 안정성 모드`
 
 운영 KPI(v4):
 - `guard_block_count_by_reason`
@@ -708,7 +709,7 @@ python -m pytest -q tests/unit
 - 로그 파일: `data/market_intelligence_events.jsonl`
 - 감사 로그: `data/decision_audit.jsonl`
 - DART corp code 캐시: `data/dart_corp_codes.json`
-- UI: `🧠 인텔리전스` 탭 + `📼 리플레이` 탭
+- UI: `🎯 핵심 설정` + `🛠 상세 설정` + `🧠 인텔리전스 설정` + `🧠 인텔리전스 현황` + `📼 인텔리전스 리플레이` + `🔐 API/알림`
 
 ### kiwoom_presets.json
 ```json

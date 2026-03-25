@@ -28,27 +28,27 @@
 
 | 패키지 | py 파일 수 | 라인 수 |
 |---|---:|---:|
-| `app/` | 18 | 9590 |
-| `api/` | 5 | 1826 |
-| `tests/` | 59 | 4750 |
-| `strategies/` | 4 | 505 |
-| `tools/` | 4 | 510 |
-| `backtest/` | 2 | 812 |
-| `data/` | 10 | 764 |
-| `portfolio/` | 2 | 51 |
+| `app/` | 19 | 9207 |
+| `api/` | 5 | 1755 |
+| `tests/` | 59 | 3722 |
+| `strategies/` | 4 | 426 |
+| `tools/` | 4 | 405 |
+| `backtest/` | 2 | 735 |
+| `data/` | 10 | 673 |
+| `portfolio/` | 2 | 39 |
 
 핵심 파일 Top 10:
 
-1. `app/mixins/market_intelligence.py` (2333)
+1. `app/mixins/market_intelligence.py` (2265)
 2. `strategy_manager.py` (1780)
-3. `app/mixins/ui_build.py` (1198)
-4. `app/mixins/trading_session.py` (1171)
-5. `app/mixins/persistence_settings.py` (892)
-6. `config.py` (871)
+3. `app/mixins/ui_build.py` (1174)
+4. `app/mixins/trading_session.py` (1042)
+5. `app/mixins/persistence_settings.py` (836)
+6. `config.py` (834)
 7. `api/rest_client.py` (807)
 8. `backtest/engine.py` (803)
 9. `app/mixins/execution_engine.py` (756)
-10. `app/main_window.py` (751)
+10. `app/main_window.py` (734)
 
 ## 3) 엔트리포인트와 조립 구조
 
@@ -79,7 +79,7 @@
 
 ### 믹스인 책임
 
-- `ui_build.py`: 메인 탭, 진단 표, `🧠 인텔리전스` 탭, `📼 리플레이` 탭 구성
+- `ui_build.py`: 메인 탭, 초보자용 핵심 설정, 상세 설정 하위 탭, 진단 표 구성
 - `api_account.py`: API 연결, 계좌정보, 실거래 가드
 - `trading_session.py`: 시작/중지, 유니버스 초기화, 시간청산, 지수 상태 반영
 - `execution_engine.py`: 틱 기반 매수/매도 판단, 시장 인텔리전스 정책 실행, 감사 로그 호출
@@ -89,6 +89,7 @@
 - `dialogs_profiles.py`: 프리셋/프로필/수동주문/예약
 - `market_data_tabs.py`: 차트/호가/조건검색/순위 탭과 후보 유니버스 갱신 훅
 - `system_shell.py`: 로깅/트레이/타이머/종료 플로우
+- `app/support/ui_text.py`: 한글 표시 라벨, 콤보박스 표시값/실제값 분리 헬퍼
 
 ## 4) 런타임 핵심 플로우
 
@@ -152,7 +153,7 @@
 5. 운영 가시성
    - `data/market_intelligence_events.jsonl`
    - `data/decision_audit.jsonl`
-   - `📼 리플레이` 탭
+   - `📼 인텔리전스 리플레이` 탭
 
 ### E. 종료
 
@@ -195,7 +196,7 @@
 - payload 기반 신규 스키마와 legacy `raw_ref` 기반 기록을 모두 읽음
 - 라이브와 동일하게 `action_policy`, `exit_policy`, `size_multiplier`, `portfolio_budget_scale`를 합성
 - `force_exit`는 결정론적 고위험 공시에만 허용
-- `📼 리플레이` 탭은 라이브 로그를 그대로 읽어 최근 이벤트, 감사 로그, 시장 리스크 요약을 표시
+- `📼 인텔리전스 리플레이` 탭은 라이브 로그를 그대로 읽어 최근 이벤트, 감사 로그, 시장 리스크 요약을 표시
 
 ## 7) 저장 산출물과 운영 문서
 
@@ -222,8 +223,8 @@
 2026-03-25 재검증:
 
 - 명령: `python -m pytest -q tests/unit`
-- 결과: `tests/unit` 전체 103개 테스트 통과
-- 로컬 재실행 시간: 약 21.44초
+- 결과: `tests/unit` 전체 104개 테스트 통과
+- 로컬 재실행 시간: 약 27.8초
 
 이번 재검증에서 함께 정리된 회귀:
 
@@ -238,7 +239,7 @@
 - canonical 설정 스키마: `settings_version = 6`
 - 시장 인텔리전스는 `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함
 - 운영 로그는 `market_intelligence_events.jsonl` + `decision_audit.jsonl` 이중 구조
-- UI는 `🧠 인텔리전스` + `📼 리플레이` 기준으로 설명
+- UI는 `🎯 핵심 설정`, `🛠 상세 설정`, `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`, `🔐 API/알림` 기준으로 설명
 - 실제 API 준비는 `REAL_API_PREPARATION_GUIDE.md`를 기준 문서로 사용
 
 ## 10) 후속 고도화 지점
@@ -246,4 +247,4 @@
 1. 실계좌/모의 분기 엔드포인트가 키움 정책상 더 필요하면 `chk_mock`와 인증/REST/WSS URL을 완전히 연결해야 함
 2. 라이브 운영용 로그 로테이션과 장중 세션 리포트 자동 저장이 있으면 장기 운영성이 좋아짐
 3. candidate universe 승격 종목의 자동 강등/만료 규칙을 운영 결과로 더 다듬을 수 있음
-4. `📼 리플레이` 탭에 일자별 필터와 diff view를 추가하면 세션 리뷰 효율이 올라감
+4. `📼 인텔리전스 리플레이` 탭에 일자별 필터와 diff view를 추가하면 세션 리뷰 효율이 올라감

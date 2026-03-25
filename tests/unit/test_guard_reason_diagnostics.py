@@ -88,10 +88,10 @@ class TestGuardReasonDiagnostics(unittest.TestCase):
         assert guard_reason_item is not None
         assert intel_source_item is not None
         assert risk_mode_item is not None
-        self.assertEqual(market_state_item.text(), "normal")
-        self.assertEqual(guard_reason_item.text(), "shock_guard")
+        self.assertEqual(market_state_item.text(), "정상")
+        self.assertEqual(guard_reason_item.text(), "시장 쇼크 보호")
         self.assertEqual(intel_source_item.text(), "")
-        self.assertEqual(risk_mode_item.text(), "shock")
+        self.assertEqual(risk_mode_item.text(), "시장 충격")
 
 
 if __name__ == "__main__":

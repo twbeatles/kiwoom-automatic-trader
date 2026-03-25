@@ -75,13 +75,13 @@ class _Harness:
 class TestDiagnosticsExternalColumns(unittest.TestCase):
     def test_diagnostics_schema_contains_external_columns(self):
         cols = [
-            "external status",
-            "external updated",
-            "external age(sec)",
-            "market state",
-            "guard reason",
-            "risk mode",
-            "health mode",
+            "외부 데이터 상태",
+            "외부 데이터 시각",
+            "외부 데이터 경과(초)",
+            "시장 상태",
+            "보호 사유",
+            "시장 위험 모드",
+            "주문 안정성 모드",
         ]
         source = Path("app/mixins/ui_build.py").read_text(encoding="utf-8")
         for col in cols:
@@ -121,13 +121,13 @@ class TestDiagnosticsExternalColumns(unittest.TestCase):
         intel_source = intel_source_item.text()
         risk_mode = risk_mode_item.text()
 
-        self.assertEqual(status, "fresh")
+        self.assertEqual(status, "최신")
         self.assertTrue(updated)
         self.assertTrue(age.isdigit())
-        self.assertEqual(market_state, "normal")
-        self.assertEqual(guard_reason, "shock_guard")
+        self.assertEqual(market_state, "정상")
+        self.assertEqual(guard_reason, "시장 쇼크 보호")
         self.assertEqual(intel_source, "")
-        self.assertEqual(risk_mode, "shock")
+        self.assertEqual(risk_mode, "시장 충격")
 
 
 if __name__ == "__main__":

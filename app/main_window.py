@@ -16,6 +16,16 @@ from telegram_notifier import TelegramNotifier
 
 from api import KiwoomAuth, KiwoomRESTClient, KiwoomWebSocketClient
 
+from app.support.ui_text import (
+    combo_value,
+    display_action_policy,
+    display_exit_policy,
+    display_guard_reason,
+    display_market_state,
+    display_regime,
+    display_source_health,
+    display_status,
+)
 from .mixins.api_account import APIAccountMixin
 from .mixins.dialogs_profiles import DialogsProfilesMixin
 from .mixins.execution_engine import ExecutionEngineMixin
@@ -220,7 +230,7 @@ class KiwoomProTrader(
         self.spin_max_holdings.valueChanged.connect(lambda v: setattr(self.config, 'max_holdings', v))
         if hasattr(self, "combo_daily_loss_basis"):
             self.combo_daily_loss_basis.currentTextChanged.connect(
-                lambda v: setattr(self.config, "daily_loss_basis", str(v))
+                lambda _v: setattr(self.config, "daily_loss_basis", combo_value(self.combo_daily_loss_basis, "total_equity"))
             )
         
         # 신규 전략들
@@ -292,19 +302,25 @@ class KiwoomProTrader(
         # Extended strategy/backtest controls (v5.0)
         if hasattr(self, "combo_strategy_pack"):
             self.combo_strategy_pack.currentTextChanged.connect(
-                lambda v: self.config.strategy_pack.update({"primary_strategy": str(v)})
+                lambda _v: self.config.strategy_pack.update({"primary_strategy": combo_value(self.combo_strategy_pack, "volatility_breakout")})
             )
         if hasattr(self, "combo_portfolio_mode"):
-            self.combo_portfolio_mode.currentTextChanged.connect(lambda v: setattr(self.config, 'portfolio_mode', str(v)))
+            self.combo_portfolio_mode.currentTextChanged.connect(
+                lambda _v: setattr(self.config, 'portfolio_mode', combo_value(self.combo_portfolio_mode, "single_strategy"))
+            )
         if hasattr(self, "chk_short_enabled"):
             self.chk_short_enabled.toggled.connect(lambda v: setattr(self.config, 'short_enabled', bool(v)))
         if hasattr(self, "combo_asset_scope"):
-            self.combo_asset_scope.currentTextChanged.connect(lambda v: setattr(self.config, 'asset_scope', str(v)))
+            self.combo_asset_scope.currentTextChanged.connect(
+                lambda _v: setattr(self.config, 'asset_scope', combo_value(self.combo_asset_scope, "kr_stock_live"))
+            )
         if hasattr(self, "combo_execution_policy"):
-            self.combo_execution_policy.currentTextChanged.connect(lambda v: setattr(self.config, 'execution_policy', str(v)))
+            self.combo_execution_policy.currentTextChanged.connect(
+                lambda _v: setattr(self.config, 'execution_policy', combo_value(self.combo_execution_policy, "market"))
+            )
         if hasattr(self, "combo_backtest_timeframe"):
             self.combo_backtest_timeframe.currentTextChanged.connect(
-                lambda v: self.config.backtest_config.update({"timeframe": str(v)})
+                lambda _v: self.config.backtest_config.update({"timeframe": combo_value(self.combo_backtest_timeframe, "1d")})
             )
         if hasattr(self, "spin_backtest_lookback"):
             self.spin_backtest_lookback.valueChanged.connect(
@@ -382,7 +398,7 @@ class KiwoomProTrader(
         self.config.max_holdings = self.spin_max_holdings.value()
         self.config.use_risk_mgmt = self.chk_use_risk.isChecked()
         if hasattr(self, "combo_daily_loss_basis"):
-            self.config.daily_loss_basis = str(self.combo_daily_loss_basis.currentText())
+            self.config.daily_loss_basis = combo_value(self.combo_daily_loss_basis, "total_equity")
         self.config.use_stoch_rsi = self.chk_use_stoch_rsi.isChecked()
         self.config.stoch_upper = self.spin_stoch_upper.value()
         self.config.stoch_lower = self.spin_stoch_lower.value()
@@ -428,17 +444,17 @@ class KiwoomProTrader(
         if hasattr(self, "spin_time_stop_min"):
             self.config.time_stop_min = self.spin_time_stop_min.value()
         if hasattr(self, "combo_strategy_pack"):
-            self.config.strategy_pack["primary_strategy"] = str(self.combo_strategy_pack.currentText())
+            self.config.strategy_pack["primary_strategy"] = combo_value(self.combo_strategy_pack, "volatility_breakout")
         if hasattr(self, "combo_portfolio_mode"):
-            self.config.portfolio_mode = str(self.combo_portfolio_mode.currentText())
+            self.config.portfolio_mode = combo_value(self.combo_portfolio_mode, "single_strategy")
         if hasattr(self, "chk_short_enabled"):
             self.config.short_enabled = bool(self.chk_short_enabled.isChecked())
         if hasattr(self, "combo_asset_scope"):
-            self.config.asset_scope = str(self.combo_asset_scope.currentText())
+            self.config.asset_scope = combo_value(self.combo_asset_scope, "kr_stock_live")
         if hasattr(self, "combo_execution_policy"):
-            self.config.execution_policy = str(self.combo_execution_policy.currentText())
+            self.config.execution_policy = combo_value(self.combo_execution_policy, "market")
         if hasattr(self, "combo_backtest_timeframe"):
-            self.config.backtest_config["timeframe"] = str(self.combo_backtest_timeframe.currentText())
+            self.config.backtest_config["timeframe"] = combo_value(self.combo_backtest_timeframe, "1d")
         if hasattr(self, "spin_backtest_lookback"):
             self.config.backtest_config["lookback_days"] = int(self.spin_backtest_lookback.value())
         if hasattr(self, "spin_backtest_commission"):
@@ -570,6 +586,16 @@ class KiwoomProTrader(
                         sync_error = f"ext:{external_error}"
                 else:
                     sync_error = str(diag.get("last_sync_error", ""))
+                raw_market_state = str(info.get("market_state", "normal") or "normal")
+                raw_guard_reason = str(
+                    info.get("last_guard_reason")
+                    or self._guard_reason_by_code.get(code, "")
+                    or ""
+                )
+                raw_action_policy = str(market_intel.get("action_policy", "allow") or "allow")
+                raw_exit_policy = str(market_intel.get("exit_policy", "none") or "none")
+                raw_risk_mode = str(getattr(self, "_global_risk_mode", "normal") or "normal")
+                raw_health_mode = str(getattr(self, "_order_health_mode", "normal") or "normal")
 
                 values = [
                     code,
@@ -577,27 +603,23 @@ class KiwoomProTrader(
                     str(diag.get("pending_side") or pending.get("side") or ""),
                     str(diag.get("pending_reason") or pending.get("reason") or ""),
                     self._diag_fmt_dt(diag.get("pending_until") or pending.get("until")),
-                    sync_status,
+                    display_status(sync_status),
                     str(diag.get("retry_count", 0)),
                     sync_error,
                     self._diag_fmt_dt(diag.get("last_update")),
-                    external_status,
+                    display_status(external_status),
                     self._diag_fmt_dt(external_updated),
                     external_age,
-                    str(info.get("market_state", "normal") or "normal"),
-                    str(
-                        info.get("last_guard_reason")
-                        or self._guard_reason_by_code.get(code, "")
-                        or ""
-                    ),
-                    str(market_intel.get("source_health", "") or ""),
-                    str(market_intel.get("action_policy", "allow") or "allow"),
+                    display_market_state(raw_market_state),
+                    display_guard_reason(raw_guard_reason),
+                    display_source_health(market_intel.get("source_health", "") or ""),
+                    display_action_policy(raw_action_policy),
                     f"{float(market_intel.get('size_multiplier', 1.0) or 1.0):.2f}",
-                    str(market_intel.get("exit_policy", "none") or "none"),
+                    display_exit_policy(raw_exit_policy),
                     str(market_intel.get("last_event_id", "") or ""),
-                    str(getattr(self, "_global_risk_mode", "normal")),
-                    str(getattr(self, "_order_health_mode", "normal")),
-                    str(diag.get("pending_state") or pending.get("state") or ""),
+                    display_regime(raw_risk_mode),
+                    display_regime(raw_health_mode),
+                    display_status(diag.get("pending_state") or pending.get("state") or ""),
                     str(diag.get("pending_remaining") or pending.get("remaining_qty") or ""),
                     str(info.get("sync_failed_reason", "") or ""),
                 ]
@@ -621,7 +643,7 @@ class KiwoomProTrader(
                         else:
                             item.setForeground(QColor("#8b949e"))
                     elif col == 12:
-                        state = str(text).lower()
+                        state = raw_market_state.lower()
                         if state in {"halt", "vi"}:
                             item.setForeground(QColor("#f85149"))
                         elif state == "reopen_cooldown":
@@ -629,23 +651,23 @@ class KiwoomProTrader(
                         else:
                             item.setForeground(QColor("#8b949e"))
                     elif col == 13:
-                        item.setForeground(QColor("#f85149") if str(text) else QColor("#8b949e"))
+                        item.setForeground(QColor("#f85149") if raw_guard_reason else QColor("#8b949e"))
                     elif col == 14:
                         item.setForeground(QColor("#8b949e" if not str(text) else "#d29922"))
                     elif col == 15:
-                        state = str(text).lower()
+                        state = raw_action_policy.lower()
                         if state in {"force_exit", "tighten_exit", "reduce_size", "block_entry"}:
                             item.setForeground(QColor("#f85149"))
                         elif state in {"allow", ""}:
                             item.setForeground(QColor("#8b949e"))
                     elif col == 17:
-                        state = str(text).lower()
+                        state = raw_exit_policy.lower()
                         if state in {"force_exit", "tighten_exit", "reduce_size"}:
                             item.setForeground(QColor("#f85149"))
                         elif state in {"none", ""}:
                             item.setForeground(QColor("#8b949e"))
                     elif col in {19, 20}:
-                        state = str(text).lower()
+                        state = raw_risk_mode.lower() if col == 19 else raw_health_mode.lower()
                         if state in {"shock", "degraded"}:
                             item.setForeground(QColor("#f85149"))
                         elif state in {"normal", ""}:
@@ -699,24 +721,24 @@ class KiwoomProTrader(
         detail = [
             f"코드: {code}",
             f"종목명: {info.get('name', code)}",
-            f"상태: {info.get('status', '')}",
-            f"sync_failed 사유: {info.get('sync_failed_reason', '')}",
-            f"entry_origin: {info.get('entry_origin', '')}",
-            f"time_stop_eligible: {bool(info.get('time_stop_eligible', True))}",
-            f"pending_state: {pending.get('state', '')}",
-            f"pending_side: {pending.get('side', '')}",
-            f"pending_order_no: {pending.get('order_no', '')}",
-            f"pending_submitted_qty: {pending.get('submitted_qty', '')}",
-            f"pending_filled_qty: {pending.get('filled_qty', '')}",
-            f"pending_remaining_qty: {pending.get('remaining_qty', '')}",
-            f"pending_expected_price: {pending.get('expected_price', '')}",
-            f"pending_updated_at: {self._diag_fmt_dt(pending.get('updated_at'))}",
-            f"intel status: {market_intel.get('status', market_intel.get('intel_status', 'idle'))}",
-            f"source health: {market_intel.get('source_health', '')}",
-            f"action policy: {market_intel.get('action_policy', 'allow')}",
-            f"exit policy: {market_intel.get('exit_policy', 'none')}",
-            f"size multiplier: {market_intel.get('size_multiplier', 1.0)}",
-            f"last event id: {market_intel.get('last_event_id', '')}",
+            f"상태: {display_status(info.get('status', ''))}",
+            f"동기화 실패 사유: {info.get('sync_failed_reason', '')}",
+            f"진입 경로: {info.get('entry_origin', '')}",
+            f"시간 청산 가능 여부: {bool(info.get('time_stop_eligible', True))}",
+            f"대기 주문 상태: {display_status(pending.get('state', ''))}",
+            f"대기 주문 방향: {pending.get('side', '')}",
+            f"대기 주문 번호: {pending.get('order_no', '')}",
+            f"주문 요청 수량: {pending.get('submitted_qty', '')}",
+            f"체결 수량: {pending.get('filled_qty', '')}",
+            f"미체결 수량: {pending.get('remaining_qty', '')}",
+            f"예상 가격: {pending.get('expected_price', '')}",
+            f"최근 주문 갱신: {self._diag_fmt_dt(pending.get('updated_at'))}",
+            f"인텔리전스 상태: {display_status(market_intel.get('status', market_intel.get('intel_status', 'idle')))}",
+            f"소스 상태: {display_source_health(market_intel.get('source_health', ''))}",
+            f"자동매매 정책: {display_action_policy(market_intel.get('action_policy', 'allow'))}",
+            f"청산 정책: {display_exit_policy(market_intel.get('exit_policy', 'none'))}",
+            f"수량 배수: {market_intel.get('size_multiplier', 1.0)}",
+            f"마지막 이벤트 ID: {market_intel.get('last_event_id', '')}",
         ]
         panel.setPlainText("\n".join(detail))
 

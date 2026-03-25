@@ -31,6 +31,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 
+from app.support.ui_text import combo_value, set_combo_value
 from app.support.worker import Worker
 from config import Config
 from dark_theme import DARK_STYLESHEET
@@ -364,7 +365,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
         if callable(update_market_intel):
             update_market_intel()
         settings = {
-            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 5)),
+            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 6)),
             "is_mock": self.chk_mock.isChecked(),
             "auto_start": self.chk_auto_start.isChecked(),
             "codes": self.input_codes.text(),
@@ -388,7 +389,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
             "max_loss": self.spin_max_loss.value(),
             "max_daily_loss": self.spin_max_loss.value(),
             "max_holdings": self.spin_max_holdings.value(),
-            "daily_loss_basis": self.combo_daily_loss_basis.currentText()
+            "daily_loss_basis": combo_value(self.combo_daily_loss_basis, getattr(self.config, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
             if hasattr(self, "combo_daily_loss_basis")
             else getattr(self.config, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")),
             "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked()
@@ -506,17 +507,17 @@ class PersistenceSettingsMixin(TraderMixinBase):
             getattr(cfg, "market_intelligence", getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
         )
         if hasattr(self, "combo_strategy_pack"):
-            settings["strategy_pack"]["primary_strategy"] = str(self.combo_strategy_pack.currentText())
+            settings["strategy_pack"]["primary_strategy"] = combo_value(self.combo_strategy_pack, "volatility_breakout")
         if hasattr(self, "combo_portfolio_mode"):
-            settings["portfolio_mode"] = str(self.combo_portfolio_mode.currentText())
+            settings["portfolio_mode"] = combo_value(self.combo_portfolio_mode, "single_strategy")
         if hasattr(self, "chk_short_enabled"):
             settings["short_enabled"] = bool(self.chk_short_enabled.isChecked())
         if hasattr(self, "combo_asset_scope"):
-            settings["asset_scope"] = str(self.combo_asset_scope.currentText())
+            settings["asset_scope"] = combo_value(self.combo_asset_scope, "kr_stock_live")
         if hasattr(self, "combo_execution_policy"):
-            settings["execution_policy"] = str(self.combo_execution_policy.currentText())
+            settings["execution_policy"] = combo_value(self.combo_execution_policy, "market")
         if hasattr(self, "combo_backtest_timeframe"):
-            settings["backtest_config"]["timeframe"] = str(self.combo_backtest_timeframe.currentText())
+            settings["backtest_config"]["timeframe"] = combo_value(self.combo_backtest_timeframe, "1d")
         if hasattr(self, "spin_backtest_lookback"):
             settings["backtest_config"]["lookback_days"] = int(self.spin_backtest_lookback.value())
         if hasattr(self, "spin_backtest_commission"):
@@ -680,8 +681,9 @@ class PersistenceSettingsMixin(TraderMixinBase):
             if hasattr(self, "spin_sector_limit"):
                 self.spin_sector_limit.setValue(settings.get("sector_limit", Config.DEFAULT_SECTOR_LIMIT))
             if hasattr(self, "combo_daily_loss_basis"):
-                self.combo_daily_loss_basis.setCurrentText(
-                    str(settings.get("daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+                set_combo_value(
+                    self.combo_daily_loss_basis,
+                    str(settings.get("daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"))),
                 )
             if hasattr(self, "chk_sync_history_flush_on_exit"):
                 self.chk_sync_history_flush_on_exit.setChecked(
@@ -768,18 +770,18 @@ class PersistenceSettingsMixin(TraderMixinBase):
             # v3+ strategy/backtest UI restore
             if hasattr(self, "combo_strategy_pack") and isinstance(settings.get("strategy_pack"), dict):
                 primary = settings.get("strategy_pack", {}).get("primary_strategy", "volatility_breakout")
-                self.combo_strategy_pack.setCurrentText(str(primary))
+                set_combo_value(self.combo_strategy_pack, str(primary))
             if hasattr(self, "combo_portfolio_mode"):
-                self.combo_portfolio_mode.setCurrentText(str(settings.get("portfolio_mode", "single_strategy")))
+                set_combo_value(self.combo_portfolio_mode, str(settings.get("portfolio_mode", "single_strategy")))
             if hasattr(self, "chk_short_enabled"):
                 self.chk_short_enabled.setChecked(bool(settings.get("short_enabled", False)))
             if hasattr(self, "combo_asset_scope"):
-                self.combo_asset_scope.setCurrentText(str(settings.get("asset_scope", "kr_stock_live")))
+                set_combo_value(self.combo_asset_scope, str(settings.get("asset_scope", "kr_stock_live")))
             if hasattr(self, "combo_execution_policy"):
-                self.combo_execution_policy.setCurrentText(str(settings.get("execution_policy", "market")))
+                set_combo_value(self.combo_execution_policy, str(settings.get("execution_policy", "market")))
             bt_cfg = settings.get("backtest_config", {}) if isinstance(settings.get("backtest_config"), dict) else {}
             if hasattr(self, "combo_backtest_timeframe"):
-                self.combo_backtest_timeframe.setCurrentText(str(bt_cfg.get("timeframe", "1d")))
+                set_combo_value(self.combo_backtest_timeframe, str(bt_cfg.get("timeframe", "1d")))
             if hasattr(self, "spin_backtest_lookback"):
                 self.spin_backtest_lookback.setValue(int(bt_cfg.get("lookback_days", 365)))
             if hasattr(self, "spin_backtest_commission"):
@@ -840,7 +842,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
             if hasattr(self, "chk_market_ai_enabled"):
                 self.chk_market_ai_enabled.setChecked(bool(ai_cfg.get("enabled", False)))
             if hasattr(self, "combo_market_ai_provider"):
-                self.combo_market_ai_provider.setCurrentText(str(ai_cfg.get("provider", "gemini")))
+                set_combo_value(self.combo_market_ai_provider, str(ai_cfg.get("provider", "gemini")))
             if hasattr(self, "input_market_ai_model"):
                 self.input_market_ai_model.setText(str(ai_cfg.get("model", "gemini-2.5-flash-lite")))
             if hasattr(self, "spin_market_ai_daily_calls"):

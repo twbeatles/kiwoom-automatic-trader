@@ -24,12 +24,34 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
+from app.support.ui_text import (
+    AI_PROVIDER_CHOICES,
+    REPLAY_AUDIT_CHOICES,
+    REPLAY_SCOPE_CHOICES,
+    combo_value,
+    display_action_policy,
+    display_allowed,
+    display_event_severity,
+    display_event_type,
+    display_exit_policy,
+    display_market_state,
+    display_news_sentiment,
+    display_regime,
+    display_replay_scope,
+    display_source_health,
+    display_source_name,
+    display_status,
+    display_yes_no,
+    populate_combo,
+    set_combo_value,
+)
 from app.support.widgets import NoScrollComboBox, NoScrollSpinBox
 from config import Config
 from data.providers import AIProvider, DartProvider, MacroProvider, NaverTrendProvider, NewsProvider
@@ -111,7 +133,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
         sources[source]["updated_at"] = datetime.datetime.now()
         label = getattr(self, f"lbl_market_source_{source}", None)
         if label is not None:
-            text = f"{source.upper()}: {sources[source]['status']}"
+            text = f"{display_source_name(source)}: {display_status(sources[source]['status'])}"
             if error:
                 text = f"{text} ({error})"
             label.setText(text)
@@ -392,7 +414,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
         if hasattr(self, "chk_market_ai_enabled"):
             cfg["ai"]["enabled"] = bool(self.chk_market_ai_enabled.isChecked())
         if hasattr(self, "combo_market_ai_provider"):
-            cfg["ai"]["provider"] = str(self.combo_market_ai_provider.currentText() or "gemini").lower()
+            cfg["ai"]["provider"] = combo_value(self.combo_market_ai_provider, "gemini").lower()
         if hasattr(self, "input_market_ai_model"):
             cfg["ai"]["model"] = str(self.input_market_ai_model.text() or cfg["ai"].get("model", "gemini-2.5-flash-lite"))
         if hasattr(self, "spin_market_ai_daily_calls"):
@@ -1611,15 +1633,15 @@ class MarketIntelligenceMixin(TraderMixinBase):
                         status = "stale"
                 values = [
                     f"{info.get('name', code)}{' (후보)' if self._is_candidate_entity(code) else ''}",
-                    status,
+                    display_status(status),
                     f"{float(state.get('news_score', 0.0) or 0.0):+.0f}",
-                    str(state.get("dart_risk_level", "normal") or "normal"),
+                    display_regime(state.get("dart_risk_level", "normal") or "normal"),
                     f"{float(state.get('theme_score', 0.0) or 0.0):.0f}",
-                    str(state.get("macro_regime", "neutral") or "neutral"),
-                    str(state.get("source_health", "") or ""),
-                    str(state.get("action_policy", "allow") or "allow"),
+                    display_regime(state.get("macro_regime", "neutral") or "neutral"),
+                    display_source_health(state.get("source_health", "") or ""),
+                    display_action_policy(state.get("action_policy", "allow") or "allow"),
                     f"{float(state.get('size_multiplier', 1.0) or 1.0):.2f}",
-                    str(state.get("exit_policy", "none") or "none"),
+                    display_exit_policy(state.get("exit_policy", "none") or "none"),
                     str(state.get("last_event_id", "") or ""),
                     updated_at.strftime("%H:%M:%S") if isinstance(updated_at, datetime.datetime) else "",
                     str(state.get("last_alert", "") or ""),
@@ -1663,27 +1685,30 @@ class MarketIntelligenceMixin(TraderMixinBase):
         sources = state.get("sources", {}) if isinstance(state.get("sources"), dict) else {}
         detail = [
             f"종목: {info.get('name', code)} ({code})",
-            f"intel status: {state.get('status', state.get('intel_status', 'idle'))}",
-            f"news score: {state.get('news_score', 0.0):+.0f}",
-            f"news sentiment: {state.get('news_sentiment', 'neutral')}",
-            f"headline velocity: {state.get('headline_velocity', 0)}",
-            f"relevance score: {state.get('relevance_score', 0.0):.2f}",
-            f"dart risk: {state.get('dart_risk_level', 'normal')}",
-            f"event type: {state.get('event_type', '')}",
-            f"event severity: {state.get('event_severity', 'low')}",
-            f"theme score: {state.get('theme_score', 0.0):.0f}",
-            f"theme keywords: {', '.join(state.get('theme_keywords', []) or [])}",
-            f"macro regime: {state.get('macro_regime', 'neutral')}",
-            f"source health: {state.get('source_health', '')}",
-            f"action policy: {state.get('action_policy', 'allow')}",
-            f"size multiplier: {state.get('size_multiplier', 1.0):.2f}",
-            f"exit policy: {state.get('exit_policy', 'none')}",
-            f"portfolio budget scale: {state.get('portfolio_budget_scale', 1.0):.2f}",
-            f"last event id: {state.get('last_event_id', '')}",
-            f"briefing: {state.get('briefing_summary', '')}",
-            f"ai summary: {ai_summary.get('summary', '') if isinstance(ai_summary, dict) else ''}",
+            f"인텔리전스 상태: {display_status(state.get('status', state.get('intel_status', 'idle')))}",
+            f"뉴스 점수: {state.get('news_score', 0.0):+.0f}",
+            f"뉴스 톤: {display_news_sentiment(state.get('news_sentiment', 'neutral'))}",
+            f"헤드라인 증가 속도: {state.get('headline_velocity', 0)}",
+            f"관련도 점수: {state.get('relevance_score', 0.0):.2f}",
+            f"공시 위험도: {display_regime(state.get('dart_risk_level', 'normal'))}",
+            f"이벤트 유형: {display_event_type(state.get('event_type', ''))}",
+            f"이벤트 심각도: {display_event_severity(state.get('event_severity', 'low'))}",
+            f"테마 점수: {state.get('theme_score', 0.0):.0f}",
+            f"테마 키워드: {', '.join(state.get('theme_keywords', []) or [])}",
+            f"매크로 상태: {display_regime(state.get('macro_regime', 'neutral'))}",
+            f"소스 상태: {display_source_health(state.get('source_health', ''))}",
+            f"자동매매 정책: {display_action_policy(state.get('action_policy', 'allow'))}",
+            f"수량 배수: {state.get('size_multiplier', 1.0):.2f}",
+            f"청산 정책: {display_exit_policy(state.get('exit_policy', 'none'))}",
+            f"포트폴리오 예산 배수: {state.get('portfolio_budget_scale', 1.0):.2f}",
+            f"마지막 이벤트 ID: {state.get('last_event_id', '')}",
+            f"브리핑 요약: {state.get('briefing_summary', '')}",
+            f"AI 요약: {ai_summary.get('summary', '') if isinstance(ai_summary, dict) else ''}",
             "소스 상태:",
-            *[f"- {source}: {row.get('status', 'idle')} ({row.get('error', '')})" for source, row in sources.items()],
+            *[
+                f"- {display_source_name(source)}: {display_status(row.get('status', 'idle'))} ({row.get('error', '')})"
+                for source, row in sources.items()
+            ],
             "헤드라인:",
             *headlines,
             "공시:",
@@ -1807,8 +1832,8 @@ class MarketIntelligenceMixin(TraderMixinBase):
 
     def _market_replay_filters(self) -> Dict[str, Any]:
         symbol_filter = str(getattr(getattr(self, "input_market_replay_symbol_filter", None), "text", lambda: "")()).strip().lower()
-        scope_filter = str(getattr(getattr(self, "combo_market_replay_scope", None), "currentText", lambda: "all")() or "all").strip().lower()
-        audit_filter = str(getattr(getattr(self, "combo_market_replay_allowed", None), "currentText", lambda: "all")() or "all").strip().lower()
+        scope_filter = combo_value(getattr(self, "combo_market_replay_scope", None), "all").strip().lower()
+        audit_filter = combo_value(getattr(self, "combo_market_replay_allowed", None), "all").strip().lower()
         limit = int(getattr(getattr(self, "spin_market_replay_limit", None), "value", lambda: 100)() or 100)
         return {
             "symbol_filter": symbol_filter,
@@ -1904,18 +1929,22 @@ class MarketIntelligenceMixin(TraderMixinBase):
         theme_text = ", ".join(
             f"{theme}({score:.0f})" for theme, score in sorted(scope_state.get("hot_themes", {}).items(), key=lambda kv: (-kv[1], kv[0]))[:5]
         ) or "-"
+        audit_label = {"all": "전체", "allowed": "허용만", "blocked": "차단만"}.get(
+            str(filters.get("audit_filter", "all") or "all"),
+            str(filters.get("audit_filter", "all") or "all"),
+        )
         return "\n".join(
             [
                 f"이벤트 로그: {getattr(Config, 'MARKET_INTELLIGENCE_EVENTS_FILE', 'data/market_intelligence_events.jsonl')}",
                 f"감사 로그: {getattr(Config, 'MARKET_INTELLIGENCE_DECISION_AUDIT_FILE', 'data/decision_audit.jsonl')}",
-                f"필터: symbol='{filters.get('symbol_filter', '')}', scope={filters.get('scope_filter', 'all')}, audit={filters.get('audit_filter', 'all')}, limit={filters.get('limit', 100)}",
+                f"필터: 검색='{filters.get('symbol_filter', '')}', 범위={display_replay_scope(filters.get('scope_filter', 'all'))}, 감사={audit_label}, 개수={filters.get('limit', 100)}",
                 f"최근 이벤트 {len(event_records)}건, 최근 감사 {len(audit_records)}건",
-                f"scope 분포: {', '.join(f'{scope}={count}' for scope, count in sorted(scope_counts.items())) or '-'}",
-                f"source 분포: {', '.join(f'{source}={count}' for source, count in sorted(source_counts.items())) or '-'}",
-                f"시장 리스크: mode={scope_state.get('market_mode', 'unknown')}, budget_scale={float(scope_state.get('portfolio_budget_scale', 1.0)):.2f}, aggregate_news={float(scope_state.get('aggregate_news_risk', 0.0)):+.1f}",
+                f"범위 분포: {', '.join(f'{display_replay_scope(scope)}={count}' for scope, count in sorted(scope_counts.items())) or '-'}",
+                f"소스 분포: {', '.join(f'{display_source_name(source)}={count}' for source, count in sorted(source_counts.items())) or '-'}",
+                f"시장 리스크: 상태={display_regime(scope_state.get('market_mode', 'unknown'))}, 예산 배수={float(scope_state.get('portfolio_budget_scale', 1.0)):.2f}, 누적 뉴스 위험={float(scope_state.get('aggregate_news_risk', 0.0)):+.1f}",
                 f"활성 섹터 차단: {sector_text}",
                 f"활성 테마 과열: {theme_text}",
-                f"감사 집계: allowed={allowed_count}, blocked={blocked_count}",
+                f"감사 집계: 허용={allowed_count}, 차단={blocked_count}",
                 f"상위 사유: {top_reasons}",
             ]
         )
@@ -1959,14 +1988,14 @@ class MarketIntelligenceMixin(TraderMixinBase):
                 payload = self._market_replay_payload(record)
                 values = [
                     str(record.get("ts", "") or ""),
-                    str(record.get("scope", "symbol") or "symbol"),
+                    display_replay_scope(record.get("scope", "symbol") or "symbol"),
                     str(record.get("symbol", "") or payload.get("sector", "") or payload.get("theme", "") or ""),
-                    str(record.get("source", "") or ""),
-                    str(record.get("event_type", "") or ""),
+                    display_source_name(record.get("source", "") or ""),
+                    display_event_type(record.get("event_type", "") or ""),
                     f"{float(record.get('score', 0.0) or 0.0):+.1f}",
-                    str(payload.get("action_policy", "") or ""),
-                    str(payload.get("exit_policy", "") or ""),
-                    "Y" if bool(record.get("blocking", False)) else "",
+                    display_action_policy(payload.get("action_policy", "") or ""),
+                    display_exit_policy(payload.get("exit_policy", "") or ""),
+                    display_yes_no(bool(record.get("blocking", False)), "예", ""),
                     str(record.get("summary", "") or ""),
                 ]
                 for col, value in enumerate(values):
@@ -1989,12 +2018,12 @@ class MarketIntelligenceMixin(TraderMixinBase):
                 values = [
                     str(record.get("ts", "") or ""),
                     str(record.get("symbol", "") or ""),
-                    "Y" if bool(record.get("allowed", False)) else "",
+                    display_allowed(bool(record.get("allowed", False))),
                     str(record.get("reason", "") or ""),
                     str(record.get("quantity", 0) or 0),
-                    str(record.get("action_policy", "") or ""),
-                    str(record.get("exit_policy", "") or ""),
-                    str(market_intel.get("status", "") or ""),
+                    display_action_policy(record.get("action_policy", "") or ""),
+                    display_exit_policy(record.get("exit_policy", "") or ""),
+                    display_status(market_intel.get("status", "") or ""),
                     str(market_intel.get("last_event_id", "") or ""),
                 ]
                 for col, value in enumerate(values):
@@ -2048,16 +2077,16 @@ class MarketIntelligenceMixin(TraderMixinBase):
             return
         payload = self._market_replay_payload(record)
         detail = [
-            f"ts: {record.get('ts', '')}",
-            f"scope: {record.get('scope', 'symbol')}",
-            f"symbol: {record.get('symbol', '')}",
-            f"source: {record.get('source', '')}",
-            f"event_type: {record.get('event_type', '')}",
-            f"score: {float(record.get('score', 0.0) or 0.0):+.1f}",
-            f"blocking: {bool(record.get('blocking', False))}",
-            f"event_id: {record.get('event_id', '')}",
-            f"summary: {record.get('summary', '')}",
-            "payload:",
+            f"시각: {record.get('ts', '')}",
+            f"범위: {display_replay_scope(record.get('scope', 'symbol'))}",
+            f"대상: {record.get('symbol', '')}",
+            f"소스: {display_source_name(record.get('source', ''))}",
+            f"이벤트 유형: {display_event_type(record.get('event_type', ''))}",
+            f"점수: {float(record.get('score', 0.0) or 0.0):+.1f}",
+            f"차단 여부: {display_yes_no(bool(record.get('blocking', False)))}",
+            f"이벤트 ID: {record.get('event_id', '')}",
+            f"요약: {record.get('summary', '')}",
+            "원본 payload:",
             json.dumps(payload, ensure_ascii=False, indent=2) if payload else "{}",
         ]
         panel.setPlainText("\n".join(detail))
@@ -2071,15 +2100,15 @@ class MarketIntelligenceMixin(TraderMixinBase):
             panel.setPlainText("선택된 감사 로그가 없습니다.")
             return
         detail = [
-            f"ts: {record.get('ts', '')}",
-            f"symbol: {record.get('symbol', '')}",
-            f"name: {record.get('name', '')}",
-            f"allowed: {bool(record.get('allowed', False))}",
-            f"reason: {record.get('reason', '')}",
-            f"quantity: {record.get('quantity', 0)}",
-            f"action_policy: {record.get('action_policy', '')}",
-            f"exit_policy: {record.get('exit_policy', '')}",
-            "snapshot:",
+            f"시각: {record.get('ts', '')}",
+            f"종목코드: {record.get('symbol', '')}",
+            f"종목명: {record.get('name', '')}",
+            f"허용 여부: {display_allowed(bool(record.get('allowed', False)))}",
+            f"사유: {record.get('reason', '')}",
+            f"수량: {record.get('quantity', 0)}",
+            f"자동매매 정책: {display_action_policy(record.get('action_policy', ''))}",
+            f"청산 정책: {display_exit_policy(record.get('exit_policy', ''))}",
+            "원본 snapshot:",
             json.dumps(record, ensure_ascii=False, indent=2),
         ]
         panel.setPlainText("\n".join(detail))
@@ -2103,27 +2132,27 @@ class MarketIntelligenceMixin(TraderMixinBase):
         control_row.addWidget(btn_refresh)
 
         self.input_market_replay_symbol_filter = QLineEdit()
-        self.input_market_replay_symbol_filter.setPlaceholderText("코드/섹터/테마/사유 필터")
+        self.input_market_replay_symbol_filter.setPlaceholderText("종목코드, 업종, 테마, 사유로 검색")
         self.input_market_replay_symbol_filter.textChanged.connect(self._on_market_replay_refresh)
         control_row.addWidget(self.input_market_replay_symbol_filter)
 
         self.combo_market_replay_scope = NoScrollComboBox()
-        self.combo_market_replay_scope.addItems(["all", "market", "sector", "theme", "symbol"])
+        populate_combo(self.combo_market_replay_scope, REPLAY_SCOPE_CHOICES, "all")
         self.combo_market_replay_scope.currentTextChanged.connect(self._on_market_replay_refresh)
-        control_row.addWidget(QLabel("scope"))
+        control_row.addWidget(QLabel("범위"))
         control_row.addWidget(self.combo_market_replay_scope)
 
         self.combo_market_replay_allowed = NoScrollComboBox()
-        self.combo_market_replay_allowed.addItems(["all", "allowed", "blocked"])
+        populate_combo(self.combo_market_replay_allowed, REPLAY_AUDIT_CHOICES, "all")
         self.combo_market_replay_allowed.currentTextChanged.connect(self._on_market_replay_refresh)
-        control_row.addWidget(QLabel("audit"))
+        control_row.addWidget(QLabel("감사"))
         control_row.addWidget(self.combo_market_replay_allowed)
 
         self.spin_market_replay_limit = NoScrollSpinBox()
         self.spin_market_replay_limit.setRange(20, 500)
         self.spin_market_replay_limit.setValue(100)
         self.spin_market_replay_limit.valueChanged.connect(self._on_market_replay_refresh)
-        control_row.addWidget(QLabel("limit"))
+        control_row.addWidget(QLabel("표시 개수"))
         control_row.addWidget(self.spin_market_replay_limit)
         control_row.addStretch()
         layout.addLayout(control_row)
@@ -2139,10 +2168,10 @@ class MarketIntelligenceMixin(TraderMixinBase):
 
         body_layout = QGridLayout()
 
-        event_group = QGroupBox("이벤트 리플레이")
+        event_group = QGroupBox("이벤트 로그")
         event_layout = QVBoxLayout(event_group)
         self.market_replay_event_table = QTableWidget()
-        event_cols = ["ts", "scope", "symbol", "source", "type", "score", "action", "exit", "block", "summary"]
+        event_cols = ["시각", "범위", "대상", "소스", "유형", "점수", "정책", "청산", "차단", "요약"]
         self.market_replay_event_table.setColumnCount(len(event_cols))
         self.market_replay_event_table.setHorizontalHeaderLabels(event_cols)
         self.market_replay_event_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -2163,7 +2192,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
         audit_group = QGroupBox("결정 감사")
         audit_layout = QVBoxLayout(audit_group)
         self.market_replay_audit_table = QTableWidget()
-        audit_cols = ["ts", "symbol", "allow", "reason", "qty", "action", "exit", "status", "last event"]
+        audit_cols = ["시각", "종목", "허용 여부", "사유", "수량", "정책", "청산", "상태", "마지막 이벤트"]
         self.market_replay_audit_table.setColumnCount(len(audit_cols))
         self.market_replay_audit_table.setHorizontalHeaderLabels(audit_cols)
         self.market_replay_audit_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -2192,7 +2221,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
         source_group = QGroupBox("📡 소스 상태")
         source_layout = QGridLayout(source_group)
         for idx, source in enumerate(self.MARKET_INTEL_SOURCE_NAMES):
-            label = QLabel(f"{source.upper()}: idle")
+            label = QLabel(f"{display_source_name(source)}: {display_status('idle')}")
             setattr(self, f"lbl_market_source_{source}", label)
             source_layout.addWidget(label, idx // 3, idx % 3)
         layout.addWidget(source_group)
@@ -2210,18 +2239,18 @@ class MarketIntelligenceMixin(TraderMixinBase):
         self.market_intel_table = QTableWidget()
         cols = [
             "종목명",
-            "intel status",
-            "news score",
-            "dart risk",
-            "theme score",
-            "macro regime",
-            "source health",
-            "action policy",
-            "size multiplier",
-            "exit policy",
-            "last event id",
-            "last update",
-            "last alert",
+            "인텔리전스 상태",
+            "뉴스 점수",
+            "공시 위험도",
+            "테마 점수",
+            "매크로 상태",
+            "소스 상태",
+            "자동매매 정책",
+            "수량 배수",
+            "청산 정책",
+            "마지막 이벤트 ID",
+            "최근 갱신",
+            "최근 알림",
         ]
         self.market_intel_table.setColumnCount(len(cols))
         self.market_intel_table.setHorizontalHeaderLabels(cols)
@@ -2242,92 +2271,137 @@ class MarketIntelligenceMixin(TraderMixinBase):
 
         return widget
 
-    def _create_market_intelligence_api_group(self):
+    def _create_market_intelligence_settings_tab(self):
         from PyQt6.QtWidgets import QCheckBox
 
-        group = QGroupBox("🧠 시장 인텔리전스 API")
-        form = QFormLayout(group)
+        cfg = self._market_intelligence_config()
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
 
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        layout.addWidget(scroll)
+
+        content = QWidget()
+        scroll.setWidget(content)
+        body = QVBoxLayout(content)
+
+        intro = QLabel(
+            "시장 인텔리전스는 뉴스, 공시, 검색량, 매크로 데이터를 읽어 자동매매를 보조합니다. "
+            "초보자는 먼저 '기본 사용'과 '점수/차단 기준'만 확인해도 충분합니다."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #8b949e;")
+        body.addWidget(intro)
+
+        basic_group = QGroupBox("기본 사용")
+        basic_form = QFormLayout(basic_group)
         self.chk_market_intel_enabled = QCheckBox("시장 인텔리전스 사용")
-        self.chk_market_intel_enabled.setChecked(bool(self._market_intelligence_config().get("enabled", True)))
-        form.addRow("", self.chk_market_intel_enabled)
+        self.chk_market_intel_enabled.setChecked(bool(cfg.get("enabled", True)))
+        basic_form.addRow("", self.chk_market_intel_enabled)
+        body.addWidget(basic_group)
 
-        self.chk_market_news = QCheckBox("NAVER 뉴스")
-        self.chk_market_news.setChecked(bool(self._market_intelligence_config().get("providers", {}).get("news", True)))
-        self.chk_market_dart = QCheckBox("OpenDART")
-        self.chk_market_dart.setChecked(bool(self._market_intelligence_config().get("providers", {}).get("dart", True)))
-        self.chk_market_datalab = QCheckBox("NAVER Datalab")
-        self.chk_market_datalab.setChecked(bool(self._market_intelligence_config().get("providers", {}).get("datalab", True)))
-        self.chk_market_macro = QCheckBox("FRED Macro")
-        self.chk_market_macro.setChecked(bool(self._market_intelligence_config().get("providers", {}).get("macro", True)))
+        source_group = QGroupBox("데이터 소스")
+        source_form = QFormLayout(source_group)
+        self.chk_market_news = QCheckBox("NAVER 뉴스 사용")
+        self.chk_market_news.setChecked(bool(cfg.get("providers", {}).get("news", True)))
+        self.chk_market_dart = QCheckBox("OpenDART 공시 사용")
+        self.chk_market_dart.setChecked(bool(cfg.get("providers", {}).get("dart", True)))
+        self.chk_market_datalab = QCheckBox("NAVER 데이터랩 사용")
+        self.chk_market_datalab.setChecked(bool(cfg.get("providers", {}).get("datalab", True)))
+        self.chk_market_macro = QCheckBox("FRED 매크로 데이터 사용")
+        self.chk_market_macro.setChecked(bool(cfg.get("providers", {}).get("macro", True)))
         provider_row = QHBoxLayout()
         provider_row.addWidget(self.chk_market_news)
         provider_row.addWidget(self.chk_market_dart)
         provider_row.addWidget(self.chk_market_datalab)
         provider_row.addWidget(self.chk_market_macro)
-        form.addRow("소스:", provider_row)
+        source_form.addRow("사용 소스:", provider_row)
 
         self.input_naver_client_id = QLineEdit()
         self.input_naver_client_id.setPlaceholderText("NAVER Client ID")
-        form.addRow("NAVER Client ID:", self.input_naver_client_id)
+        source_form.addRow("NAVER Client ID:", self.input_naver_client_id)
         self.input_naver_client_secret = QLineEdit()
         self.input_naver_client_secret.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_naver_client_secret.setPlaceholderText("NAVER Client Secret")
-        form.addRow("NAVER Client Secret:", self.input_naver_client_secret)
+        source_form.addRow("NAVER Client Secret:", self.input_naver_client_secret)
 
         self.input_dart_api_key = QLineEdit()
         self.input_dart_api_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_dart_api_key.setPlaceholderText("OPEN_DART_API_KEY")
-        form.addRow("DART API Key:", self.input_dart_api_key)
+        source_form.addRow("DART API Key:", self.input_dart_api_key)
 
         self.input_fred_api_key = QLineEdit()
         self.input_fred_api_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_fred_api_key.setPlaceholderText("FRED_API_KEY")
-        form.addRow("FRED API Key:", self.input_fred_api_key)
+        source_form.addRow("FRED API Key:", self.input_fred_api_key)
+        body.addWidget(source_group)
 
+        refresh_group = QGroupBox("갱신 주기")
+        refresh_form = QFormLayout(refresh_group)
+        self.spin_market_news_refresh = NoScrollSpinBox()
+        self.spin_market_news_refresh.setRange(10, 600)
+        self.spin_market_news_refresh.setValue(int(cfg.get("refresh_sec", {}).get("news", 60)))
+        refresh_form.addRow("뉴스/공시 갱신(초):", self.spin_market_news_refresh)
+        self.spin_market_macro_refresh = NoScrollSpinBox()
+        self.spin_market_macro_refresh.setRange(30, 1800)
+        self.spin_market_macro_refresh.setValue(int(cfg.get("refresh_sec", {}).get("macro", 300)))
+        refresh_form.addRow("매크로 갱신(초):", self.spin_market_macro_refresh)
+        body.addWidget(refresh_group)
+
+        scoring_group = QGroupBox("점수/차단 기준")
+        scoring_form = QFormLayout(scoring_group)
+        self.spin_market_news_block = NoScrollSpinBox()
+        self.spin_market_news_block.setRange(10, 100)
+        self.spin_market_news_block.setValue(abs(int(cfg.get("scoring", {}).get("news_block_threshold", -60))))
+        scoring_form.addRow("신규 진입 차단 점수:", self.spin_market_news_block)
+        self.spin_market_news_boost = NoScrollSpinBox()
+        self.spin_market_news_boost.setRange(10, 100)
+        self.spin_market_news_boost.setValue(abs(int(cfg.get("scoring", {}).get("news_boost_threshold", 60))))
+        scoring_form.addRow("우선순위 강화 점수:", self.spin_market_news_boost)
+        body.addWidget(scoring_group)
+
+        ai_group = QGroupBox("AI 요약")
+        ai_form = QFormLayout(ai_group)
         self.chk_market_ai_enabled = QCheckBox("AI 요약 사용")
-        self.chk_market_ai_enabled.setChecked(bool(self._market_intelligence_config().get("ai", {}).get("enabled", False)))
-        form.addRow("", self.chk_market_ai_enabled)
+        self.chk_market_ai_enabled.setChecked(bool(cfg.get("ai", {}).get("enabled", False)))
+        ai_form.addRow("", self.chk_market_ai_enabled)
         self.combo_market_ai_provider = NoScrollComboBox()
-        self.combo_market_ai_provider.addItems(["gemini", "openai"])
-        self.combo_market_ai_provider.setCurrentText(str(self._market_intelligence_config().get("ai", {}).get("provider", "gemini")))
-        form.addRow("AI Provider:", self.combo_market_ai_provider)
-        self.input_market_ai_model = QLineEdit(str(self._market_intelligence_config().get("ai", {}).get("model", "gemini-2.5-flash-lite")))
-        form.addRow("AI Model:", self.input_market_ai_model)
+        populate_combo(self.combo_market_ai_provider, AI_PROVIDER_CHOICES, str(cfg.get("ai", {}).get("provider", "gemini")))
+        ai_form.addRow("AI 제공사:", self.combo_market_ai_provider)
+        self.input_market_ai_model = QLineEdit(str(cfg.get("ai", {}).get("model", "gemini-2.5-flash-lite")))
+        self.input_market_ai_model.setPlaceholderText("예: gemini-2.5-flash-lite")
+        ai_form.addRow("모델 이름:", self.input_market_ai_model)
         self.input_ai_api_key = QLineEdit()
         self.input_ai_api_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_ai_api_key.setPlaceholderText("AI_API_KEY")
-        form.addRow("AI API Key:", self.input_ai_api_key)
-
-        self.spin_market_news_refresh = NoScrollSpinBox()
-        self.spin_market_news_refresh.setRange(10, 600)
-        self.spin_market_news_refresh.setValue(int(self._market_intelligence_config().get("refresh_sec", {}).get("news", 60)))
-        form.addRow("뉴스 갱신(초):", self.spin_market_news_refresh)
-        self.spin_market_macro_refresh = NoScrollSpinBox()
-        self.spin_market_macro_refresh.setRange(30, 1800)
-        self.spin_market_macro_refresh.setValue(int(self._market_intelligence_config().get("refresh_sec", {}).get("macro", 300)))
-        form.addRow("매크로 갱신(초):", self.spin_market_macro_refresh)
-
-        self.spin_market_news_block = NoScrollSpinBox()
-        self.spin_market_news_block.setRange(10, 100)
-        self.spin_market_news_block.setValue(abs(int(self._market_intelligence_config().get("scoring", {}).get("news_block_threshold", -60))))
-        form.addRow("차단 임계치:", self.spin_market_news_block)
-        self.spin_market_news_boost = NoScrollSpinBox()
-        self.spin_market_news_boost.setRange(10, 100)
-        self.spin_market_news_boost.setValue(abs(int(self._market_intelligence_config().get("scoring", {}).get("news_boost_threshold", 60))))
-        form.addRow("강화 임계치:", self.spin_market_news_boost)
+        ai_form.addRow("AI API Key:", self.input_ai_api_key)
 
         self.spin_market_ai_daily_calls = NoScrollSpinBox()
         self.spin_market_ai_daily_calls.setRange(1, 500)
-        self.spin_market_ai_daily_calls.setValue(int(self._market_intelligence_config().get("ai", {}).get("max_calls_per_day", 30)))
-        form.addRow("AI 하루 호출수:", self.spin_market_ai_daily_calls)
+        self.spin_market_ai_daily_calls.setValue(int(cfg.get("ai", {}).get("max_calls_per_day", 30)))
+        ai_form.addRow("하루 최대 호출 수:", self.spin_market_ai_daily_calls)
         self.spin_market_ai_symbol_calls = NoScrollSpinBox()
         self.spin_market_ai_symbol_calls.setRange(1, 50)
-        self.spin_market_ai_symbol_calls.setValue(int(self._market_intelligence_config().get("ai", {}).get("max_calls_per_symbol", 3)))
-        form.addRow("AI 종목당 호출수:", self.spin_market_ai_symbol_calls)
+        self.spin_market_ai_symbol_calls.setValue(int(cfg.get("ai", {}).get("max_calls_per_symbol", 3)))
+        ai_form.addRow("종목당 최대 호출 수:", self.spin_market_ai_symbol_calls)
         self.spin_market_ai_budget = NoScrollSpinBox()
         self.spin_market_ai_budget.setRange(100, 100000)
-        self.spin_market_ai_budget.setValue(int(self._market_intelligence_config().get("ai", {}).get("daily_budget_krw", 1000)))
-        form.addRow("AI 하루 예산(원):", self.spin_market_ai_budget)
+        self.spin_market_ai_budget.setValue(int(cfg.get("ai", {}).get("daily_budget_krw", 1000)))
+        ai_form.addRow("하루 예산(원):", self.spin_market_ai_budget)
+        body.addWidget(ai_group)
 
-        return group
+        note_group = QGroupBox("설명/주의사항")
+        note_layout = QVBoxLayout(note_group)
+        note = QLabel(
+            "1. 악재 뉴스나 공시는 신규 진입을 막거나 기존 포지션 청산 정책을 강화할 수 있습니다.\n"
+            "2. AI 요약은 보조 수단입니다. 결정론적 규칙이 항상 우선합니다.\n"
+            "3. 실거래 전에는 API 키와 로그 저장 위치를 반드시 점검하세요."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #d29922;")
+        note_layout.addWidget(note)
+        body.addWidget(note_group)
+
+        body.addStretch()
+        return widget

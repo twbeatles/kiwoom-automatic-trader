@@ -2,13 +2,13 @@
 
 작성일: 2026-03-24  
 최종 동기화: 2026-03-25  
-기준: 현재 코드베이스 실구현 + `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`
+기준: 현재 코드베이스 실구현 + 한글 UI 개편 반영
 
 ## 1) 문서 목적
 
-이 문서는 시장 인텔리전스 계층이 어떤 소스를 수집하고, 어떻게 자동매매 정책으로 변환되며, 어떤 운영 화면과 로그로 검증되는지를 설명한다.
+이 문서는 시장 인텔리전스 계층이 어떤 소스를 수집하고, 어떻게 자동매매 정책으로 변환되며, 어떤 화면과 로그로 검증되는지 설명한다.
 
-현재 저장소 기준으로 시장 인텔리전스는 이미 "아이디어 단계"를 넘어 실제 주문 경로와 백테스트/리플레이 경로에 연결되어 있다.
+현재 저장소 기준으로 시장 인텔리전스는 아이디어 단계가 아니라 실제 주문 경로, 백테스트, 리플레이 화면까지 연결된 상태다.
 
 ## 2) 현재 구현 요약
 
@@ -18,13 +18,14 @@
 - `app/mixins/market_intelligence.py` 전용 믹스인
 - NAVER 뉴스, NAVER Datalab, OpenDART, FRED, 선택형 AI provider
 - alias-aware 뉴스 질의와 dedup
-- provider 상태 `ok_with_data`, `ok_empty`, `error` 구분
+- provider 상태 `ok_with_data`, `ok_empty`, `error`, `partial` 처리
 - `action_policy`, `size_multiplier`, `exit_policy`, `portfolio_budget_scale` 계산
 - 전역 `market/sector/theme/symbol` scope 이벤트 로그
 - `data/market_intelligence_events.jsonl`
 - `data/decision_audit.jsonl`
-- `🧠 인텔리전스` 탭
-- `📼 리플레이` 탭
+- `🧠 인텔리전스 설정`
+- `🧠 인텔리전스 현황`
+- `📼 인텔리전스 리플레이`
 - candidate universe 승격
 - 백테스트 replay parity
 
@@ -115,11 +116,12 @@
 
 ## 6) 운영 가시성
 
-현재 운영 가시성은 새 전용 앱이 아니라 기존 UI 확장으로 처리한다.
+현재 운영 가시성은 별도 앱이 아니라 기존 UI 확장으로 처리한다.
 
-- `🧠 인텔리전스` 탭: 종목별 상태와 소스 상태
-- 진단 탭: `source health`, `action policy`, `size multiplier`, `exit policy`, `last event id`
-- `📼 리플레이` 탭: 최근 이벤트/감사 로그, 시장 리스크 모드, 섹터 차단, 테마 과열, 원본 payload
+- `🧠 인텔리전스 설정`: 외부 데이터/AI/차단 임계치 설정
+- `🧠 인텔리전스 현황`: 종목별 상태와 소스 상태
+- `🩺 시스템 진단`: `소스 상태`, `자동매매 정책`, `수량 배수`, `청산 정책`, `마지막 이벤트 ID`
+- `📼 인텔리전스 리플레이`: 최근 이벤트/감사 로그, 시장 리스크 모드, 섹터 차단, 테마 과열, 원본 payload
 
 ## 7) 관련 산출물
 
@@ -138,7 +140,7 @@
 2026-03-25 재검증:
 
 - `python -m pytest -q tests/unit`
-- `tests/unit` 전체 103개 통과
+- 결과: `tests/unit` 전체 104개 테스트 통과
 
 시장 인텔리전스 관련 핵심 검증 범주:
 

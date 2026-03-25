@@ -80,6 +80,30 @@ class TestShortcutsAndUISchema(unittest.TestCase):
         count = len(re.findall(r"self\.chk_auto_start\s*=\s*QCheckBox", text))
         self.assertEqual(count, 1)
 
+    def test_main_tab_labels_and_beginner_sections_exist(self):
+        ui_text = Path("app/mixins/ui_build.py").read_text(encoding="utf-8")
+        market_text = Path("app/mixins/market_intelligence.py").read_text(encoding="utf-8")
+
+        for label in (
+            "🎯 핵심 설정",
+            "🛠 상세 설정",
+            "🧠 인텔리전스 설정",
+            "🧠 인텔리전스 현황",
+            "📼 인텔리전스 리플레이",
+            "🩺 시스템 진단",
+            "🔐 API/알림",
+            "진입 판단",
+            "리스크 관리",
+            "주문/청산",
+            "전략팩/백테스트",
+            "시장 급변동 보호",
+            "시스템",
+        ):
+            self.assertTrue(label in ui_text or label in market_text)
+
+        self.assertIn("시장 인텔리전스는 뉴스, 공시, 검색량, 매크로 데이터를 읽어 자동매매를 보조합니다.", market_text)
+        self.assertNotIn("_create_market_intelligence_api_group", market_text)
+
 
 if __name__ == "__main__":
     unittest.main()
