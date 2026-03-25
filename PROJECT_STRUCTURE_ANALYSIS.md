@@ -2,7 +2,7 @@
 
 작성일: 2026-03-05  
 최종 동기화: 2026-03-25  
-분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`, `STRATEGY_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`, `REAL_API_PREPARATION_GUIDE.md`
+분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`, `STRATEGY_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`, `REAL_API_PREPARATION_GUIDE.md`, `IMPLEMENTATION_REVIEW_2026-03-25.md`
 
 ## 1) 요약
 
@@ -217,6 +217,7 @@
 - `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`
 - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`
 - `REAL_API_PREPARATION_GUIDE.md`
+- `IMPLEMENTATION_REVIEW_2026-03-25.md`
 
 ## 8) 검증 현황
 
@@ -248,3 +249,5 @@
 2. 라이브 운영용 로그 로테이션과 장중 세션 리포트 자동 저장이 있으면 장기 운영성이 좋아짐
 3. candidate universe 승격 종목의 자동 강등/만료 규칙을 운영 결과로 더 다듬을 수 있음
 4. `📼 인텔리전스 리플레이` 탭에 일자별 필터와 diff view를 추가하면 세션 리뷰 효율이 올라감
+5. `portfolio/allocator.py`, `portfolio_mode`, `enable_backtest`는 현재 구조상 확장 경로로 존재하지만, 실주문 수량 계산과 직접 결합된 상태는 아니므로 phase-2 연결 여부를 계속 추적해야 함
+6. `분할 매수`는 UI/설정/헬퍼 계층까지 연결되어 있으나 주문 라우팅 단계의 실제 분할 제출은 아직 별도 구현이 필요함

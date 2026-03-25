@@ -146,6 +146,12 @@ pyinstaller KiwoomTrader.spec
    - `REAL_API_PREPARATION_GUIDE.md`
 5. 최신 검증 결과는 `python -m pytest -q tests/unit` 기준 `tests/unit` 전체 104개 테스트 통과 (2026-03-25 재실행 기준) 입니다.
 
+6. 구현 정합성 메모
+- `IMPLEMENTATION_REVIEW_2026-03-25.md`에 코드 기준 잠재 이슈와 후속 구현 과제를 별도 정리했습니다.
+- `분할 매수`는 현재 UI/설정/프로필 경로까지 연결되어 있으며, 실주문 분할 라우팅은 후속 구현 범위입니다.
+- 전략팩의 SHORT 방향 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`)은 현재 실주문이 아니라 백테스트/시뮬레이션 범위로 취급해야 합니다.
+- 문서 정합성 점검 시 `QApplication + KiwoomProTrader()` 오프스크린 UI 생성 스모크 테스트를 함께 보는 편이 안전합니다.
+
 ---
 
 ## 2026-03-24 시장 인텔리전스 동기화

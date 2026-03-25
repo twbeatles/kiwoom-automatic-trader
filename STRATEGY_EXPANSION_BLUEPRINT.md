@@ -107,7 +107,23 @@
 - backtest guard parity
 - market intelligence policy runtime
 
-## 9) 후속 고도화 과제
+## 9) 현재 구현 경계 메모
+
+운영/문서 해석 시 아래 항목은 현재 구현 범위를 명확히 구분해서 보는 것이 맞다.
+
+1. 전략팩 SHORT 방향
+- `strategies/pack.py`에는 SHORT 방향을 반환하는 전략이 있지만, 현재 실주문 경로는 LONG 진입 중심 구조다.
+- 따라서 `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`는 현재 백테스트/시뮬레이션 관점의 전략으로 보는 편이 맞다.
+
+2. 분할 매수
+- `use_split`, `split_count`, `split_percent`는 UI/설정/프로필 경로와 `strategy_manager.py` 헬퍼까지 존재한다.
+- 다만 실주문 엔진은 아직 단일 주문 제출 경로이며, 주문 라우팅 단계의 실제 분할 제출은 후속 구현 과제다.
+
+3. 포트폴리오 모드/할당기
+- `portfolio/allocator.py`, `portfolio_mode`, `enable_backtest`는 확장 경로로 존재한다.
+- 하지만 현재 실주문 경로의 주문 수량 계산 책임은 여전히 `strategy_manager.py` 중심이다.
+
+## 10) 후속 고도화 과제
 
 1. 공식 시장상태 API 품질이 더 좋아지면 proxy 비중을 줄일 수 있다.
 2. `reopen_cooldown` 구간의 점수/틱/수량 가중을 더 세분화할 수 있다.

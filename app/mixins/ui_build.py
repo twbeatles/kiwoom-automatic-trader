@@ -568,7 +568,7 @@ class UIBuildMixin(TraderMixinBase):
         g4.addWidget(QLabel("매수 간격:"), 0, 3)
         self.spin_split_percent = NoScrollDoubleSpinBox()
         self.spin_split_percent.setRange(0.1, 2.0)
-        self.spin_split_percent.setValue(Config.DEFAULT_SPLIT_DROP_PERCENT)
+        self.spin_split_percent.setValue(Config.DEFAULT_SPLIT_PERCENT)
         self.spin_split_percent.setSuffix(" %")
         g4.addWidget(self.spin_split_percent, 0, 4)
 

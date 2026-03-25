@@ -203,6 +203,7 @@ python -m pytest -q tests/unit
 3. 운영 문서
 - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`는 시장 인텔리전스 자동매매 연결 상태와 운영 rollout을 설명합니다.
 - `REAL_API_PREPARATION_GUIDE.md`는 실제 API 준비물, 보안, 로그 파일, 실계좌 전 체크리스트를 정리합니다.
+- `IMPLEMENTATION_REVIEW_2026-03-25.md`는 문서-코드 정합성 점검과 후속 구현 과제를 정리합니다.
 
 4. 최신 검증 결과
 ```bash
@@ -285,6 +286,19 @@ python -m pytest -q tests/unit
 ```
 - 결과: `0 errors, 0 warnings` (2026-03-09 당시 환경)
 - 결과: `83 passed` (2026-03-09)
+
+---
+
+## 2026-03-25 구현 정합성 메모
+
+1. UI 초기화
+- `app/mixins/ui_build.py`의 분할매수 기본값 상수는 `Config.DEFAULT_SPLIT_PERCENT` 기준으로 동기화합니다.
+- 문서 정합성 점검 시 `QApplication + KiwoomProTrader()` 오프스크린 생성 스모크 테스트를 함께 보는 편이 안전합니다.
+
+2. 구현 경계
+- `분할 매수`는 현재 UI/설정/프로필 경로까지 연결되어 있지만, 실주문 분할 라우팅은 아직 연결되지 않았습니다.
+- 전략팩의 SHORT 방향 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`)은 현재 실주문이 아니라 백테스트/시뮬레이션 범위로 취급합니다.
+- `portfolio/allocator.py`, `portfolio_mode`, `feature_flags.enable_backtest`는 확장 경로로는 존재하지만 실주문 경로에 직접 연결된 상태는 아닙니다.
 
 ---
 
