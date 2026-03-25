@@ -15,12 +15,19 @@ class NewsProvider:
     def __init__(self, client_id: str = "", client_secret: str = ""):
         self.client_id = str(client_id or "").strip()
         self.client_secret = str(client_secret or "").strip()
+        self.last_status = "idle"
+        self.last_error = ""
+
+    def _mark(self, status: str, error: str = ""):
+        self.last_status = str(status or "idle")
+        self.last_error = str(error or "")
 
     def available(self) -> bool:
         return bool(self.client_id and self.client_secret)
 
     def search(self, query: str, display: int = 10, sort: str = "date") -> List[Dict[str, Any]]:
         if not self.available() or not query:
+            self._mark("disabled" if not self.available() else "ok_empty")
             return []
         headers = {
             "X-Naver-Client-Id": self.client_id,
@@ -37,9 +44,13 @@ class NewsProvider:
             payload = response.json()
             items = payload.get("items", [])
             if not isinstance(items, list):
+                self._mark("ok_empty")
                 return []
-            return [self._normalize_item(item) for item in items if isinstance(item, dict)]
-        except Exception:
+            normalized = [self._normalize_item(item) for item in items if isinstance(item, dict)]
+            self._mark("ok_with_data" if normalized else "ok_empty")
+            return normalized
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return []
 
     @staticmethod

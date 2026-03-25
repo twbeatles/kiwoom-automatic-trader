@@ -40,6 +40,16 @@ from ._typing import TraderMixinBase
 
 class PersistenceSettingsMixin(TraderMixinBase):
     @staticmethod
+    def _deep_merge_dict(base: dict, override: dict) -> dict:
+        result = copy.deepcopy(base)
+        for key, value in override.items():
+            if isinstance(value, dict) and isinstance(result.get(key), dict):
+                result[key] = PersistenceSettingsMixin._deep_merge_dict(result[key], value)
+            else:
+                result[key] = copy.deepcopy(value)
+        return result
+
+    @staticmethod
     def _v4_guard_defaults() -> dict:
         return {
             "use_shock_guard": bool(getattr(Config, "DEFAULT_USE_SHOCK_GUARD", True)),
@@ -106,12 +116,14 @@ class PersistenceSettingsMixin(TraderMixinBase):
         for key, default in self._v4_guard_defaults().items():
             settings.setdefault(key, default)
 
-        settings.setdefault(
-            "market_intelligence",
-            copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})),
-        )
+        existing_market_intel = settings.get("market_intelligence", {})
+        default_market_intel = copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+        if isinstance(existing_market_intel, dict):
+            settings["market_intelligence"] = self._deep_merge_dict(default_market_intel, existing_market_intel)
+        else:
+            settings["market_intelligence"] = default_market_intel
 
-        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 5))
+        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 6))
 
     def _add_trade(self, record: dict):
         """거래 기록 추가."""
@@ -781,10 +793,11 @@ class PersistenceSettingsMixin(TraderMixinBase):
                 self.chk_feature_backtest.setChecked(bool(flags.get("enable_backtest", True)))
             if hasattr(self, "chk_feature_external_data"):
                 self.chk_feature_external_data.setChecked(bool(flags.get("enable_external_data", True)))
-            market_intelligence = (
+            market_intelligence = self._deep_merge_dict(
+                copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})),
                 copy.deepcopy(settings.get("market_intelligence", {}))
                 if isinstance(settings.get("market_intelligence"), dict)
-                else copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+                else {},
             )
             if hasattr(self, "chk_market_intel_enabled"):
                 self.chk_market_intel_enabled.setChecked(bool(market_intelligence.get("enabled", True)))

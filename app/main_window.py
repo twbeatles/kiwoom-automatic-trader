@@ -2,7 +2,7 @@
 
 from collections import deque
 import datetime
-from typing import Any, Deque, Dict, Optional, Set
+from typing import Any, Deque, Dict, List, Optional, Set
 
 from PyQt6.QtCore import QThreadPool, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -90,6 +90,20 @@ class KiwoomProTrader(
         self._market_ai_usage: Dict[str, Any] = {}
         self._market_briefing_sent_day = ""
         self._market_macro_cache: Dict[str, Any] = {"values": {}, "ts": 0.0}
+        self._market_dart_cursor_by_code: Dict[str, str] = {}
+        self._market_risk_mode = "neutral"
+        self._portfolio_budget_scale = 1.0
+        self._sector_blocks: Dict[str, Dict[str, Any]] = {}
+        self._theme_heat_map: Dict[str, float] = {}
+        self._aggregate_news_risk = 0.0
+        self._candidate_universe: Dict[str, Dict[str, Any]] = {}
+        self._active_market_candidates: Dict[str, Dict[str, Any]] = {}
+        self._candidate_last_refresh_ts = 0.0
+        self._market_replay_event_records: List[Dict[str, Any]] = []
+        self._market_replay_audit_records: List[Dict[str, Any]] = []
+        self._market_replay_event_row_to_index: Dict[int, int] = {}
+        self._market_replay_audit_row_to_index: Dict[int, int] = {}
+        self._market_replay_refresh_scheduled = False
         self._last_time_strategy_phase: Optional[str] = None
         self._force_quit_requested = False
         self._shutdown_in_progress = False
@@ -535,6 +549,7 @@ class KiwoomProTrader(
             for row, code in enumerate(codes):
                 row_to_code[row] = code
                 info = self.universe.get(code, {})
+                market_intel = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
                 diag = self._diagnostics_by_code.get(code, {})
                 pending = self._pending_order_state.get(code, {})
                 sync_status = str(info.get("status", ""))
@@ -575,6 +590,11 @@ class KiwoomProTrader(
                         or self._guard_reason_by_code.get(code, "")
                         or ""
                     ),
+                    str(market_intel.get("source_health", "") or ""),
+                    str(market_intel.get("action_policy", "allow") or "allow"),
+                    f"{float(market_intel.get('size_multiplier', 1.0) or 1.0):.2f}",
+                    str(market_intel.get("exit_policy", "none") or "none"),
+                    str(market_intel.get("last_event_id", "") or ""),
                     str(getattr(self, "_global_risk_mode", "normal")),
                     str(getattr(self, "_order_health_mode", "normal")),
                     str(diag.get("pending_state") or pending.get("state") or ""),
@@ -608,13 +628,29 @@ class KiwoomProTrader(
                             item.setForeground(QColor("#d29922"))
                         else:
                             item.setForeground(QColor("#8b949e"))
-                    elif col in {13, 14, 15}:
+                    elif col == 13:
+                        item.setForeground(QColor("#f85149") if str(text) else QColor("#8b949e"))
+                    elif col == 14:
+                        item.setForeground(QColor("#8b949e" if not str(text) else "#d29922"))
+                    elif col == 15:
                         state = str(text).lower()
-                        if state in {"shock", "degraded"} or (col == 13 and state):
+                        if state in {"force_exit", "tighten_exit", "reduce_size", "block_entry"}:
+                            item.setForeground(QColor("#f85149"))
+                        elif state in {"allow", ""}:
+                            item.setForeground(QColor("#8b949e"))
+                    elif col == 17:
+                        state = str(text).lower()
+                        if state in {"force_exit", "tighten_exit", "reduce_size"}:
+                            item.setForeground(QColor("#f85149"))
+                        elif state in {"none", ""}:
+                            item.setForeground(QColor("#8b949e"))
+                    elif col in {19, 20}:
+                        state = str(text).lower()
+                        if state in {"shock", "degraded"}:
                             item.setForeground(QColor("#f85149"))
                         elif state in {"normal", ""}:
                             item.setForeground(QColor("#8b949e"))
-                    elif col == 18:
+                    elif col == 23:
                         item.setForeground(QColor("#f85149") if str(text) else QColor("#8b949e"))
         finally:
             self.diagnostic_table.setUpdatesEnabled(True)
@@ -658,6 +694,7 @@ class KiwoomProTrader(
             return
 
         info = self.universe.get(code, {})
+        market_intel = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
         pending = self._pending_order_state.get(code, {})
         detail = [
             f"코드: {code}",
@@ -674,6 +711,12 @@ class KiwoomProTrader(
             f"pending_remaining_qty: {pending.get('remaining_qty', '')}",
             f"pending_expected_price: {pending.get('expected_price', '')}",
             f"pending_updated_at: {self._diag_fmt_dt(pending.get('updated_at'))}",
+            f"intel status: {market_intel.get('status', market_intel.get('intel_status', 'idle'))}",
+            f"source health: {market_intel.get('source_health', '')}",
+            f"action policy: {market_intel.get('action_policy', 'allow')}",
+            f"exit policy: {market_intel.get('exit_policy', 'none')}",
+            f"size multiplier: {market_intel.get('size_multiplier', 1.0)}",
+            f"last event id: {market_intel.get('last_event_id', '')}",
         ]
         panel.setPlainText("\n".join(detail))
 

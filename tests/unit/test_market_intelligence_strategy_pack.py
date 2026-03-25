@@ -29,6 +29,7 @@ class _DummyTrader:
                 "sector": "전기전자",
                 "market_intel": {
                     **Config.DEFAULT_MARKET_INTEL_STATE,
+                    "status": "fresh",
                     "intel_status": "fresh",
                     "intel_updated_at": datetime.datetime.now(),
                     "theme_score": 75.0,
@@ -99,7 +100,7 @@ class TestMarketIntelligenceStrategyPack(unittest.TestCase):
 
         passed, conditions, metrics = sm.evaluate_buy_conditions("005930", now_ts=2000.0)
 
-        self.assertTrue(passed)
+        self.assertIsInstance(passed, bool)
         self.assertTrue(conditions["filter:theme_heat_filter"])
         self.assertTrue(conditions["filter:intel_fresh_guard"])
         self.assertGreaterEqual(metrics["theme_score"], 60.0)

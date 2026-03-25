@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-24
+> **최종 업데이트**: 2026-03-25
 
 ---
 
@@ -125,17 +125,19 @@
   - `LIVE_GUARD_PHRASE`
   - `LIVE_GUARD_TIMEOUT_SEC`
 
-- 설정 스키마(v5):
-  - canonical은 `settings_version: 5`
+- 설정 스키마(v6):
+  - canonical은 `settings_version: 6`
   - `betting_ratio`를 canonical로 사용
   - `betting`은 legacy 호환용으로 병행 저장/로드
-  - `settings_version < 5` 파일은 로드 시 v4 가드 키 + `market_intelligence` 블록 자동 보강
+  - `settings_version < 6` 파일은 로드 시 v4 가드 키 + `market_intelligence` 블록 자동 보강
 
 - 시장 인텔리전스 핵심 키:
   - `universe[code]["market_intel"]`
-  - `news_score`, `news_sentiment`, `news_headlines`
-  - `dart_events`, `dart_risk_level`, `dart_block_until`
+  - `status`, `sources`, `source_health`, `seen_event_ids`, `last_event_id`
+  - `news_score`, `news_sentiment`, `news_headlines`, `relevance_score`, `headline_velocity`
+  - `dart_events`, `dart_risk_level`, `dart_block_until`, `event_type`, `event_severity`
   - `theme_score`, `theme_keywords`, `macro_regime`
+  - `action_policy`, `size_multiplier`, `exit_policy`, `portfolio_budget_scale`
   - `briefing_summary`, `intel_updated_at`, `intel_status`, `intel_error`, `ai_summary`
 
 - 유니버스 표준 키:
@@ -188,11 +190,33 @@ python -m pytest -q tests/unit
 
 ---
 
+## 2026-03-25 문서/리플레이/운영 가이드 동기화 메모
+
+1. 설정/문서 기준
+- 현재 canonical 설정 스키마는 `settings_version = 6`입니다.
+- `market_intelligence`는 `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함하는 운영 스키마입니다.
+
+2. UI/감사 로그
+- 메인 탭에 `📼 리플레이` 탭이 추가되어 `data/market_intelligence_events.jsonl`, `data/decision_audit.jsonl`를 직접 열람합니다.
+- `🧠 인텔리전스` 탭과 진단 탭에는 `source health`, `action policy`, `size multiplier`, `exit policy`, `last event id`가 반영됩니다.
+
+3. 운영 문서
+- `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`는 시장 인텔리전스 자동매매 연결 상태와 운영 rollout을 설명합니다.
+- `REAL_API_PREPARATION_GUIDE.md`는 실제 API 준비물, 보안, 로그 파일, 실계좌 전 체크리스트를 정리합니다.
+
+4. 최신 검증 결과
+```bash
+python -m pytest -q tests/unit
+```
+- 결과: `tests/unit` 전체 103개 테스트 통과 (2026-03-25 재실행 기준)
+
+---
+
 ## 2026-03-24 시장 인텔리전스 동기화 메모
 
 1. 신규 믹스인/탭
 - `app/mixins/market_intelligence.py`를 추가했습니다.
-- API 탭에 시장 인텔리전스 설정 그룹이 생겼고, 메인 탭에 `🧠 인텔리전스` 탭이 추가되었습니다.
+- API 탭에 시장 인텔리전스 설정 그룹이 생겼고, 메인 탭에 `🧠 인텔리전스` 탭과 `📼 리플레이` 탭이 추가되었습니다.
 
 2. 외부 데이터 계층 확장
 - 기존 `external_data` 경로를 유지하면서 `market_intelligence` canonical state를 병행합니다.
@@ -204,18 +228,15 @@ python -m pytest -q tests/unit
 
 4. 전략/백테스트 동기화
 - `strategy_manager.py`와 `strategies/pack.py`에 `news_risk_guard`, `disclosure_event_guard`, `macro_regime_guard`, `theme_heat_filter`, `intel_fresh_guard`가 추가되었습니다.
-- 현재 워크스페이스 검증 기준으로 `python -m pytest tests/unit --disable-warnings`는 `90 passed in 0.53s`이며, `pyright .` 재실행에는 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 설치가 필요합니다.
+- 당시(2026-03-24) 검증 기준으로 `python -m pytest tests/unit --disable-warnings`는 `90 passed in 0.53s`였으며, 현재 최신 수치는 상단 2026-03-25 섹션을 기준으로 확인합니다. `pyright .` 재실행에는 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 설치가 필요합니다.
 - `backtest/engine.py`는 `BacktestIntelligenceEvent` sidecar replay를 지원합니다.
 
 5. 패키징/로그
 - `KiwoomTrader.spec`는 새 믹스인/프로바이더를 explicit import + `collect_submodules`로 함께 수집합니다.
-- 이벤트 로그는 `data/market_intelligence_events.jsonl`, DART corp code 캐시는 `data/dart_corp_codes.json`을 사용합니다.
+- 이벤트 로그는 `data/market_intelligence_events.jsonl`, 감사 로그는 `data/decision_audit.jsonl`, DART corp code 캐시는 `data/dart_corp_codes.json`을 사용합니다.
 
 6. 최신 검증 결과
-```bash
-python -m pytest tests/unit --disable-warnings
-```
-- 결과: **90 passed in 0.53s** (2026-03-24)
+- 현재 최신 검증 수치는 상단 `2026-03-25 문서/리플레이/운영 가이드 동기화 메모`를 기준으로 확인합니다.
 
 ---
 
@@ -270,8 +291,8 @@ python -m pytest -q tests/unit
 ## 2026-03-05 추가 동기화 메모
 
 1. 설정 스키마 기준
-- 현재 canonical은 `settings_version = 5`입니다.
-- `settings_version < 5` 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다(기존 값 우선, 누락 키만 default 주입).
+- 현재 canonical은 `settings_version = 6`입니다.
+- `settings_version < 6` 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다(기존 값 우선, 누락 키만 default 주입).
 
 2. 누락되기 쉬운 실제 모듈
 - `app/support/execution_policy.py` (market/limit 주문 라우팅)

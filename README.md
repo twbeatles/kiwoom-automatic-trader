@@ -25,6 +25,7 @@
 - [키보드 단축키](#-키보드-단축키)
 - [매매 전략](#-매매-전략)
 - [리스크 관리](#-리스크-관리)
+- [2026-03-25 문서·리플레이·운영 가이드 동기화 업데이트](#-2026-03-25-문서리플레이운영-가이드-동기화-업데이트)
 - [2026-03-24 시장 인텔리전스 업데이트](#-2026-03-24-시장-인텔리전스-업데이트)
 - [2026-03-09 정적 분석 및 문서 동기화 업데이트](#-2026-03-09-정적-분석-및-문서-동기화-업데이트)
 - [2026-03-07 기능 안정화 업데이트](#-2026-03-07-기능-안정화-업데이트)
@@ -174,7 +175,7 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-> 기준: 2026-03-09, `git -c core.quotePath=false ls-files`
+> 기준: 2026-03-25, `git -c core.quotePath=false ls-files`
 
 ```text
 kiwoom-automatic-trader/
@@ -195,19 +196,20 @@ kiwoom-automatic-trader/
 ├── pyrightconfig.json       # repo-wide pyright 기준(Python 3.14)
 ├── strategy_manager.py
 ├── KiwoomTrader.spec
-└── 문서: README.md / CLAUDE.md / GEMINI.md / PROJECT_STRUCTURE_ANALYSIS.md / STRATEGY_EXPANSION_BLUEPRINT.md / MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md
+└── 문서: README.md / CLAUDE.md / GEMINI.md / PROJECT_STRUCTURE_ANALYSIS.md / STRATEGY_EXPANSION_BLUEPRINT.md / MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md / MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md / REAL_API_PREPARATION_GUIDE.md
 ```
 
 ### 파일별 역할
 
-| 파일 | 라인 수(2026-03-09) | 주요 기능 |
+| 파일 | 라인 수(2026-03-25) | 주요 기능 |
 |------|---------------------:|-----------|
-| `키움증권 자동매매.py` | 27 | `app.main_window.KiwoomProTrader` 실행 래퍼 |
-| `app/main_window.py` | 651 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태 |
+| `키움증권 자동매매.py` | 38 | `app.main_window.KiwoomProTrader` 실행 래퍼 |
+| `app/main_window.py` | 751 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태 |
 | `app/mixins/*.py` | 분할 모듈 | UI/API/주문/저장/다이얼로그 기능별 구현 |
-| `strategy_manager.py` | 1519 | 매매 전략 로직, 지표 계산, 가드 메트릭 |
-| `config.py` | 649 | 설정 상수, v5 스키마, 가드/market intelligence 기본값 |
-| `ui_dialogs.py` | 564 | 검색/주문/설정 다이얼로그 |
+| `app/mixins/market_intelligence.py` | 2333 | 시장 인텔리전스 수집, 정책 계산, 리플레이/감사 뷰어 |
+| `strategy_manager.py` | 1780 | 매매 전략 로직, 지표 계산, 가드 메트릭 |
+| `config.py` | 871 | 설정 상수, v6 스키마, 가드/market intelligence 기본값 |
+| `ui_dialogs.py` | 648 | 검색/주문/설정 다이얼로그 |
 
 ---
 
@@ -274,15 +276,39 @@ python -m pytest -q tests/unit
 
 ---
 
+## 🔄 2026-03-25 문서·리플레이·운영 가이드 동기화 업데이트
+
+이번 업데이트는 코드베이스 기준으로 문서, 운영 가이드, 리플레이 화면, 패키징 메타데이터를 다시 맞춘 정합성 동기화입니다.
+
+### 반영된 핵심 변경
+
+- canonical 설정 스키마 기준을 `settings_version = 6`으로 문서 전반에 통일
+- 시장 인텔리전스 자동매매 확장에 맞춰 `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay` 하위 설정과 `action_policy`/`size_multiplier`/`exit_policy` 흐름을 문서화
+- 메인 UI의 `📼 리플레이` 탭과 `data/decision_audit.jsonl` 감사 로그를 README에 반영
+- 삭제 상태였던 `STRATEGY_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`를 현재 코드 기준 문서로 복원
+- `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`, `REAL_API_PREPARATION_GUIDE.md`를 운영 문서로 추가
+- `KiwoomTrader.spec`, `.gitignore`를 런타임 로그/감사 로그/리플레이 산출물 기준으로 재검토
+
+### 최신 검증 결과
+
+```bash
+python -m pytest -q tests/unit
+```
+
+- 결과: **`tests/unit` 전체 103개 테스트 통과** (2026-03-25 재실행 기준)
+- 로컬 재실행 시간: **약 21.44초**
+
+---
+
 ## 🔄 2026-03-24 시장 인텔리전스 업데이트
 
 이번 업데이트는 기존 `external_data` 경로를 `market intelligence` 계층으로 확장한 구현 동기화입니다.
 
 ### 반영된 핵심 변경
 
-- 설정 스키마를 `settings_version = 5`로 승격하고 `market_intelligence` 블록 및 관련 API 키 저장/복원을 추가
+- 설정 스키마를 `market_intelligence` 포함 구조로 확장했고, 현재 canonical 스키마는 `settings_version = 6`
 - `app/mixins/market_intelligence.py`를 추가해 뉴스/공시/검색트렌드/매크로 수집 루프, 브리핑, 경보, JSONL 이벤트 로그를 분리
-- API 탭에 `시장 인텔리전스` 설정 그룹을 추가하고, 전용 `🧠 인텔리전스` 탭에서 소스 상태/종목 점수/상세 요약을 표시
+- API 탭에 `시장 인텔리전스` 설정 그룹을 추가하고, 전용 `🧠 인텔리전스` 탭과 `📼 리플레이` 탭에서 소스 상태/종목 점수/상세 요약/감사 로그를 표시
 - 신규 provider 추가:
   - `data/providers/news_provider.py`
   - `data/providers/naver_trend_provider.py`
@@ -302,15 +328,11 @@ python -m pytest -q tests/unit
 
 - `feature_flags["enable_external_data"]`가 상위 게이트이고, 그 아래 `market_intelligence.enabled`가 세부 스위치입니다.
 - 데이터가 없거나 stale/error이면 신규 진입만 보수적으로 차단하고 청산은 허용하는 fail-closed 원칙을 유지합니다.
-- AI 요약은 기본 `OFF`이며, 규칙 기반 점수화가 우선입니다.
+- AI 요약은 기본 `OFF`이며, 규칙 기반 점수화와 결정론적 포지션 방어가 우선입니다.
 
 ### 최신 검증 결과
 
-```bash
-python -m pytest tests/unit --disable-warnings
-```
-
-- 결과: **90 passed in 0.53s** (2026-03-24)
+- 현재 최신 검증 수치는 상단 `2026-03-25 문서·리플레이·운영 가이드 동기화 업데이트` 섹션을 기준으로 확인합니다.
 - 정적 분석 메모: 현재 워크스페이스에서 `pyright .`를 다시 실행하려면 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성이 설치되어 있어야 합니다.
 
 ---
@@ -616,7 +638,7 @@ python -m pytest -q tests/unit
 ### kiwoom_settings.json
 ```json
 {
-  "settings_version": 5,
+  "settings_version": 6,
   "codes": "005930,000660",
   "k_value": 0.5,
   "betting_ratio": 10.0,
@@ -638,16 +660,31 @@ python -m pytest -q tests/unit
       "datalab": 60,
       "macro": 300
     },
-    "briefing_time": "08:50"
+    "briefing_time": "08:50",
+    "soft_scale": {
+      "enabled": true
+    },
+    "position_defense": {
+      "enabled": true
+    },
+    "portfolio_budget": {
+      "enabled": true
+    },
+    "candidate_universe": {
+      "enabled": true
+    },
+    "replay": {
+      "event_file": "data/market_intelligence_events.jsonl"
+    }
   },
   ...
 }
 ```
-설정 스키마(v5) 정책:
-- canonical 스키마는 `settings_version = 5`
+설정 스키마(v6) 정책:
+- canonical 스키마는 `settings_version = 6`
 - 저장은 `betting_ratio`를 기준으로 사용
 - `betting`은 legacy 파일 호환을 위해 병행 저장/로드
-- `settings_version < 5` 파일은 로드 시 v4 가드 + `market_intelligence` 블록이 자동 보강됩니다.
+- `settings_version < 6` 파일은 로드 시 v4 가드와 `market_intelligence` 신규 하위 블록이 자동 보강됩니다.
 
 ### v4 Guard 옵션
 - Shock guard: `shock_1m_pct`, `shock_5m_pct`, `shock_cooldown_min`
@@ -666,10 +703,12 @@ python -m pytest -q tests/unit
 - `order_health_degraded_count`
 - `avg_slippage_bps`
 
-### Market Intelligence 산출물(v5)
+### Market Intelligence 산출물(v6)
 - 전용 상태 키: `universe[code]["market_intel"]`
 - 로그 파일: `data/market_intelligence_events.jsonl`
+- 감사 로그: `data/decision_audit.jsonl`
 - DART corp code 캐시: `data/dart_corp_codes.json`
+- UI: `🧠 인텔리전스` 탭 + `📼 리플레이` 탭
 
 ### kiwoom_presets.json
 ```json
@@ -726,7 +765,7 @@ MIT License
 
 - **작성자**: Kiwoom Pro Algo-Trader
 - **버전**: 4.5
-- **최종 업데이트**: 2026-03-24
+- **최종 업데이트**: 2026-03-25
 
 ---
 

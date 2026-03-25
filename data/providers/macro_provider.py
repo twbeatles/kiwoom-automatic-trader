@@ -11,12 +11,19 @@ class MacroProvider:
 
     def __init__(self, api_key: str = ""):
         self.api_key = api_key or os.getenv("FRED_API_KEY", "")
+        self.last_status = "idle"
+        self.last_error = ""
+
+    def _mark(self, status: str, error: str = ""):
+        self.last_status = str(status or "idle")
+        self.last_error = str(error or "")
 
     def available(self) -> bool:
         return bool(self.api_key)
 
     def get_series(self, series_id: str, start_date: str = "", end_date: str = "") -> List[Dict[str, str]]:
         if not self.available() or not series_id:
+            self._mark("disabled" if not self.available() else "ok_empty")
             return []
         params = {
             "api_key": self.api_key,
@@ -31,8 +38,12 @@ class MacroProvider:
             res = requests.get(self.BASE_URL, params=params, timeout=10)
             res.raise_for_status()
             payload = res.json()
-            return payload.get("observations", [])
-        except Exception:
+            observations = payload.get("observations", [])
+            normalized = observations if isinstance(observations, list) else []
+            self._mark("ok_with_data" if normalized else "ok_empty")
+            return normalized
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return []
 
     def latest_value(self, series_id: str) -> float:
@@ -61,9 +72,17 @@ class MacroProvider:
 
     def latest_values(self, series_ids: List[str]) -> Dict[str, float]:
         values: Dict[str, float] = {}
+        had_error = False
         for series_id in series_ids:
             sid = str(series_id or "").strip()
             if not sid:
                 continue
             values[sid] = self.latest_value(sid)
+            had_error = had_error or self.last_status == "error"
+        if had_error:
+            self._mark("error", error=self.last_error)
+        elif values and any(float(v or 0.0) != 0.0 for v in values.values()):
+            self._mark("ok_with_data")
+        else:
+            self._mark("ok_empty")
         return values

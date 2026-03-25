@@ -18,7 +18,7 @@ class TestSettingsSchemaV4(unittest.TestCase):
 
         trader._apply_settings_schema_migration(settings)
 
-        self.assertEqual(settings["settings_version"], 5)
+        self.assertEqual(settings["settings_version"], 6)
         self.assertEqual(settings["shock_1m_pct"], 2.0)
         self.assertIn("use_vi_guard", settings)
         self.assertIn("max_slippage_bps", settings)

@@ -14,6 +14,12 @@ class NaverTrendProvider:
     def __init__(self, client_id: str = "", client_secret: str = ""):
         self.client_id = str(client_id or "").strip()
         self.client_secret = str(client_secret or "").strip()
+        self.last_status = "idle"
+        self.last_error = ""
+
+    def _mark(self, status: str, error: str = ""):
+        self.last_status = str(status or "idle")
+        self.last_error = str(error or "")
 
     def available(self) -> bool:
         return bool(self.client_id and self.client_secret)
@@ -26,6 +32,7 @@ class NaverTrendProvider:
         time_unit: str = "date",
     ) -> Dict[str, Any]:
         if not self.available() or not keyword_groups:
+            self._mark("disabled" if not self.available() else "ok_empty")
             return {}
         today = date.today()
         payload = {
@@ -43,8 +50,12 @@ class NaverTrendProvider:
             response = requests.post(self.BASE_URL, headers=headers, json=payload, timeout=10)
             response.raise_for_status()
             result = response.json()
-            return result if isinstance(result, dict) else {}
-        except Exception:
+            normalized = result if isinstance(result, dict) else {}
+            has_results = bool(isinstance(normalized.get("results"), list) and normalized.get("results"))
+            self._mark("ok_with_data" if has_results else "ok_empty")
+            return normalized
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return {}
 
     def latest_ratios(self, keywords: List[str]) -> Dict[str, float]:
@@ -73,6 +84,10 @@ class NaverTrendProvider:
                     except (TypeError, ValueError):
                         continue
             ratios[group_name] = latest_ratio
+        if ratios and self.last_status != "error":
+            self._mark("ok_with_data")
+        elif self.last_status != "error":
+            self._mark("ok_empty")
         return ratios
 
     @staticmethod

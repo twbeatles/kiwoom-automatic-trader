@@ -25,12 +25,19 @@ class DartProvider:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_path = self.cache_dir / "dart_corp_codes.json"
+        self.last_status = "idle"
+        self.last_error = ""
+
+    def _mark(self, status: str, error: str = ""):
+        self.last_status = str(status or "idle")
+        self.last_error = str(error or "")
 
     def available(self) -> bool:
         return bool(self.api_key)
 
     def get_company_info(self, corp_code: str) -> Dict[str, Any]:
         if not self.available() or not corp_code:
+            self._mark("disabled" if not self.available() else "ok_empty")
             return {}
         url = f"{self.BASE_URL}/company.json"
         params = {"crtfc_key": self.api_key, "corp_code": corp_code}
@@ -39,15 +46,19 @@ class DartProvider:
             res.raise_for_status()
             payload = res.json()
             if str(payload.get("status")) != "000":
+                self._mark("ok_empty", error=str(payload.get("message", "") or ""))
                 return {}
+            self._mark("ok_with_data")
             return payload
-        except Exception:
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return {}
 
     def get_financial_statement(
         self, corp_code: str, bsns_year: str, reprt_code: str = "11011"
     ) -> List[Dict[str, Any]]:
         if not self.available() or not corp_code or not bsns_year:
+            self._mark("disabled" if not self.available() else "ok_empty")
             return []
         url = f"{self.BASE_URL}/fnlttSinglAcnt.json"
         params = {
@@ -61,19 +72,25 @@ class DartProvider:
             res.raise_for_status()
             payload = res.json()
             if str(payload.get("status")) != "000":
+                self._mark("ok_empty", error=str(payload.get("message", "") or ""))
                 return []
             result = payload.get("list", [])
-            return result if isinstance(result, list) else []
-        except Exception:
+            normalized = result if isinstance(result, list) else []
+            self._mark("ok_with_data" if normalized else "ok_empty")
+            return normalized
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return []
 
     def get_corp_code_map(self, force_refresh: bool = False) -> Dict[str, str]:
         if not self.available():
+            self._mark("disabled")
             return {}
         if not force_refresh and self.cache_path.exists():
             try:
                 payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
                 if isinstance(payload, dict):
+                    self._mark("ok_with_data")
                     return {str(k): str(v) for k, v in payload.items() if str(k) and str(v)}
             except (OSError, json.JSONDecodeError):
                 pass
@@ -83,8 +100,10 @@ class DartProvider:
             mapping = self._parse_corp_code_zip(response.content)
             if mapping:
                 self.cache_path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._mark("ok_with_data" if mapping else "ok_empty")
             return mapping
-        except Exception:
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return {}
 
     def resolve_corp_code(self, stock_code: str, force_refresh: bool = False) -> str:
@@ -102,9 +121,11 @@ class DartProvider:
         page_count: int = 10,
     ) -> List[Dict[str, Any]]:
         if not self.available() or not stock_code:
+            self._mark("disabled" if not self.available() else "ok_empty")
             return []
         corp_code = self.resolve_corp_code(stock_code)
         if not corp_code:
+            self._mark("ok_empty", error="corp_code_not_found")
             return []
         url = f"{self.BASE_URL}/list.json"
         params = {
@@ -120,10 +141,14 @@ class DartProvider:
             res.raise_for_status()
             payload = res.json()
             if str(payload.get("status")) != "000":
+                self._mark("ok_empty", error=str(payload.get("message", "") or ""))
                 return []
             result = payload.get("list", [])
-            return result if isinstance(result, list) else []
-        except Exception:
+            normalized = result if isinstance(result, list) else []
+            self._mark("ok_with_data" if normalized else "ok_empty")
+            return normalized
+        except Exception as exc:
+            self._mark("error", error=str(exc))
             return []
 
     @staticmethod

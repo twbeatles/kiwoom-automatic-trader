@@ -1,5 +1,6 @@
 """Dialogs/profiles mixin for KiwoomProTrader."""
 
+import copy
 import json
 import re
 from pathlib import Path
@@ -469,7 +470,13 @@ class DialogsProfilesMixin(TraderMixinBase):
             if hasattr(self, "config"):
                 self.config.feature_flags = dict(flags)
         if isinstance(settings.get('market_intelligence'), dict):
-            mi = settings['market_intelligence']
+            default_mi = copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                mi = merge_fn(default_mi, settings['market_intelligence'])
+            else:
+                mi = default_mi
+                mi.update(settings['market_intelligence'])
             if hasattr(self, "config"):
                 self.config.market_intelligence = dict(mi)
             if hasattr(self, "chk_market_intel_enabled"):

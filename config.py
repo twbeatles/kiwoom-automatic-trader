@@ -31,17 +31,57 @@ def _default_market_intelligence_config() -> Dict[str, Any]:
             "ui": True,
             "telegram": True,
         },
+        "source_policy": {
+            "core_sources": ["news", "dart"],
+            "fail_on_core_error": True,
+            "allow_partial_for_entry": False,
+        },
         "scoring": {
             "news_block_threshold": -60,
             "news_boost_threshold": 60,
             "macro_block_threshold": -40,
             "headline_velocity_threshold": 5,
             "theme_heat_threshold": 60,
+            "min_relevance_score": 0.4,
             "weights": {
                 "keyword_frequency": 50,
                 "datalab_change": 30,
                 "ranking_intersection": 20,
             },
+        },
+        "soft_scale": {
+            "enabled": True,
+            "base_multiplier": 1.0,
+            "positive_news_multiplier": 1.15,
+            "theme_heat_multiplier": 1.10,
+            "risk_on_multiplier": 1.05,
+            "max_multiplier": 1.25,
+        },
+        "position_defense": {
+            "enabled": True,
+            "reduce_ratio": 0.5,
+            "tighten_ts_start_scale": 0.5,
+            "tighten_ts_stop_scale": 0.5,
+            "allow_force_exit_on_high_risk_dart": True,
+        },
+        "portfolio_budget": {
+            "enabled": True,
+            "risk_off_scale": 0.7,
+            "aggregate_negative_news_threshold": -80,
+            "aggregate_negative_scale": 0.85,
+        },
+        "candidate_universe": {
+            "enabled": True,
+            "max_candidates": 20,
+            "refresh_sec": 60,
+            "promotion_news_score": 70,
+            "promotion_theme_score": 70,
+            "promotion_requires_dual_source": True,
+            "active_ttl_sec": 900,
+        },
+        "replay": {
+            "event_file": str(_BASE_PATH / "data" / "market_intelligence_events.jsonl"),
+            "prefer_payload": True,
         },
         "ai": {
             "enabled": False,
@@ -52,6 +92,9 @@ def _default_market_intelligence_config() -> Dict[str, Any]:
             "max_calls_per_day": 30,
             "max_calls_per_symbol": 3,
             "min_score_to_call": 60,
+            "apply_to_policy": True,
+            "min_confidence_for_policy": 0.8,
+            "allow_force_exit": False,
         },
         "macro_series": ["VIXCLS", "DGS10"],
     }
@@ -59,17 +102,37 @@ def _default_market_intelligence_config() -> Dict[str, Any]:
 
 def _default_market_intel_state() -> Dict[str, Any]:
     return {
+        "status": "idle",
+        "updated_at": None,
         "news_score": 0.0,
         "news_sentiment": "neutral",
         "news_headlines": [],
         "headline_velocity": 0,
+        "relevance_score": 0.0,
         "dart_events": [],
         "dart_risk_level": "normal",
         "dart_block_until": None,
+        "event_type": "",
+        "event_severity": "low",
+        "action_policy": "allow",
+        "size_multiplier": 1.0,
+        "exit_policy": "none",
+        "portfolio_budget_scale": 1.0,
         "theme_score": 0.0,
         "theme_keywords": [],
         "macro_regime": "neutral",
         "briefing_summary": "",
+        "sources": {
+            "news": {"status": "idle", "updated_at": None, "count": 0, "error": ""},
+            "dart": {"status": "idle", "updated_at": None, "count": 0, "error": ""},
+            "datalab": {"status": "idle", "updated_at": None, "value": 0.0, "error": ""},
+            "macro": {"status": "idle", "updated_at": None, "summary": "", "error": ""},
+            "ai": {"status": "idle", "updated_at": None, "error": ""},
+        },
+        "source_health": "",
+        "seen_event_ids": [],
+        "last_event_id": "",
+        "last_position_action_event_id": "",
         "intel_updated_at": None,
         "intel_status": "idle",
         "intel_error": "",
@@ -580,6 +643,7 @@ class Config:
     MARKET_INTEL_ALERT_DEDUP_SEC = 600
     MARKET_INTEL_BRIEFING_TIME = "08:50"
     MARKET_INTELLIGENCE_EVENTS_FILE = str(_BASE_PATH / "data" / "market_intelligence_events.jsonl")
+    MARKET_INTELLIGENCE_DECISION_AUDIT_FILE = str(_BASE_PATH / "data" / "decision_audit.jsonl")
     
     # =========================================================================
     # 기본 프리셋 정의
@@ -716,7 +780,7 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         """
     }
 
-    SETTINGS_SCHEMA_VERSION = 5
+    SETTINGS_SCHEMA_VERSION = 6
     # =========================================================================
     # 전략팩/백테스트/실행 정책 (v5.0)
     # =========================================================================
@@ -777,6 +841,14 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         "횡령",
         "배임",
         "리콜",
+    }
+    MARKET_INTELLIGENCE_EVENT_KEYWORDS: Dict[str, Set[str]] = {
+        "funding": {"유상증자", "전환사채", "cb", "bw", "신주인수권부사채"},
+        "governance": {"감사의견", "횡령", "배임", "소송"},
+        "earnings": {"실적", "가이던스", "실적정정", "실적 하향", "실적 개선"},
+        "contract": {"수주", "계약", "파트너십"},
+        "halt": {"거래정지", "매매거래정지", "정지"},
+        "correction": {"정정", "정정공시", "실적정정"},
     }
     DEFAULT_EXECUTION_POLICY = "market"
     STRATEGY_CAPABILITIES: Dict[str, Dict[str, bool]] = {

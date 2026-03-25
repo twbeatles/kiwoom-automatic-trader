@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-24
+> **최종 업데이트**: 2026-03-25
 
 ---
 
@@ -130,13 +130,26 @@ pyinstaller KiwoomTrader.spec
 | `kiwoom_token_cache.json` | 인증 토큰 캐시 |
 | `data/*.json` | 프로필 데이터 |
 | `data/market_intelligence_events.jsonl` | 시장 인텔리전스 이벤트 로그 |
+| `data/decision_audit.jsonl` | 시장 인텔리전스 결정 감사 로그 |
 | `data/dart_corp_codes.json` | OpenDART 종목코드 캐시 |
+
+---
+
+## 2026-03-25 문서/리플레이/운영 가이드 동기화
+
+1. 현재 canonical 설정 스키마는 `settings_version = 6` 입니다.
+2. `TradingConfig.market_intelligence`는 `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함합니다.
+3. 메인 UI에는 `🧠 인텔리전스` 탭과 `📼 리플레이` 탭이 있으며, 감사 로그는 `data/decision_audit.jsonl`에 기록됩니다.
+4. 운영 문서:
+   - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`
+   - `REAL_API_PREPARATION_GUIDE.md`
+5. 최신 검증 결과는 `python -m pytest -q tests/unit` 기준 `tests/unit` 전체 103개 테스트 통과 (2026-03-25 재실행 기준) 입니다.
 
 ---
 
 ## 2026-03-24 시장 인텔리전스 동기화
 
-1. 현재 canonical 설정 스키마는 `settings_version = 5` 입니다.
+1. 현재 canonical 설정 스키마는 `settings_version = 6` 입니다.
 2. `TradingConfig.market_intelligence`와 `universe[code]["market_intel"]`가 현재 시장 인텔리전스 상태의 기준 필드입니다.
 3. 신규 provider:
    - `data/providers/news_provider.py`
@@ -149,7 +162,8 @@ pyinstaller KiwoomTrader.spec
    - `theme_heat_filter`
    - `intel_fresh_guard`
 5. 패키징은 `KiwoomTrader.spec`의 explicit hiddenimports + `collect_submodules('app')`, `collect_submodules('data.providers')`로 동기화됩니다.
-6. 최신 검증 결과는 `python -m pytest tests/unit --disable-warnings` 기준 **90 passed in 0.53s** (2026-03-24) 입니다.
+6. 이벤트 로그는 `data/market_intelligence_events.jsonl`, 감사 로그는 `data/decision_audit.jsonl`를 사용합니다.
+7. 최신 검증 결과는 상단 `2026-03-25 문서/리플레이/운영 가이드 동기화` 섹션을 기준으로 확인합니다.
 
 ---
 
@@ -200,8 +214,8 @@ python -m pytest -q tests/unit
 - `tools/perf_smoke.py`로 전략 평가 성능 스모크 테스트를 수행할 수 있습니다.
 
 ### 2) 설정 스키마 기준
-- 현재 canonical 스키마는 `settings_version = 5` 입니다.
-- `settings_version < 5` 파일은 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다.
+- 현재 canonical 스키마는 `settings_version = 6` 입니다.
+- `settings_version < 6` 파일은 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다.
 
 ### 3) 테스트 기준
 ```bash

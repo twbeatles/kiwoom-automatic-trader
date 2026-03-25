@@ -44,6 +44,14 @@ log/
 *.out
 *.err
 
+# Trading runtime state (local only)
+kiwoom_settings.json
+kiwoom_token_cache.json
+kiwoom_trade_history.json
+data/market_intelligence_events.jsonl
+data/decision_audit.jsonl
+data/dart_corp_codes.json
+
 # User-requested exclusions: text/json/db artifacts
 *.txt
 *.json

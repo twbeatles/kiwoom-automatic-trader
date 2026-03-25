@@ -216,6 +216,9 @@ class MarketDataTabsMixin(TraderMixinBase):
 
             self.condition_info.setText(f"{len(results)}개 종목 검색됨")
             self.log(f"조건검색 완료: {len(results)}개")
+            refresh_candidates = getattr(self, "_refresh_candidate_universe_state", None)
+            if callable(refresh_candidates):
+                refresh_candidates()
 
         def on_error(e):
             if btn:
@@ -290,6 +293,9 @@ class MarketDataTabsMixin(TraderMixinBase):
                 self.ranking_table.setUpdatesEnabled(True)
 
             self.log(f"{ranking_type} 조회 완료")
+            refresh_candidates = getattr(self, "_refresh_candidate_universe_state", None)
+            if callable(refresh_candidates):
+                refresh_candidates()
 
         def on_error(e):
             if btn:

@@ -64,8 +64,8 @@ class StrategyManager:
         if isinstance(updated_at, datetime.datetime):
             age_sec = max(0.0, reference_now_ts - updated_at.timestamp())
         stale_sec = float(getattr(Config, "MARKET_INTEL_STALE_SEC", 180))
-        status = str(state.get("intel_status", "idle") or "idle")
-        fresh = enabled and age_sec >= 0.0 and age_sec <= stale_sec and status not in {"error", "disabled"}
+        status = str(state.get("status", state.get("intel_status", "idle")) or "idle")
+        fresh = enabled and age_sec >= 0.0 and age_sec <= stale_sec and status == "fresh"
         if not enabled:
             status = "disabled"
         elif status == "fresh" and age_sec > stale_sec:
@@ -87,9 +87,30 @@ class StrategyManager:
             "news_score": float(state.get("news_score", 0.0) or 0.0),
             "theme_score": float(state.get("theme_score", 0.0) or 0.0),
             "headline_velocity": int(state.get("headline_velocity", 0) or 0),
+            "relevance_score": float(state.get("relevance_score", 0.0) or 0.0),
             "dart_risk_level": str(state.get("dart_risk_level", "normal") or "normal"),
             "macro_regime": str(state.get("macro_regime", "neutral") or "neutral"),
+            "action_policy": str(state.get("action_policy", "allow") or "allow"),
+            "exit_policy": str(state.get("exit_policy", "none") or "none"),
+            "size_multiplier": float(state.get("size_multiplier", 1.0) or 1.0),
+            "portfolio_budget_scale": float(state.get("portfolio_budget_scale", 1.0) or 1.0),
+            "last_event_id": str(state.get("last_event_id", "") or ""),
+            "event_type": str(state.get("event_type", "") or ""),
+            "event_severity": str(state.get("event_severity", "low") or "low"),
+            "source_health": str(state.get("source_health", "") or ""),
+            "market_risk_mode": str(getattr(self.trader, "_market_risk_mode", "neutral") or "neutral"),
+            "aggregate_news_risk": float(getattr(self.trader, "_aggregate_news_risk", 0.0) or 0.0),
             "block_until": block_until,
+        }
+
+    def get_market_position_defense_policy(self, code: str, now_ts: Optional[float] = None) -> Dict[str, Any]:
+        snapshot = self.get_market_intel_snapshot(code, now_ts=now_ts)
+        return {
+            "action_policy": str(snapshot.get("action_policy", "allow") or "allow"),
+            "exit_policy": str(snapshot.get("exit_policy", "none") or "none"),
+            "last_event_id": str(snapshot.get("last_event_id", "") or ""),
+            "event_type": str(snapshot.get("event_type", "") or ""),
+            "event_severity": str(snapshot.get("event_severity", "low") or "low"),
         }
 
     def check_market_news_risk_guard(self, code: str, now_ts: Optional[float] = None) -> Tuple[bool, float]:
@@ -1177,6 +1198,9 @@ class StrategyManager:
         market_intel = self.get_market_intel_snapshot(code)
         if market_intel.get("enabled") and str(market_intel.get("macro_regime", "neutral")) == "risk_off":
             qty = max(1, int(qty * 0.7))
+        if market_intel.get("enabled"):
+            qty = max(1, int(qty * max(0.1, float(market_intel.get("size_multiplier", 1.0) or 1.0))))
+            qty = max(1, int(qty * max(0.1, float(market_intel.get("portfolio_budget_scale", 1.0) or 1.0))))
         if regime in {"elevated", "extreme"}:
             return max(1, int(qty * float(scale)))
         return qty

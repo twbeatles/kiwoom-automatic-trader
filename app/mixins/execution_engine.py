@@ -1,6 +1,7 @@
 ﻿"""Execution engine mixin for KiwoomProTrader."""
 
 import datetime
+import time
 from collections import deque
 
 from api.models import ExecutionData
@@ -11,6 +12,47 @@ from ._typing import TraderMixinBase
 
 
 class ExecutionEngineMixin(TraderMixinBase):
+    def _record_decision_audit_once(
+        self,
+        code: str,
+        info: dict,
+        *,
+        allowed: bool,
+        reason: str,
+        conditions: dict | None = None,
+        metrics: dict | None = None,
+        quantity: int = 0,
+    ):
+        recorder = getattr(self, "_record_decision_audit_event", None)
+        if not callable(recorder):
+            return
+        state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+        key = (
+            f"{code}:{int(bool(allowed))}:{reason}:{state.get('last_event_id', '')}:"
+            f"{int(time.time() // 30)}:{int(quantity or 0)}"
+        )
+        cache = getattr(self, "_decision_audit_keys", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._decision_audit_keys = cache
+        if key in cache:
+            return
+        cache[key] = time.time()
+        if len(cache) > 500:
+            cutoff = time.time() - 3600
+            for old_key in list(cache.keys()):
+                if float(cache.get(old_key, 0.0)) < cutoff:
+                    cache.pop(old_key, None)
+        recorder(
+            code=code,
+            info=info,
+            allowed=allowed,
+            reason=reason,
+            conditions=conditions,
+            metrics=metrics,
+            quantity=quantity,
+        )
+
     def _reserved_cash_map(self):
         mapping = getattr(self, "_reserved_cash_by_code", None)
         if not isinstance(mapping, dict):
@@ -278,6 +320,44 @@ class ExecutionEngineMixin(TraderMixinBase):
             if profit_rate > float(info.get("max_profit_rate", 0)):
                 info["max_profit_rate"] = profit_rate
 
+            defense_getter = getattr(getattr(self, "strategy", None), "get_market_position_defense_policy", None)
+            defense = defense_getter(code) if callable(defense_getter) else {}
+            exit_policy = str(defense.get("exit_policy", "none") or "none")
+            defense_event_id = str(
+                defense.get("last_event_id", "") or f"{code}:{exit_policy}:{datetime.date.today().isoformat()}"
+            )
+            state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+            market_intel_cfg = getattr(getattr(self, "config", None), "market_intelligence", {})
+            defense_cfg = (
+                market_intel_cfg.get("position_defense", {})
+                if isinstance(market_intel_cfg, dict) and isinstance(market_intel_cfg.get("position_defense"), dict)
+                else {}
+            )
+            if exit_policy == "force_exit" and state.get("last_position_action_event_id", "") != defense_event_id:
+                state["last_position_action_event_id"] = defense_event_id
+                self._record_decision_audit_once(
+                    code,
+                    info,
+                    allowed=False,
+                    reason="market_intel_force_exit",
+                    quantity=held,
+                )
+                self._execute_sell(code, held, current_price, "MARKET_INTEL_FORCE_EXIT")
+                return
+            if exit_policy == "reduce_size" and state.get("last_position_action_event_id", "") != defense_event_id:
+                reduce_ratio = float(defense_cfg.get("reduce_ratio", 0.5) or 0.5)
+                reduce_qty = min(held, max(1, int(max(1, held) * reduce_ratio)))
+                state["last_position_action_event_id"] = defense_event_id
+                self._record_decision_audit_once(
+                    code,
+                    info,
+                    allowed=False,
+                    reason="market_intel_reduce_size",
+                    quantity=reduce_qty,
+                )
+                self._execute_sell(code, reduce_qty, current_price, "MARKET_INTEL_REDUCE_SIZE")
+                return
+
             atr_triggered, _ = self.strategy.check_atr_stop_loss(code)
             if atr_triggered:
                 self._execute_sell(code, held, current_price, "ATR_STOP")
@@ -312,6 +392,9 @@ class ExecutionEngineMixin(TraderMixinBase):
                     float(self.spin_ts_stop.value()) if hasattr(self, "spin_ts_stop") else Config.DEFAULT_TS_STOP,
                 )
             )
+            if exit_policy in {"tighten_exit", "force_exit"}:
+                ts_start *= float(defense_cfg.get("tighten_ts_start_scale", 0.5) or 0.5)
+                ts_stop *= float(defense_cfg.get("tighten_ts_stop_scale", 0.5) or 0.5)
             max_profit = float(info.get("max_profit_rate", 0))
             if max_profit >= ts_start:
                 info["status"] = "trailing"
@@ -358,6 +441,7 @@ class ExecutionEngineMixin(TraderMixinBase):
                         f"guard:{code}:{reason_code}",
                         f"[진입차단] {info.get('name', code)} reason={reason_code}",
                     )
+                self._record_decision_audit_once(code, info, allowed=False, reason=reason_code)
                 return
             info["last_guard_reason"] = ""
             guard_map = getattr(self, "_guard_reason_by_code", None)
@@ -400,7 +484,7 @@ class ExecutionEngineMixin(TraderMixinBase):
                     if hits < required_hits:
                         return
 
-                passed, _, _ = self.strategy.evaluate_buy_conditions(code, now.timestamp())
+                passed, conditions, metrics = self.strategy.evaluate_buy_conditions(code, now.timestamp())
                 if passed:
                     use_dynamic_sizing = bool(
                         cfg_value(
@@ -431,7 +515,25 @@ class ExecutionEngineMixin(TraderMixinBase):
                         quantity = self.strategy._default_position_size(code)
 
                     if quantity > 0:
+                        self._record_decision_audit_once(
+                            code,
+                            info,
+                            allowed=True,
+                            reason="buy_signal",
+                            conditions=conditions,
+                            metrics=metrics,
+                            quantity=quantity,
+                        )
                         self._execute_buy(code, quantity, current_price)
+                else:
+                    self._record_decision_audit_once(
+                        code,
+                        info,
+                        allowed=False,
+                        reason="strategy_conditions_failed",
+                        conditions=conditions,
+                        metrics=metrics,
+                    )
             elif info.get("breakout_hits"):
                 info["breakout_hits"] = 0
 

@@ -15,12 +15,19 @@ class AIProvider:
     def __init__(self, provider: str = "gemini", api_key: str = ""):
         self.provider = str(provider or "gemini").strip().lower()
         self.api_key = str(api_key or "").strip()
+        self.last_status = "idle"
+        self.last_error = ""
+
+    def _mark(self, status: str, error: str = ""):
+        self.last_status = str(status or "idle")
+        self.last_error = str(error or "")
 
     def available(self) -> bool:
         return bool(self.api_key)
 
     def summarize_event(self, prompt: str, model: str) -> Dict[str, Any]:
         if not self.available():
+            self._mark("disabled", error="ai_api_key_missing")
             raise RuntimeError("ai_api_key_missing")
         if self.provider == "openai":
             return self._summarize_openai(prompt, model)
@@ -56,7 +63,9 @@ class AIProvider:
         content = message.get("content", "") if isinstance(message, dict) else ""
         if not isinstance(content, str) or not content.strip():
             raise RuntimeError("openai_empty_content")
-        return json.loads(content)
+        result = json.loads(content)
+        self._mark("ok_with_data")
+        return result
 
     def _summarize_gemini(self, prompt: str, model: str) -> Dict[str, Any]:
         url = self.GEMINI_URL.format(model=str(model or "gemini-2.5-flash-lite"))
@@ -96,4 +105,6 @@ class AIProvider:
                     break
         if not text.strip():
             raise RuntimeError("gemini_empty_content")
-        return json.loads(text)
+        result = json.loads(text)
+        self._mark("ok_with_data")
+        return result

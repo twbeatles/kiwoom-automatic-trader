@@ -1,45 +1,54 @@
 # Kiwoom Automatic Trader 프로젝트 구조 분석
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-24  
-분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`
+최종 동기화: 2026-03-25  
+분석 기준: 실제 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`, `STRATEGY_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`, `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`, `REAL_API_PREPARATION_GUIDE.md`
 
 ## 1) 요약
 
-현재 프로젝트는 `엔트리 래퍼(키움증권 자동매매.py) + app/mixins 분할 아키텍처`로 잘 정리되어 있습니다.  
-실시간 매매 핵심은 다음 축으로 동작합니다.
+현재 프로젝트는 `엔트리 래퍼(키움증권 자동매매.py) + app/mixins 분할 아키텍처 + 전략/백테스트/시장 인텔리전스 sidecar` 구조로 정리되어 있습니다.
 
-- UI/상태: `app/main_window.py` + `app/mixins/ui_build.py`
+실시간 자동매매 핵심 축은 다음과 같습니다.
+
+- UI/상태: `app/main_window.py`, `app/mixins/ui_build.py`
 - 세션/수명주기: `app/mixins/trading_session.py`
-- 체결 기반 매매 엔진: `app/mixins/execution_engine.py`
-- 시장 인텔리전스: `app/mixins/market_intelligence.py`
+- 체결 기반 실행 엔진: `app/mixins/execution_engine.py`
+- 시장 인텔리전스/리플레이/감사 로그: `app/mixins/market_intelligence.py`
+- 전략/포지션 크기 계산: `strategy_manager.py`, `strategies/pack.py`, `portfolio/allocator.py`
 - 주문/계좌 동기화 Fail-safe: `app/mixins/order_sync.py`
-- 전략 평가: `strategy_manager.py` + `strategies/pack.py`
+- 저장/스키마 마이그레이션: `app/mixins/persistence_settings.py`
 - API 통신: `api/rest_client.py`, `api/websocket_client.py`
+- 백테스트 parity: `backtest/engine.py`
 
-## 2) 실제 코드베이스 규모 (실측)
+핵심 특징은 기존 가격 기반 전략 엔진 위에 `시장 인텔리전스 -> 정책 계산 -> 주문/감사 로그 -> 리플레이 뷰어` 체인이 실제로 연결되어 있다는 점입니다.
 
-패키지별 Python 라인 수(주요 기준):
+## 2) 실제 코드베이스 규모 (2026-03-25 실측)
+
+패키지별 Python 파일 수와 라인 수:
 
 | 패키지 | py 파일 수 | 라인 수 |
 |---|---:|---:|
-| `app/` | 17 | 6240 |
-| `api/` | 5 | 1755 |
-| `strategy_manager.py` | 1 | 1519 |
-| `tests/` | 54 | 3105 |
-| `strategies/` | 4 | 401 |
-| `tools/` | 4 | 405 |
-| `backtest/` | 2 | 309 |
-| `data/` | 7 | 257 |
-| `portfolio/` | 2 | 39 |
+| `app/` | 18 | 9590 |
+| `api/` | 5 | 1826 |
+| `tests/` | 59 | 4750 |
+| `strategies/` | 4 | 505 |
+| `tools/` | 4 | 510 |
+| `backtest/` | 2 | 812 |
+| `data/` | 10 | 764 |
+| `portfolio/` | 2 | 51 |
 
-핵심 파일 Top 5:
+핵심 파일 Top 10:
 
-1. `strategy_manager.py` (1519)
-2. `app/mixins/ui_build.py` (1081)
-3. `app/mixins/trading_session.py` (1030)
-4. `api/rest_client.py` (792)
-5. `app/mixins/persistence_settings.py` (737)
+1. `app/mixins/market_intelligence.py` (2333)
+2. `strategy_manager.py` (1780)
+3. `app/mixins/ui_build.py` (1198)
+4. `app/mixins/trading_session.py` (1171)
+5. `app/mixins/persistence_settings.py` (892)
+6. `config.py` (871)
+7. `api/rest_client.py` (807)
+8. `backtest/engine.py` (803)
+9. `app/mixins/execution_engine.py` (756)
+10. `app/main_window.py` (751)
 
 ## 3) 엔트리포인트와 조립 구조
 
@@ -48,30 +57,37 @@
 - `키움증권 자동매매.py`
   - `QApplication` 생성
   - 전역 예외 훅 설정
-  - `KiwoomProTrader` 표시
+  - `app.main_window.KiwoomProTrader` 표시
 
 ### 조립 클래스
 
 - `app/main_window.py`
-  - `KiwoomProTrader`는 10개 믹스인을 다중상속으로 조립
-  - 정적 분석 시 `app/mixins/_typing.py`의 `TraderMixinBase`를 통해 `QMainWindow` 성격과 동적 속성 접근을 타입으로 보강
-  - 시그널:
+  - `KiwoomProTrader`는 다수 믹스인을 다중상속으로 조립
+  - 공용 상태:
+    - `_global_risk_mode`
+    - `_market_risk_mode`
+    - `_portfolio_budget_scale`
+    - `_sector_blocks`
+    - `_theme_heat_map`
+    - `_aggregate_news_risk`
+    - `_candidate_universe`
+  - 공용 시그널:
     - `sig_log`
     - `sig_execution`
     - `sig_order_execution`
     - `sig_update_table`
 
-믹스인 책임:
+### 믹스인 책임
 
-- `ui_build.py`: 탭/위젯/고급전략 UI 구성
+- `ui_build.py`: 메인 탭, 진단 표, `🧠 인텔리전스` 탭, `📼 리플레이` 탭 구성
 - `api_account.py`: API 연결, 계좌정보, 실거래 가드
-- `trading_session.py`: 시작/중지, 유니버스 초기화, 시간청산
-- `execution_engine.py`: 틱 이벤트 기반 매수/매도 의사결정 및 주문 실행
-- `market_intelligence.py`: 뉴스/공시/검색트렌드/매크로 수집, 브리핑, 경보, 전용 탭
+- `trading_session.py`: 시작/중지, 유니버스 초기화, 시간청산, 지수 상태 반영
+- `execution_engine.py`: 틱 기반 매수/매도 판단, 시장 인텔리전스 정책 실행, 감사 로그 호출
+- `market_intelligence.py`: 뉴스/공시/트렌드/매크로 수집, 정책 계산, 후보 유니버스, 이벤트/감사 리플레이
 - `order_sync.py`: 주문/체결 이벤트 반영, 포지션 동기화, sync 실패 차단
-- `persistence_settings.py`: 설정/내역 저장, 스키마 호환
+- `persistence_settings.py`: 설정 저장/복원, 스키마 마이그레이션, keyring 연동
 - `dialogs_profiles.py`: 프리셋/프로필/수동주문/예약
-- `market_data_tabs.py`: 차트/호가/조건검색/순위
+- `market_data_tabs.py`: 차트/호가/조건검색/순위 탭과 후보 유니버스 갱신 훅
 - `system_shell.py`: 로깅/트레이/타이머/종료 플로우
 
 ## 4) 런타임 핵심 플로우
@@ -81,160 +97,153 @@
 1. `connect_api()` 호출
 2. Worker 스레드에서 인증/계좌조회
 3. 성공 시 `rest_client`, `ws_client`, 계좌 콤보 반영
-4. `_refresh_account_info_async()`로 예수금/총자산/가상예수금 동기화
+4. `_refresh_account_info_async()`로 예수금/총자산 동기화
 
 ### B. 매매 시작
 
 1. `start_trading()` 입력 코드 검증
 2. 실거래 보호문구 가드 `_confirm_live_trading_guard()`
 3. live capability guard:
-   - `asset_scope == kr_stock_live` 강제
-   - `short_enabled == False` 강제
-   - 전략 live_supported 체크
-4. `_init_universe()`로 종목별 시세/일봉/분봉/평균거래량/스프레드 초기화
-5. `_sync_positions_snapshot()` 성공해야만 시작 허용
-6. WebSocket 체결/주문체결 구독 시작
+   - `asset_scope == kr_stock_live`
+   - `short_enabled == False`
+   - 전략별 `live_supported == True`
+4. `_init_universe()`로 가격/거래량/호가/히스토리 초기화
+5. `_sync_positions_snapshot()` 성공 후 시작
+6. WebSocket 체결/주문체결/지수 구독 시작
+7. 시장 인텔리전스 refresh loop와 리플레이 요약 상태가 함께 시작
 
-### C. 실시간 의사결정
+### C. 실시간 진입/청산
 
 - `ExecutionData` 수신 -> `ExecutionEngineMixin._on_execution()`
-- 보유 중:
-  - ATR 손절
-  - 고정 손절
-  - 단계별 익절
-  - 트레일링 스톱
-  - 시간 청산
 - 미보유:
-  - 시간대 진입금지(15시 이후)
-  - 일일손실 트리거 차단
-  - 최대보유수 차단
-  - 쿨다운 차단
-  - 목표가 돌파 + 돌파확인틱
-  - `strategy.evaluate_buy_conditions()` 통과 시 수량 계산 후 주문
+  - 시간대/일일손실/최대보유수/쿨다운/guard 상태 차단
+  - `strategy.evaluate_buy_conditions()` 통과 후
+  - 시장 인텔리전스 `action_policy`, `size_multiplier`, `portfolio_budget_scale` 적용
+  - `decision_audit.jsonl`에 평가 결과 기록 후 주문
+- 보유:
+  - ATR 손절, 고정 손절, 단계별 익절, 트레일링, 시간청산
+  - 시장 인텔리전스 `exit_policy` 적용
+  - `reduce_size`, `tighten_exit`, `force_exit`는 정책에 따라 매도 실행
 
-### D. 주문/체결 동기화
+### D. 시장 인텔리전스 -> 자동매매 연결
 
-- 주문 성공은 곧바로 체결로 간주하지 않음
-- `_sync_position_from_account()` 배치/디바운스 호출
-- 재시도 초과 시 `sync_failed` 상태로 종목 단위 자동주문 차단
-- 동기화 복구 시 `sync_failed` 해제
+현재 구현된 연결 체인은 다음과 같습니다.
+
+1. provider 수집
+   - 뉴스
+   - OpenDART
+   - NAVER Datalab
+   - FRED
+   - 선택형 AI
+2. 정규화/정책 계산
+   - `status`, `sources`, `relevance_score`
+   - `event_type`, `event_severity`
+   - `action_policy`, `size_multiplier`, `exit_policy`
+3. 글로벌 집계
+   - `market_risk_mode`
+   - `portfolio_budget_scale`
+   - `sector_blocks`
+   - `theme_heat_map`
+   - `aggregate_news_risk`
+4. 라이브 적용
+   - 진입 차단
+   - 소프트 사이징
+   - 보유 포지션 방어
+5. 운영 가시성
+   - `data/market_intelligence_events.jsonl`
+   - `data/decision_audit.jsonl`
+   - `📼 리플레이` 탭
 
 ### E. 종료
 
-- `stop_trading()`에서 구독해제/타이머 정리/reserved cash 환원
-- `closeEvent()`에서 강제종료/트레이 최소화/내역 flush 정책 처리
+- `stop_trading()`에서 구독 해제/타이머 정리/reserved cash 환원
+- `closeEvent()`에서 트레이 최소화/종료 정리/내역 flush 처리
 
-## 5) 데이터 모델 핵심
+## 5) 상태 모델 핵심
 
-### universe 엔트리(종목 상태) 주요 필드
+### universe 엔트리 주요 필드
 
-- 가격/지표 기반: `current`, `open`, `prev_close`, `prev_high`, `prev_low`, `target`
+- 가격/지표: `current`, `open`, `prev_close`, `prev_high`, `prev_low`, `target`
 - 히스토리: `price_history`, `minute_prices`, `daily_prices`, `high_history`, `low_history`
 - 거래량/유동성: `current_volume`, `avg_volume_5`, `avg_volume_20`, `avg_value_20`
 - 체결/호가: `ask_price`, `bid_price`
 - 포지션: `held`, `buy_price`, `invest_amount`, `buy_time`
 - 리스크/상태: `status`, `max_profit_rate`, `cooldown_until`, `breakout_hits`, `partial_profit_levels`
-- 외부데이터: `investor_net`, `program_net`, `external_status`, `external_updated_at`, `external_error`
-- 시장 인텔리전스: `market_intel.news_score`, `market_intel.dart_risk_level`, `market_intel.theme_score`, `market_intel.macro_regime`, `market_intel.intel_status`
+- 외부데이터 호환 필드: `external_status`, `external_updated_at`, `external_error`
+- 시장 인텔리전스:
+  - `status`, `updated_at`, `source_health`
+  - `news_score`, `news_sentiment`, `headline_velocity`, `relevance_score`
+  - `dart_events`, `dart_risk_level`, `event_type`, `event_severity`
+  - `theme_score`, `theme_keywords`, `macro_regime`
+  - `action_policy`, `size_multiplier`, `exit_policy`, `portfolio_budget_scale`
+  - `seen_event_ids`, `last_event_id`, `last_position_action_event_id`
+  - `briefing_summary`, `ai_summary`
 
-### 상태(state) 흐름
+### 전역 상태
 
-대표 상태:
-- `watch`
-- `buying` -> `buy_submitted` -> `holding`
-- `selling` -> `sell_submitted` -> `watch`
-- `trailing`
-- `cooldown`
-- `sync_failed` (Fail-safe 차단 상태)
+- `_global_risk_mode`: v4 guard 종합 모드
+- `_market_risk_mode`: market intelligence 기반 시장 레짐
+- `_portfolio_budget_scale`: 전체 포트폴리오 사이징 축소 비율
+- `_sector_blocks`: 섹터 단위 진입 차단 상태
+- `_theme_heat_map`: 테마 강도 집계
+- `_aggregate_news_risk`: 시장 전체 뉴스 리스크 합산
+- `_candidate_universe`: 이벤트 기반 승격 후보 종목
 
-## 6) 전략 엔진 구조
+## 6) 백테스트/리플레이 구조
 
-### 레거시 평가 경로
+- `backtest/engine.py`는 `market`, `sector`, `theme`, `symbol` scope 이벤트를 재생
+- payload 기반 신규 스키마와 legacy `raw_ref` 기반 기록을 모두 읽음
+- 라이브와 동일하게 `action_policy`, `exit_policy`, `size_multiplier`, `portfolio_budget_scale`를 합성
+- `force_exit`는 결정론적 고위험 공시에만 허용
+- `📼 리플레이` 탭은 라이브 로그를 그대로 읽어 최근 이벤트, 감사 로그, 시장 리스크 요약을 표시
 
-`StrategyManager.evaluate_buy_conditions()`가 단일 스냅샷으로 아래 조건을 평가:
+## 7) 저장 산출물과 운영 문서
 
-- RSI
-- 거래량
-- 유동성
-- 스프레드
-- MACD
-- 볼린저
-- DMI/ADX
-- Stoch RSI
-- MTF
-- 갭
-- 시장 분산/섹터 제한
-- MA 데드크로스 필터
-- 진입 점수
+주요 로컬 산출물:
 
-### 모듈형 전략팩 경로
+- `kiwoom_settings.json`
+- `kiwoom_token_cache.json`
+- `data/market_intelligence_events.jsonl`
+- `data/decision_audit.jsonl`
+- `data/dart_corp_codes.json`
 
-- `TradingConfig.feature_flags.use_modular_strategy_pack=True`면
-  `strategies/pack.py`의 `StrategyPackEngine` 경로 사용
-- primary/filter/risk overlay 분리
-- 외부데이터 의존 전략(`investor_program_flow`)은 stale/disabled 시 fail-closed
+운영/설계 문서:
 
-## 7) 리스크/안전장치 현황
+- `README.md`
+- `CLAUDE.md`
+- `GEMINI.md`
+- `STRATEGY_EXPANSION_BLUEPRINT.md`
+- `MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md`
+- `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`
+- `REAL_API_PREPARATION_GUIDE.md`
 
-구현됨:
+## 8) 검증 현황
 
-- 실거래 시작 보호문구 가드
-- 일일 손실 한도(일일 기준 손익/기준금액)
-- ATR 손절 + 고정 손절 + 트레일링 + 시간청산
-- 재진입 쿨다운
-- 주문-체결 비동기 동기화 + 재시도 + `sync_failed` 차단
-- reserved cash(가상 예수금) 선점/환원
-- v4 Shock guard(1m/5m 급변동 감지) + 세션 단위 진입 차단
-- v4 VI/HALT guard + `reopen_cooldown` 상태 머신
-- v4 Regime sizing(ATR% 기반 `elevated/extreme` 포지션 축소)
-- v4 Liquidity stress guard(스프레드/거래대금 스트레스 진입 차단)
-- v4 Slippage guard(최근 체결 평균 bps 기반 진입 차단)
-- v4 Order health guard(실패 이벤트 급증 시 degraded 모드)
-- 차단 reason code 및 진단 컬럼(`market state`, `guard reason`, `risk mode`, `health mode`)
+2026-03-25 재검증:
 
-## 8) 테스트/검증 현황
+- 명령: `python -m pytest -q tests/unit`
+- 결과: `tests/unit` 전체 103개 테스트 통과
+- 로컬 재실행 시간: 약 21.44초
 
-2026-03-24 실행:
+이번 재검증에서 함께 정리된 회귀:
 
-- 명령: `python -m pytest tests/unit --disable-warnings`
-- 결과: `90 passed in 0.53s`
-- 정적 분석 메모: `pyright .`는 현재 워크스페이스에서 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성 설치 후 재실행 필요
-- 인코딩 점검: UTF-8 디코드 실패 없음, `U+FFFD` 없음
-
-커버되는 핵심 시나리오:
-
-- 시작 시 포지션 스냅샷 동기화 강제
-- 동기화 실패 누적 `sync_failed` 차단
-- 일일 손실 롤오버/기준 전환
-- 전략팩 엔진 경로 및 external stale guard
-- 실행 정책(`market/limit`) 라우팅
-- 설정 스키마/호환성
-- Shock/VI/reopen_cooldown/regime/liquidity/slippage/order-health 가드
-- 진단 컬럼/guard reason 노출
-- 백테스트 guard parity
-- 백테스트 다종목 MTM 최신가 캐시 회귀
-- 거래내역 single-writer 저장 순서 보장
-- 세션 인입 포지션 TIME_STOP 제외 정책
+- 진단 컬럼 인덱스 변경에 맞춘 테스트 정리
+- `settings_version = 6` 기대값 반영
+- `ExecutionEngineMixin`의 `get_market_position_defense_policy` 하위 호환 처리
 
 ## 9) 문서-코드 동기화 메모
 
-`README.md`/`CLAUDE.md`/`GEMINI.md`/`STRATEGY_EXPANSION_BLUEPRINT.md`/`MARKET_INTELLIGENCE_EXPANSION_BLUEPRINT.md` 기준으로 v4 guard 정책, v5 설정 스키마, market intelligence 구현, 정적 분석 선행 의존성을 동기화했습니다.
+2026-03-25 기준 canonical 정합성:
 
-- canonical 설정 스키마: `settings_version = 5`
-- 신규 가드 기본값/진단 컬럼/KPI 항목 문서 반영
-- `pyrightconfig.json` 추적 및 `app/mixins/_typing.py` 역할을 문서에 반영
-- `app/mixins/market_intelligence.py`, 신규 provider, 인텔리전스 탭/이벤트 로그를 문서에 반영
-- README 구조 트리와 테스트 현황을 현재 기준으로 정리
+- canonical 설정 스키마: `settings_version = 6`
+- 시장 인텔리전스는 `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함
+- 운영 로그는 `market_intelligence_events.jsonl` + `decision_audit.jsonl` 이중 구조
+- UI는 `🧠 인텔리전스` + `📼 리플레이` 기준으로 설명
+- 실제 API 준비는 `REAL_API_PREPARATION_GUIDE.md`를 기준 문서로 사용
 
 ## 10) 후속 고도화 지점
 
-현재 v4 가드 통합은 완료되었고, 다음 고도화가 남아 있습니다.
-
-1. 공식 시장상태(서킷/VI) API 안정 연동률 개선(현재는 지원 시 우선, 미지원 시 proxy 폴백)
-2. `reopen_cooldown` 구간의 점수/틱/수량 강화 규칙 세분화
-3. 운영 KPI의 장중/일별 리포트 자동 집계
-4. 시장별 인덱스 피드 품질 저하 시 폴백 전략(다중 소스/지연 허용치) 고도화
-
----
-
-상세 구현/운영 스펙은 [`STRATEGY_EXPANSION_BLUEPRINT.md`](./STRATEGY_EXPANSION_BLUEPRINT.md)에 정리되어 있습니다.
+1. 실계좌/모의 분기 엔드포인트가 키움 정책상 더 필요하면 `chk_mock`와 인증/REST/WSS URL을 완전히 연결해야 함
+2. 라이브 운영용 로그 로테이션과 장중 세션 리포트 자동 저장이 있으면 장기 운영성이 좋아짐
+3. candidate universe 승격 종목의 자동 강등/만료 규칙을 운영 결과로 더 다듬을 수 있음
+4. `📼 리플레이` 탭에 일자별 필터와 diff view를 추가하면 세션 리뷰 효율이 올라감

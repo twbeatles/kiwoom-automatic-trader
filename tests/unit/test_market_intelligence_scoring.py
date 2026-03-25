@@ -14,13 +14,17 @@ class _DummyConfig:
 class _Harness(MarketIntelligenceMixin):
     def __init__(self):
         self.config = _DummyConfig()
+        self.universe = {}
+        self._candidate_universe = {}
+        self._active_market_candidates = {}
+        self._portfolio_budget_scale = 1.0
 
 
 class TestMarketIntelligenceScoring(unittest.TestCase):
     def test_news_scoring_deduplicates_and_tracks_velocity(self):
         trader = _Harness()
         now = datetime.datetime.now(datetime.timezone.utc)
-        info = {"name": "SAMSUNG", "market_intel": dict(Config.DEFAULT_MARKET_INTEL_STATE)}
+        info = {"name": "삼성전자", "aliases": ["SAMSUNG"], "market_intel": dict(Config.DEFAULT_MARKET_INTEL_STATE)}
         items = [
             {"title": "삼성전자 대규모 수주 계약", "published_at": now},
             {"title": "삼성전자 대규모 수주 계약", "published_at": now},
@@ -62,8 +66,31 @@ class TestMarketIntelligenceScoring(unittest.TestCase):
         result = trader._maybe_run_ai_summary("005930", info, reason="unit_test")
 
         self.assertEqual(result["source"], "rules")
-        self.assertEqual(result["action_hint"], "block_entry")
+        self.assertEqual(result["action_hint"], "reduce_size")
         self.assertIn("뉴스 점수", result["summary"])
+
+    def test_source_status_distinguishes_core_error_and_partial(self):
+        trader = _Harness()
+
+        error_status = trader._determine_symbol_status(
+            {
+                "news": {"status": "error"},
+                "dart": {"status": "ok_with_data"},
+                "datalab": {"status": "ok_empty"},
+                "macro": {"status": "ok_with_data"},
+            }
+        )
+        partial_status = trader._determine_symbol_status(
+            {
+                "news": {"status": "ok_with_data"},
+                "dart": {"status": "ok_with_data"},
+                "datalab": {"status": "error"},
+                "macro": {"status": "ok_with_data"},
+            }
+        )
+
+        self.assertEqual(error_status, "error")
+        self.assertEqual(partial_status, "partial")
 
 
 if __name__ == "__main__":

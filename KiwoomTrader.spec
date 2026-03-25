@@ -6,6 +6,7 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-03-07: 주문/동기화 상태머신, 저장 안정화, 백테스트 MTM 보정은 런타임 로직 변경이며 패키징 항목 변경 없음
 2026-03-09: pyright 정리용 type-check helper(`app.mixins._typing`) 추가, 패키징 동작은 동일
 2026-03-24: 시장 인텔리전스 믹스인/프로바이더/백테스트 sidecar 확장 반영, collect_submodules + explicit import 동기화
+2026-03-25: 리플레이 탭/decision audit 로그/viewer 추가 반영, 신규 런타임 JSONL 산출물은 계속 번들 제외
 """
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -16,7 +17,7 @@ block_cipher = None
 # 데이터 파일 수집
 # ============================================================================
 datas = [('icon.png', '.')] # 아이콘 파일 포함 (만약 있다면)
-# 시장 인텔리전스 JSON/JSONL 캐시·이벤트 로그는 런타임 생성 산출물이므로 번들에 포함하지 않는다.
+# 시장 인텔리전스 JSON/JSONL 캐시·이벤트·감사 로그는 런타임 생성 산출물이므로 번들에 포함하지 않는다.
 
 # ============================================================================
 # 숨겨진 imports (자동 감지 안 되는 모듈)

@@ -174,6 +174,8 @@ class UIBuildMixin(TraderMixinBase):
         tabs.addTab(self._create_history_tab(), "📝 내역")
         if hasattr(self, "_create_market_intelligence_tab"):
             tabs.addTab(self._create_market_intelligence_tab(), "🧠 인텔리전스")
+        if hasattr(self, "_create_market_replay_tab"):
+            tabs.addTab(self._create_market_replay_tab(), "📼 리플레이")
         tabs.addTab(self._create_diagnostics_tab(), "🩺 진단")
         tabs.addTab(self._create_api_tab(), "🔑 API")
         return tabs
@@ -1039,6 +1041,11 @@ class UIBuildMixin(TraderMixinBase):
             "external age(sec)",
             "market state",
             "guard reason",
+            "intel source",
+            "action policy",
+            "size mult",
+            "exit policy",
+            "last event id",
             "risk mode",
             "health mode",
             "pending state",

@@ -148,6 +148,38 @@ class TestSettingsSchemaV4Compat(unittest.TestCase):
         self.assertTrue(getattr(trader.config, "use_shock_guard", False))
         self.assertIsInstance(getattr(trader.config, "market_intelligence", {}), dict)
 
+    def test_v5_market_intelligence_deep_merges_to_v6_defaults(self):
+        trader = _Harness()
+        tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
+        try:
+            settings_path = Path(tmpdir) / "kiwoom_settings.json"
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "settings_version": 5,
+                        "market_intelligence": {
+                            "providers": {"news": False},
+                            "ai": {"enabled": True},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
+                "app.mixins.persistence_settings.keyring.get_password", return_value=""
+            ):
+                trader._load_settings()
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+        market_intel = getattr(trader.config, "market_intelligence", {})
+        self.assertEqual(market_intel["providers"]["news"], False)
+        self.assertTrue(market_intel["providers"]["dart"])
+        self.assertTrue(market_intel["ai"]["enabled"])
+        self.assertIn("soft_scale", market_intel)
+        self.assertIn("candidate_universe", market_intel)
+
 
 if __name__ == "__main__":
     unittest.main()

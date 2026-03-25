@@ -97,24 +97,28 @@ class TestDiagnosticsExternalColumns(unittest.TestCase):
         age_item = trader.diagnostic_table.item(0, 11)
         market_state_item = trader.diagnostic_table.item(0, 12)
         guard_reason_item = trader.diagnostic_table.item(0, 13)
-        risk_mode_item = trader.diagnostic_table.item(0, 14)
+        intel_source_item = trader.diagnostic_table.item(0, 14)
+        risk_mode_item = trader.diagnostic_table.item(0, 19)
         self.assertIsNotNone(status_item)
         self.assertIsNotNone(updated_item)
         self.assertIsNotNone(age_item)
         self.assertIsNotNone(market_state_item)
         self.assertIsNotNone(guard_reason_item)
+        self.assertIsNotNone(intel_source_item)
         self.assertIsNotNone(risk_mode_item)
         assert status_item is not None
         assert updated_item is not None
         assert age_item is not None
         assert market_state_item is not None
         assert guard_reason_item is not None
+        assert intel_source_item is not None
         assert risk_mode_item is not None
         status = status_item.text()
         updated = updated_item.text()
         age = age_item.text()
         market_state = market_state_item.text()
         guard_reason = guard_reason_item.text()
+        intel_source = intel_source_item.text()
         risk_mode = risk_mode_item.text()
 
         self.assertEqual(status, "fresh")
@@ -122,6 +126,7 @@ class TestDiagnosticsExternalColumns(unittest.TestCase):
         self.assertTrue(age.isdigit())
         self.assertEqual(market_state, "normal")
         self.assertEqual(guard_reason, "shock_guard")
+        self.assertEqual(intel_source, "")
         self.assertEqual(risk_mode, "shock")
 
 

@@ -1,188 +1,108 @@
-# 급변동/서킷브레이커 대응 전략 확장 청사진
+# 급변동/가드/전략 확장 청사진
 
 작성일: 2026-03-05  
-최종 동기화: 2026-03-24 (v4 Guard 유지 + v5 설정 스키마 + 시장 인텔리전스 통합 반영 기준)
+최종 동기화: 2026-03-25  
+기준: 현재 코드베이스 실구현 + `README.md` + `PROJECT_STRUCTURE_ANALYSIS.md`
 
-추가 동기화: 2026-03-24
+## 1) 문서 목적
 
-- 프로젝트 canonical 설정 스키마는 현재 `settings_version = 5`입니다.
-- v4 guard 자체는 유지되며, `market_intelligence` 계층이 전략팩/백테스트에 추가 통합되었습니다.
-- 본 문서는 v4 guard 확장 청사진/구현 이력을 설명하는 문서로 유지합니다.
+이 문서는 v4 guard 계열 확장과 전략 엔진 쪽 핵심 보호장치를 한 문서로 묶어 설명하는 운영 청사진이다.  
+현재 저장소 기준으로 대부분 구현은 완료되었고, 본 문서는 "무엇이 들어가 있는가"와 "어디까지가 결정론적 보호 로직인가"를 설명하는 참조 문서로 유지한다.
 
-## 1) 목표
+## 2) 현재 구현 상태 요약
 
-급등/급락, VI(변동성완화장치), 서킷브레이커, 유동성 급감 구간에서
+- 정책 철학: `Fail-Closed`
+- canonical 설정 스키마: `settings_version = 6`
+- 시장 인텔리전스와 전략 가드는 별도 계층이지만 진입 게이트에서 함께 합성
+- 라이브/전략팩/백테스트 의미를 최대한 맞춤
 
-- 신규 진입 리스크 자동 억제
-- 기존 포지션 청산 경로 유지
-- 시장 정상화 후 안전한 재가동
+핵심 구현 완료 항목:
 
-을 유지하는 Fail-Closed 체계를 운영한다.
+1. Shock guard
+2. VI/HALT guard + reopen cooldown
+3. ATR 기반 regime sizing
+4. liquidity stress guard
+5. slippage guard
+6. order health degraded 모드
+7. 진단 컬럼/guard reason 노출
+8. 시장 인텔리전스 기반 `block_entry`, `reduce_size`, `tighten_exit`, `force_exit` 연동
 
-## 2) 구현 상태 요약
+## 3) 전략 엔진의 실제 진입 순서
 
-- 범위: `F1~F8` 전부 반영 완료
-- 정책: `Fail-Closed` (불확실/오류 시 신규 진입 차단, 청산 허용)
-- 감지: 가격기반 1차 + 공식 상태연동 탐색(지원 시 우선, 미지원 시 proxy 폴백)
-- 스키마: 현재 canonical은 `settings_version = 5`, v4 guard 필드는 그대로 유지
-- 동기화: 라이브/전략팩/백테스트 guard 의미 일치
+현재 진입 경로는 아래 순서로 이해하는 것이 맞다.
 
-## 3) F1~F8 구현 결과
+1. 가격/거래량/기술지표 기반 기본 전략 평가
+2. v4 guard 계열 차단 여부 확인
+3. 시장 인텔리전스 `action_policy` 적용
+4. `size_multiplier`와 `portfolio_budget_scale` 적용
+5. 주문 실행 정책(`market`/`limit`) 반영
+6. `decision_audit.jsonl` 기록
 
-## F1. 시장 충격 글로벌 가드
+즉 시장 인텔리전스는 "전략을 대체하는 독립 매수 엔진"이 아니라, 기존 전략이 통과한 이후 최종 진입 정책을 더 보수적이거나 약간 더 공격적으로 조정하는 계층이다.
 
-- 규칙: `abs(ret_1m) >= shock_1m_pct` 또는 `abs(ret_5m) >= shock_5m_pct`
-- 동작: 세션 `risk_mode=shock` 전환, cooldown 동안 신규 매수 차단
-- 기본값: `shock_1m_pct=1.5`, `shock_5m_pct=2.8`, `shock_cooldown_min=10`
+## 4) 보유 포지션 방어 정책
 
-## F2. VI/서킷브레이커 상태 가드
+현재 보유 포지션에는 다음 정책이 연결된다.
 
-- 상태: `normal | vi | halt | reopen_cooldown`
-- 우선순위: 공식 상태 필드 우선, 미지원 시 proxy 판정
-- proxy: `abs(ret_1m_code) >= vi_proxy_1m_pct` 또는 `spread_pct >= vi_proxy_spread_pct`
-- 기본값: `vi_cooldown_min=7`, `vi_proxy_1m_pct=4.0`, `vi_proxy_spread_pct=1.2`
+- `watch_only`: 경고와 관찰만 수행
+- `reduce_size`: 보유 수량 일부 축소
+- `tighten_exit`: 트레일링 시작/정지 조건 강화
+- `force_exit`: 결정론적 고위험 공시에 한해서만 허용
 
-## F3. 변동성 레짐 기반 동적 축소
+제한사항:
 
-- 지표: `atr_pct = ATR14 / current * 100`
-- 구간: `normal | elevated | extreme`
-- 스케일: `elevated=0.7`, `extreme=0.4`
-- 최대 보유수: 레짐에 따라 보수적으로 축소
+- 일반 뉴스나 AI 결과만으로는 `force_exit`를 직접 허용하지 않는다.
+- AI는 보조 해석 도구이며 최종 권한은 규칙 기반 정책이 가진다.
 
-## F4. 유동성 스트레스 가드
+## 5) 설정 스키마 관점의 핵심 키
 
-- 조건: `spread_pct > stress_spread_pct` 또는 `avg_value_20` 저하
-- 기본값: `stress_spread_pct=1.0`, `stress_min_value_ratio=0.35`
-- 동작: 스트레스 구간 신규 진입 차단
+전략/가드와 직접 연결되는 대표 키:
 
-## F5. 슬리피지 가드
+- `use_shock_guard`
+- `use_vi_guard`
+- `use_regime_sizing`
+- `use_liquidity_stress_guard`
+- `use_slippage_guard`
+- `use_order_health_guard`
+- `market_intelligence.soft_scale`
+- `market_intelligence.position_defense`
+- `market_intelligence.portfolio_budget`
 
-- 최근 `slippage_window_trades`의 평균 절대 슬리피지 bps 계산
-- 평균이 `max_slippage_bps` 초과 시 신규 진입 차단
-- 기본값: `max_slippage_bps=15.0`, `slippage_window_trades=20`
+마이그레이션 정책:
 
-## F6. 재개장 점진 재가동
+- `settings_version < 6` 파일은 로드 시 누락 키만 default 보강
+- 기존 사용자 값 우선
+- `betting_ratio` canonical 유지
 
-- `vi/halt` 해제 직후 `reopen_cooldown` 상태 유지
-- 쿨다운 구간에서 신규 진입 제한 유지(Fail-Closed)
+## 6) 구현 파일 맵
 
-## F7. 주문 실패 스파이크 차단
+- `config.py`: 기본값과 v6 스키마
+- `strategy_manager.py`: 전략 평가, 시장 인텔리전스 스케일 반영
+- `strategies/pack.py`: 전략팩/리스크 오버레이
+- `app/mixins/execution_engine.py`: 진입 게이트, 포지션 방어 실행
+- `app/mixins/trading_session.py`: 지수/세션 상태
+- `app/mixins/order_sync.py`: sync_failed 차단
+- `backtest/engine.py`: guard + market intelligence parity replay
 
-- 최근 `order_health_window_sec` 내 실패 수 집계
-- 임계 초과 시 `order_health_mode=degraded` 진입
-- 기본값: `order_health_fail_count=5`, `order_health_window_sec=60`, `order_health_cooldown_sec=180`
+## 7) 검증 기준
 
-## F8. 관측/감사 로그 강화
+2026-03-25 기준 재검증:
 
-- 차단 사유를 `guard reason`으로 기록
-- 진단 컬럼 확장: `market state`, `guard reason`, `risk mode`, `health mode`
-- KPI 필드: `guard_block_count_by_reason`, `shock_mode_minutes`, `order_health_degraded_count`, `avg_slippage_bps`
+- `python -m pytest -q tests/unit`
+- `tests/unit` 전체 103개 통과
 
-## 4) 데이터 모델/설정 스키마(v5 current)
+전략/가드 관련 대표 테스트 범주:
 
-### 4.1 TradingConfig / Config 신규 필드(반영됨)
+- shock/VI/reopen cooldown
+- slippage/liquidity/order health
+- settings schema migration
+- strategy pack overlays
+- backtest guard parity
+- market intelligence policy runtime
 
-- `use_shock_guard`, `shock_1m_pct`, `shock_5m_pct`, `shock_cooldown_min`
-- `use_vi_guard`, `vi_cooldown_min`, `vi_proxy_1m_pct`, `vi_proxy_spread_pct`
-- `use_regime_sizing`, `regime_elevated_atr_pct`, `regime_extreme_atr_pct`
-- `regime_size_scale_elevated`, `regime_size_scale_extreme`
-- `use_liquidity_stress_guard`, `stress_spread_pct`, `stress_min_value_ratio`
-- `use_slippage_guard`, `max_slippage_bps`, `slippage_window_trades`
-- `use_order_health_guard`, `order_health_fail_count`, `order_health_window_sec`, `order_health_cooldown_sec`
+## 8) 남은 고도화 과제
 
-### 4.2 모델/인터페이스 확장(반영됨)
-
-- `ExecutionData` 선택 필드: `trading_status`, `market_event`, `index_code`, `index_value`
-- `IndexTick` dataclass 추가
-- `websocket_client` 인덱스 구독: `subscribe_index`, `set_on_index`
-
-### 4.3 설정 마이그레이션(반영됨)
-
-- canonical: `settings_version = 5`
-- `settings_version < 5` 로드 시 v4 guard 키와 `market_intelligence` 블록 자동 보강
-- 기존 값 우선, 신규 키만 default 주입
-
-## 5) 파일별 반영 지점
-
-- `config.py`: v4 가드 필드/기본값/스키마 상수
-- `app/mixins/ui_build.py`: 고급설정 핵심 토글/임계치, 진단 컬럼
-- `app/main_window.py`: global risk/order health 상태 저장 및 진단 반영
-- `app/mixins/trading_session.py`: 인덱스 피드 + shock/VI 상태 계산/복구
-- `app/mixins/execution_engine.py`: `_can_enter_trade()` 단일 진입 게이트
-- `app/mixins/order_sync.py`: 실패 이벤트 집계 + degraded 자동 복구
-- `strategy_manager.py`: guard 조건/metrics 확장 + 레짐 스케일 훅
-- `strategies/pack.py`: risk overlay 가드 확장(fail-closed)
-- `api/models.py`, `api/websocket_client.py`, `api/rest_client.py`: 상태/인덱스 확장
-- `app/mixins/_typing.py`: 동적 Qt mixin 정적 분석용 type-only 베이스
-- `app/mixins/persistence_settings.py`, `app/mixins/dialogs_profiles.py`: v4 키 parity
-- `backtest/engine.py`: guard parity 평가 입력 반영
-
-## 6) 테스트 동기화
-
-신규 테스트:
-
-- `tests/unit/test_shock_guard_entry_block.py`
-- `tests/unit/test_vi_state_machine.py`
-- `tests/unit/test_reopen_cooldown_restriction.py`
-- `tests/unit/test_regime_sizing_scale.py`
-- `tests/unit/test_liquidity_stress_guard.py`
-- `tests/unit/test_slippage_guard_policy_switch.py`
-- `tests/unit/test_order_health_degrade.py`
-- `tests/unit/test_guard_reason_diagnostics.py`
-- `tests/unit/test_settings_schema_v4.py`
-- `tests/unit/test_settings_schema_v4_compat.py`
-- `tests/unit/test_strategy_pack_guard_overlays.py`
-- `tests/unit/test_backtest_guard_parity.py`
-
-검증 결과(2026-03-05):
-
-- `python -m pytest tests/unit --disable-warnings`
-- `68 passed in 1.36s`
-
-추가 반영(2026-03-07):
-
-- `tests/unit/test_order_sync_pending_state_machine.py`
-- `tests/unit/test_regime_sizing_single_apply.py`
-- `tests/unit/test_investment_cost_basis_ledger.py`
-- `tests/unit/test_shock_fallback_representative.py`
-- `tests/unit/test_time_stop_session_policy.py`
-- `tests/unit/test_trade_history_single_writer.py`
-- `tests/unit/test_sync_failed_manual_release.py`
-- `tests/unit/test_backtest_engine.py` (다종목 MTM 최신가 캐시 회귀 보강)
-
-최신 검증 결과(2026-03-24):
-
-- `python -m pytest tests/unit --disable-warnings`
-- `90 passed in 0.53s`
-
-추가 동기화(2026-03-09):
-
-- `pyrightconfig.json`을 루트 추적 파일로 추가하여 repo-wide 정적 분석 기준을 고정
-- `pyright .` -> `0 errors, 0 warnings` (2026-03-09 당시 환경)
-- `KiwoomTrader.spec` / 문서 / `.gitignore`를 `app/mixins/_typing.py` 및 현재 구조 기준으로 동기화
-- UTF-8 인코딩 스캔 결과 디코드 실패 및 `U+FFFD` 없음
-
-추가 메모(2026-03-24):
-
-- 현재 워크스페이스에서 `pyright .`를 다시 실행하려면 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성 설치가 필요
-- `KiwoomTrader.spec`는 시장 인텔리전스 신규 provider/mixin을 hiddenimport에 반영했고, 런타임 JSON/JSONL 산출물은 번들에서 제외
-
-## 7) 수용 기준 반영 상태
-
-1. 급변동 임계치 초과 시 신규 진입 즉시 차단 + reason 코드 기록: 충족  
-2. VI/HALT 및 proxy VI 상태에서 신규 매수 차단, 청산 허용: 충족  
-3. 재개장 쿨다운 제한: 충족  
-4. 주문 실패 스파이크 degraded 전환/자동 복구: 충족  
-5. v3 설정 로드 시 v4 자동 보강: 충족  
-6. 라이브/전략팩/백테스트 guard 의미 동기화: 충족  
-7. 기존/신규 테스트 통과: 충족
-
-## 8) 후속 고도화 과제
-
-1. 공식 서킷/VI 상태 API 연동 성공률 및 장애시 폴백 로깅 고도화
-2. `reopen_cooldown` 구간의 점수/틱 강화 규칙 세분화
-3. 운영 KPI 자동 리포트(세션/일자별 집계) 추가
-
----
-
-구조 분석 상세는 [`PROJECT_STRUCTURE_ANALYSIS.md`](./PROJECT_STRUCTURE_ANALYSIS.md)를 참조.
+1. 공식 시장상태 API 품질이 더 좋아지면 proxy 비중을 줄일 수 있다.
+2. `reopen_cooldown` 구간의 점수/틱/수량 가중을 세분화할 수 있다.
+3. 세션/일자 단위 가드 KPI 자동 리포트가 추가되면 운영성이 좋아진다.
+4. 실계좌 운영 결과를 바탕으로 `reduce_size` 비율과 `tighten_exit` 파라미터를 더 미세 조정할 수 있다.
