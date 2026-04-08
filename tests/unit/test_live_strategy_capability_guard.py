@@ -88,6 +88,19 @@ class TestLiveStrategyCapabilityGuard(unittest.TestCase):
         self.assertTrue(warn.called)
         self.assertTrue(any("전략가드" in msg for msg in trader.logs))
 
+    @patch("app.mixins.trading_session.QMessageBox.warning")
+    def test_mock_start_also_blocked_for_short_only_strategy(self, warn):
+        trader = _Harness()
+        trader.chk_mock = _DummyCheck(True)
+
+        started = trader.start_trading()
+
+        self.assertFalse(started)
+        self.assertFalse(trader.is_running)
+        self.assertEqual(trader.init_calls, 0)
+        self.assertTrue(warn.called)
+        self.assertTrue(any("자동매매 비지원 전략 차단" in msg for msg in trader.logs))
+
 
 if __name__ == "__main__":
     unittest.main()

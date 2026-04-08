@@ -3,6 +3,7 @@ from typing import Literal, overload
 from unittest.mock import patch
 
 from app.mixins.trading_session import BackgroundUniversePayload, TradingSessionMixin
+from config import TradingConfig
 
 
 class _DummyLineEdit:
@@ -41,6 +42,7 @@ class _Harness(TradingSessionMixin):
         self.init_called_with = None
         self.snapshot_called_with = None
         self._init_result = init_result
+        self.config = TradingConfig()
 
     def log(self, msg):
         self.logs.append(msg)
@@ -93,6 +95,20 @@ class TestTradingSessionStateMachine(unittest.TestCase):
         self.assertFalse(trader.btn_stop.enabled)
         self.assertFalse(trader.btn_emergency.enabled)
         self.assertFalse(trader.schedule_started)
+
+    @patch("app.mixins.trading_session.QMessageBox.critical")
+    @patch("app.mixins.trading_session.QMessageBox.warning")
+    def test_start_trading_blocks_split_buy_without_limit_policy(self, warning, _critical):
+        trader = _Harness("005930", ["005930"])
+        trader.config.use_split = True
+        trader.config.execution_policy = "market"
+
+        started = trader.start_trading()
+
+        self.assertFalse(started)
+        self.assertIsNone(trader.init_called_with)
+        self.assertTrue(warning.called)
+        self.assertFalse(trader.is_running)
 
 
 if __name__ == "__main__":

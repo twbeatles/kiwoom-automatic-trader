@@ -877,3 +877,8 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         "execution_algo_twap_vwap_pov": {"live_supported": False, "requires_external_data": False},
         "market_making_spread": {"live_supported": False, "requires_external_data": False},
     }
+    AUTOTRADING_UNSUPPORTED_STRATEGIES: Set[str] = {
+        "pairs_trading_cointegration",
+        "stat_arb_residual",
+        "ff5_factor_ls",
+    }

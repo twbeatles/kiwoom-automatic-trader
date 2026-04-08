@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-03-25
+> **최종 업데이트**: 2026-04-08
 
 ---
 
@@ -13,6 +13,10 @@
 - 실행 진입점: `키움증권 자동매매.py`
 - 실구현 클래스: `app/main_window.py`의 `KiwoomProTrader`
 - 기능 모듈: `app/mixins/*.py`
+- 전략 오케스트레이션: `strategy_manager.py`
+- 전략 세부 책임: `strategies/manager_mixins/*.py`
+- 다이얼로그 구현: `dialogs/*.py`
+- 다이얼로그 호환 import: `ui_dialogs.py`
 - 타입 보조: `app/mixins/_typing.py`의 `TraderMixinBase`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
 - 주문 라우팅 지원: `app/support/execution_policy.py`
@@ -60,6 +64,18 @@ app/mixins/dialogs_profiles.py
 
 app/mixins/_typing.py
   - pyright용 type-only Qt mixin 베이스
+
+strategy_manager.py
+  - StrategyManager 조립/orchestration
+
+strategies/manager_mixins/
+  - evaluation / indicators / market_intelligence / portfolio_risk / signal_filters
+
+dialogs/
+  - 프리셋 / 도움말 / 종목검색 / 수동주문 / 프로필 / 예약 다이얼로그 구현
+
+ui_dialogs.py
+  - dialogs 패키지 호환 re-export
 ```
 
 ---
@@ -96,6 +112,7 @@ pyright .
 python -c "import py_compile, pathlib; py_compile.compile('키움증권 자동매매.py', doraise=True); [py_compile.compile(str(p), doraise=True) for p in pathlib.Path('app').rglob('*.py')]"
 python tools/refactor_verify.py
 python -m pytest -q tests/unit
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 ```
 
 3. 설정 키 변경 시
@@ -114,7 +131,7 @@ python -m pytest -q tests/unit
 python "키움증권 자동매매.py"
 
 # 빌드
-pyinstaller KiwoomTrader.spec
+pyinstaller --clean KiwoomTrader.spec
 ```
 
 출력(ONEFILE):
@@ -142,15 +159,28 @@ pyinstaller KiwoomTrader.spec
 2. `TradingConfig.market_intelligence`는 `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함합니다.
 3. 메인 UI는 `🎯 핵심 설정`, `🛠 상세 설정`, `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`, `🔐 API/알림` 구조이며, 감사 로그는 `data/decision_audit.jsonl`에 기록됩니다.
 4. 운영 문서:
-   - `MARKET_INTELLIGENCE_AUTOTRADING_ADDENDUM.md`
    - `REAL_API_PREPARATION_GUIDE.md`
-5. 최신 검증 결과는 `python -m pytest -q tests/unit` 기준 `tests/unit` 전체 104개 테스트 통과 (2026-03-25 재실행 기준) 입니다.
+   - `IMPLEMENTATION_REVIEW_2026-04-08.md`
+5. 최신 검증 결과는 상단 `2026-04-08 주문/예약/구조 동기화` 섹션을 기준으로 확인합니다.
 
 6. 구현 정합성 메모
-- `IMPLEMENTATION_REVIEW_2026-03-25.md`에 코드 기준 잠재 이슈와 후속 구현 과제를 별도 정리했습니다.
-- `분할 매수`는 현재 UI/설정/프로필 경로까지 연결되어 있으며, 실주문 분할 라우팅은 후속 구현 범위입니다.
+- `분할 매수`는 현재 `use_split=True` + `execution_policy=limit` 조건에서 실제 child 지정가 주문까지 연결됩니다.
 - 전략팩의 SHORT 방향 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`)은 현재 실주문이 아니라 백테스트/시뮬레이션 범위로 취급해야 합니다.
 - 문서 정합성 점검 시 `QApplication + KiwoomProTrader()` 오프스크린 UI 생성 스모크 테스트를 함께 보는 편이 안전합니다.
+
+---
+
+## 2026-04-08 주문/예약/구조 동기화
+
+1. `start_trading(from_schedule=False) -> bool` 로 예약 시작 상태머신을 정리했습니다.
+2. 수동 주문은 실계좌에서 주문마다 `_confirm_live_trading_guard()` 를 다시 통과하고, 6자리 숫자 코드/지정가 1원 이상을 강제합니다.
+3. `strategy_manager.py` 는 현재 orchestration 레이어이고 실제 전략 구현 책임은 `strategies/manager_mixins/` 로 분리되었습니다.
+4. `ui_dialogs.py` 는 호환 re-export 레이어이고 실제 다이얼로그는 `dialogs/` 패키지에 있습니다.
+5. `KiwoomTrader.spec` 는 `dialogs` 와 `strategies` 하위 모듈을 `collect_submodules(...)` 로 함께 수집합니다.
+6. 최신 검증 기준:
+   - `python -m pytest -q tests/unit`
+   - `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit`
+7. 현재 작업 기준 `tests/unit` 전체 113개 테스트 통과, 문법 컴파일 검증 통과입니다.
 
 ---
 

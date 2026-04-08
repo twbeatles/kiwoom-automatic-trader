@@ -1,6 +1,6 @@
 # 실제 API 준비 가이드
 
-기준일: 2026-03-25  
+기준일: 2026-04-08  
 기준: 현재 저장소 코드 + 공식 문서 확인
 
 이 문서는 이 프로젝트를 실제 API와 연결해 운영하기 전에 무엇을 준비해야 하는지 정리한 실무용 체크리스트다.  
@@ -49,9 +49,11 @@
 
 추가 정합성 메모:
 
-- `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`처럼 전략팩에서 SHORT 방향을 반환할 수 있는 전략은 현재 실주문 대상이 아니라 백테스트/시뮬레이션 범위로 보는 편이 맞다.
+- `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`처럼 전략팩에서 SHORT 방향을 반환할 수 있는 전략은 현재 자동매매 비지원/백테스트 전용이다.
 - `portfolio_mode`, `enable_backtest`, `portfolio/allocator.py`는 확장 경로로는 존재하지만 실주문 라우팅의 직접 제어 스위치는 아니다.
-- `분할 매수` 설정은 현재 UI/설정/프로필 경로까지 연결되어 있으며, 실제 주문 분할 제출 로직은 후속 구현 범위다.
+- `분할 매수`는 현재 `use_split=True` + `execution_policy=limit` 일 때 실제 child 지정가 주문을 즉시 다건 제출한다.
+- 실계좌 `수동 주문`은 주문마다 실거래 보호 확인을 다시 요구하고, 6자리 숫자 코드/지정가 1원 이상 검증을 통과해야 한다.
+- 빌드 기준 배포 패키지는 `KiwoomTrader.spec`에서 `dialogs`, `strategies`, `app`, `data.providers` 하위 모듈을 함께 수집하도록 동기화돼 있다.
 
 ## 3. 가장 먼저 확인할 현재 코드 제약
 
@@ -344,6 +346,8 @@ AI는 선택 기능이다. 기본은 규칙 기반이 우선이고, AI는 보조
 - `asset_scope = kr_stock_live`
 - `short_enabled = False`
 - 선택 전략이 `live_supported = True`
+- SHORT 가능 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`) 미선택
+- `use_split = True` 인 경우 `execution_policy = limit`
 
 ### 시장 인텔리전스
 

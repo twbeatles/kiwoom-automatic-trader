@@ -22,6 +22,86 @@ from ui_dialogs import (
 from ._typing import TraderMixinBase
 
 class DialogsProfilesMixin(TraderMixinBase):
+    def _manual_order_live_guard_required(self) -> bool:
+        if not bool(getattr(Config, "LIVE_GUARD_ENABLED", True)):
+            return False
+        chk_mock = getattr(self, "chk_mock", None)
+        if chk_mock is None:
+            return False
+        return not bool(chk_mock.isChecked())
+
+    def _estimate_manual_order_price(self, order: dict) -> int:
+        if not isinstance(order, dict):
+            return 0
+        order_type = str(order.get("type", "") or "")
+        if order_type != "매수":
+            return max(0, int(order.get("price", 0) or 0))
+
+        price_type = str(order.get("price_type", "시장가") or "시장가")
+        if price_type == "지정가":
+            return max(1, int(order.get("price", 0) or 0))
+
+        code = str(order.get("code", "") or "").strip()
+        info = getattr(self, "universe", {}).get(code, {}) if code else {}
+        current = max(0, int(info.get("current", 0) or 0))
+        if current > 0:
+            return current
+
+        client = getattr(self, "rest_client", None)
+        fetch_quote = getattr(client, "get_stock_quote", None)
+        if callable(fetch_quote) and code:
+            try:
+                quote = fetch_quote(code)
+                current = max(0, int(getattr(quote, "current_price", 0) or 0))
+            except Exception as exc:
+                self.log(f"⚠️ 수동 주문 현재가 조회 실패: {exc}")
+                current = 0
+        return current
+
+    def _validate_manual_order_request(self, order: dict) -> bool:
+        if not isinstance(order, dict):
+            QMessageBox.warning(self, "경고", "주문 요청 데이터가 올바르지 않습니다.")
+            return False
+
+        code = str(order.get("code", "") or "").strip()
+        qty = max(0, int(order.get("qty", 0) or 0))
+        price_type = str(order.get("price_type", "시장가") or "시장가")
+        price = max(0, int(order.get("price", 0) or 0))
+        order_type = str(order.get("type", "") or "")
+
+        if len(code) != 6 or not code.isdigit():
+            QMessageBox.warning(self, "경고", "종목코드는 6자리 숫자여야 합니다.")
+            return False
+        if qty <= 0:
+            QMessageBox.warning(self, "경고", "주문수량은 1주 이상이어야 합니다.")
+            return False
+        if price_type == "지정가" and price <= 0:
+            QMessageBox.warning(self, "경고", "지정가 주문은 1원 이상의 가격이 필요합니다.")
+            return False
+
+        estimated_price = self._estimate_manual_order_price(order)
+        order["expected_price"] = estimated_price
+        if order_type == "매수":
+            if estimated_price <= 0:
+                QMessageBox.warning(
+                    self,
+                    "경고",
+                    "현재가를 확인할 수 없어 예상 주문금액을 계산하지 못했습니다.\n"
+                    "지정가 주문을 사용하거나 감시 유니버스에 종목을 먼저 추가해주세요.",
+                )
+                return False
+            required_cash = qty * estimated_price
+            available_cash = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+            if required_cash > available_cash:
+                QMessageBox.warning(
+                    self,
+                    "경고",
+                    f"예상 필요금액 {required_cash:,}원이 주문가능금액 {available_cash:,}원을 초과합니다.",
+                )
+                return False
+
+        return True
+
     def _open_presets(self):
         current = {"k": self.spin_k.value(), "ts_start": self.spin_ts_start.value(),
                    "ts_stop": self.spin_ts_stop.value(), "loss": self.spin_loss.value(),
@@ -122,10 +202,19 @@ class DialogsProfilesMixin(TraderMixinBase):
         if not self.is_connected:
             QMessageBox.warning(self, "경고", "먼저 API에 연결하세요.")
             return
+        if not getattr(self, "current_account", ""):
+            QMessageBox.warning(self, "경고", "주문 가능한 계좌를 먼저 선택하세요.")
+            return
         
         dialog = ManualOrderDialog(self, self.rest_client, self.current_account)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.order_result:
             order = dialog.order_result
+            if not self._validate_manual_order_request(order):
+                return
+            if self._manual_order_live_guard_required():
+                confirm_guard = getattr(self, "_confirm_live_trading_guard", None)
+                if callable(confirm_guard) and not bool(confirm_guard()):
+                    return
             self.log(f"📝 수동 주문 요청: {order['type']} {order['code']} {order['qty']}주")
             
             # 실제 주문 실행 (Worker 사용)
@@ -163,29 +252,53 @@ class DialogsProfilesMixin(TraderMixinBase):
         if result.success:
             self.log(f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})")
             side = "buy" if order_type == "매수" else "sell"
+            submitted_qty = int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0
+            expected_price = int(order.get("expected_price", order.get("price", 0) if isinstance(order, dict) else 0) or 0)
+            reserve_amount = submitted_qty * expected_price if side == "buy" and expected_price > 0 else 0
+            reserve_cash = getattr(self, "_reserve_cash_for_buy", None)
+            if callable(reserve_cash) and reserve_amount > 0:
+                reserve_cash(code, reserve_amount)
             if code in getattr(self, "universe", {}):
-                submitted_qty = int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0
+                if side == "buy":
+                    self.universe[code]["status"] = "buy_submitted"
+                elif side == "sell":
+                    self.universe[code]["status"] = "sell_submitted"
                 self._set_pending_order(
                     code,
                     side,
                     "수동주문",
-                    expected_price=int(order.get("price", 0) or 0) if isinstance(order, dict) else 0,
+                    expected_price=expected_price,
                     submitted_qty=submitted_qty,
                     order_no=str(getattr(result, "order_no", "") or ""),
                 )
+                recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+                if callable(recompute_count):
+                    recompute_count()
                 self._sync_position_from_account(code)
             else:
                 set_manual_pending = getattr(self, "_set_manual_pending_order", None)
                 if callable(set_manual_pending):
-                    set_manual_pending(code, side, "수동주문")
+                    set_manual_pending(
+                        code,
+                        side,
+                        "수동주문",
+                        expected_price=expected_price,
+                        submitted_qty=submitted_qty,
+                        order_no=str(getattr(result, "order_no", "") or ""),
+                        reserved_cash=reserve_amount,
+                    )
                 else:
                     self._set_pending_order(
                         code,
                         side,
                         "수동주문",
-                        submitted_qty=int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0,
+                        expected_price=expected_price,
+                        submitted_qty=submitted_qty,
                         order_no=str(getattr(result, "order_no", "") or ""),
                     )
+                    recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+                    if callable(recompute_count):
+                        recompute_count()
         else:
             self.log(f"❌ 수동 주문 실패: {result.message}")
             if code in getattr(self, "universe", {}):

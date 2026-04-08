@@ -193,11 +193,11 @@ class SystemShellMixin(TraderMixinBase):
             start_time = self.schedule.get("start", "09:00")
             end_time = self.schedule.get("end", "15:19")
 
-            if not self.is_running and not self.schedule_started:
+            start_inflight = bool(getattr(self, "_trading_start_inflight", False))
+            if not self.is_running and not self.schedule_started and not start_inflight:
                 if start_time <= current_time < end_time:
                     self.log(f"예약 매매 시작: {start_time}")
-                    self.schedule_started = True
-                    self.start_trading()
+                    self.start_trading(from_schedule=True)
 
             if self.is_running and self.schedule_started:
                 if current_time >= end_time:

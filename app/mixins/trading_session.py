@@ -671,19 +671,22 @@ class TradingSessionMixin(TraderMixinBase):
             self.sig_update_table.emit()
         return True, ""
 
-    def start_trading(self):
+    def start_trading(self, from_schedule: bool = False) -> bool:
         if self.is_running:
             self.log("자동매매가 이미 실행 중입니다.")
-            return
+            return False
+        if bool(getattr(self, "_trading_start_inflight", False)):
+            self.log("자동매매 시작이 진행 중입니다.")
+            return False
 
         if not self.is_connected:
             QMessageBox.warning(self, "경고", "먼저 API를 연결해주세요.")
-            return
+            return False
 
         raw_codes = [c.strip() for c in self.input_codes.text().split(",") if c.strip()]
         if not raw_codes:
             QMessageBox.warning(self, "경고", "감시 종목 코드를 입력해주세요.")
-            return
+            return False
 
         valid_codes: List[str] = []
         invalid_codes: List[str] = []
@@ -708,13 +711,34 @@ class TradingSessionMixin(TraderMixinBase):
 
         if not valid_codes:
             QMessageBox.warning(self, "경고", "유효한 6자리 종목코드를 입력해주세요.")
-            return
+            return False
+
+        cfg = getattr(self, "config", None)
+        primary = self._strategy_primary_id()
+        unsupported = getattr(Config, "AUTOTRADING_UNSUPPORTED_STRATEGIES", set())
+        if primary in unsupported:
+            self.log(f"[전략가드] 자동매매 비지원 전략 차단: {primary}")
+            QMessageBox.warning(
+                self,
+                "자동매매 전략 제한",
+                f"선택 전략 `{primary}` 은(는) 현재 자동매매를 지원하지 않습니다.\n백테스트/연구 모드에서만 사용하세요.",
+            )
+            return False
+
+        if cfg is not None and bool(getattr(cfg, "use_split", False)):
+            policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))
+            if policy != "limit":
+                QMessageBox.warning(
+                    self,
+                    "분할 매수 제한",
+                    "분할 매수는 현재 지정가 주문 방식에서만 지원합니다.\n주문 방식을 `지정가 우선`으로 바꿔주세요.",
+                )
+                return False
 
         if not self._confirm_live_trading_guard():
-            return
+            return False
 
         # Keep live routing constrained to KR stock long path in phase-1.
-        cfg = getattr(self, "config", None)
         is_mock = bool(hasattr(self, "chk_mock") and self.chk_mock.isChecked())
         if cfg is not None and not is_mock:
             if str(getattr(cfg, "asset_scope", "kr_stock_live")) != "kr_stock_live":
@@ -723,15 +747,14 @@ class TradingSessionMixin(TraderMixinBase):
                     "실주문 범위 제한",
                     "실주문은 현재 `kr_stock_live` 범위만 지원합니다. 모의/백테스트 모드를 사용하세요.",
                 )
-                return
+                return False
             if bool(getattr(cfg, "short_enabled", False)):
                 QMessageBox.warning(
                     self,
                     "실주문 숏 제한",
                     "숏 포지션은 현재 백테스트/시뮬레이션에서만 지원합니다.",
                 )
-                return
-            primary = self._strategy_primary_id()
+                return False
             capabilities = getattr(Config, "STRATEGY_CAPABILITIES", {})
             cap = capabilities.get(primary)
             if not cap or not bool(cap.get("live_supported", False)):
@@ -745,9 +768,11 @@ class TradingSessionMixin(TraderMixinBase):
                     "실거래 전략 제한",
                     f"선택 전략 `{primary}` 은(는) 실거래를 지원하지 않습니다.\n허용 전략: {supported_text}",
                 )
-                return
+                return False
 
         try:
+            self._trading_start_inflight = True
+            self._scheduled_start_requested = bool(from_schedule)
             self._rollover_daily_metrics(reset_baseline=True)
             self.daily_loss_triggered = False
             self.time_liquidate_executed = False
@@ -787,10 +812,13 @@ class TradingSessionMixin(TraderMixinBase):
                     self.ws_client.subscribe_order_execution(self._on_order_realtime)
                     self._start_index_feed(initialized_codes)
                 self.is_running = True
+                self.schedule_started = bool(getattr(self, "_scheduled_start_requested", False))
+                self._scheduled_start_requested = False
+                self._trading_start_inflight = False
                 self.log(f"매매 시작 - {len(initialized_codes)}개 종목")
                 if self.telegram:
                     self.telegram.send(f"매매 시작\n종목: {', '.join(initialized_codes)}")
-                return
+                return True
 
             self.log(f"유니버스 초기화 중... ({len(valid_codes)}개 종목)")
             worker = Worker(self._init_universe, valid_codes, True)
@@ -834,15 +862,22 @@ class TradingSessionMixin(TraderMixinBase):
                         self._start_index_feed(initialized_codes)
 
                     self.is_running = True
+                    self.schedule_started = bool(getattr(self, "_scheduled_start_requested", False))
+                    self._scheduled_start_requested = False
+                    self._trading_start_inflight = False
                     self.log(f"매매 시작 - {len(initialized_codes)}개 종목")
                     if self.telegram:
                         self.telegram.send(f"매매 시작\n종목: {', '.join(initialized_codes)}")
                 except Exception as exc:
+                    self._scheduled_start_requested = False
+                    self._trading_start_inflight = False
                     self.stop_trading()
                     self.log(f"매매 시작 실패: {exc}")
                     QMessageBox.critical(self, "오류", f"매매 시작 중 오류:\n{exc}")
 
             def on_error(exc):
+                self._scheduled_start_requested = False
+                self._trading_start_inflight = False
                 self.stop_trading()
                 self.log(f"매매 시작 실패: {exc}")
                 QMessageBox.critical(self, "오류", f"매매 시작 중 오류:\n{exc}")
@@ -850,14 +885,20 @@ class TradingSessionMixin(TraderMixinBase):
             worker.signals.result.connect(on_result)
             worker.signals.error.connect(on_error)
             self.threadpool.start(worker)
+            return True
         except Exception as exc:
+            self._scheduled_start_requested = False
+            self._trading_start_inflight = False
             self.stop_trading()
             self.log(f"매매 시작 실패: {exc}")
             QMessageBox.critical(self, "오류", f"매매 시작 중 오류:\n{exc}")
+            return False
 
     def stop_trading(self):
         was_running = self.is_running
         self.is_running = False
+        self._trading_start_inflight = False
+        self._scheduled_start_requested = False
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.btn_emergency.setEnabled(False)

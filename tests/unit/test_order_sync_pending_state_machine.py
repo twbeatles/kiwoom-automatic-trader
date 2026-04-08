@@ -130,6 +130,58 @@ class TestOrderSyncPendingStateMachine(unittest.TestCase):
         self.assertEqual(trader.virtual_deposit, 5000)
         self.assertEqual(trader.universe["005930"]["status"], "watch")
 
+    def test_split_child_cancel_refunds_only_cancelled_slice(self):
+        trader = _Harness()
+        trader._set_pending_order(
+            "005930",
+            "buy",
+            "BUY_SPLIT",
+            expected_price=990,
+            submitted_qty=7,
+            order_no="O1000",
+            child_orders=[
+                {
+                    "index": 1,
+                    "submitted_qty": 3,
+                    "filled_qty": 0,
+                    "remaining_qty": 3,
+                    "expected_price": 1000,
+                    "order_no": "O1000",
+                    "state": "submitted",
+                    "reserved_cash": 3000,
+                },
+                {
+                    "index": 2,
+                    "submitted_qty": 4,
+                    "filled_qty": 0,
+                    "remaining_qty": 4,
+                    "expected_price": 980,
+                    "order_no": "O980",
+                    "state": "submitted",
+                    "reserved_cash": 3920,
+                },
+            ],
+        )
+        trader._reserved_cash_by_code["005930"] = 6920
+        trader.universe["005930"]["status"] = "buy_submitted"
+
+        trader._on_order_execution(
+            {
+                "code": "005930",
+                "order_type": "1",
+                "order_status": "cancel",
+                "ord_qty": "3",
+                "order_no": "O1000",
+            }
+        )
+
+        self.assertIn("005930", trader._pending_order_state)
+        pending = trader._pending_order_state["005930"]
+        self.assertEqual(pending["submitted_qty"], 7)
+        self.assertEqual(pending["remaining_qty"], 4)
+        self.assertEqual(trader._reserved_cash_by_code.get("005930"), 3920)
+        self.assertEqual(trader.universe["005930"]["status"], "buy_submitted")
+
 
 if __name__ == "__main__":
     unittest.main()

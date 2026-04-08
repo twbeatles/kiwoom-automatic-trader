@@ -87,6 +87,32 @@ class ExecutionEngineMixin(TraderMixinBase):
             self.log(f"Reserved cash {action} [{code}]: {amount:,} ({reason})")
         return amount
 
+    def _release_reserved_cash_amount(self, code: str, amount: int, reason: str = "", refund: bool = True) -> int:
+        amount = max(0, int(amount or 0))
+        if not code or amount <= 0:
+            return 0
+
+        mapping = self._reserved_cash_map()
+        current = max(0, int(mapping.get(code, 0) or 0))
+        released = min(current, amount)
+        if released <= 0:
+            return 0
+
+        remaining = current - released
+        if remaining > 0:
+            mapping[code] = remaining
+        else:
+            mapping.pop(code, None)
+
+        if refund:
+            base = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+            self.virtual_deposit = max(0, base + released)
+
+        if reason and hasattr(self, "log"):
+            action = "refunded" if refund else "released"
+            self.log(f"Reserved cash {action} [{code}]: {released:,} ({reason})")
+        return released
+
     def _release_all_reserved_cash(self, reason: str = "STOP_TRADING") -> int:
         mapping = self._reserved_cash_map()
         if not mapping:
@@ -111,6 +137,57 @@ class ExecutionEngineMixin(TraderMixinBase):
         if consumed > 0 and reason and hasattr(self, "log"):
             self.log(f"Reserved cash consumed [{code}]: {consumed:,} ({reason})")
         return consumed
+
+    def _recompute_holding_or_pending_count(self) -> int:
+        universe = getattr(self, "universe", {})
+        pending_state = getattr(self, "_pending_order_state", {})
+        held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
+        pending_buy = sum(
+            1
+            for c, state in pending_state.items()
+            if self._is_pending_active(state)
+            and state.get("side") == "buy"
+            and int(universe.get(c, {}).get("held", 0)) == 0
+        )
+        self._holding_or_pending_count = held_count + pending_buy
+        return self._holding_or_pending_count
+
+    def _submit_split_buy_orders(self, code: str, child_orders: list[tuple[int, int]]) -> list[dict]:
+        results: list[dict] = []
+        account = str(getattr(self, "current_account", "") or "")
+        client = getattr(self, "rest_client", None)
+        if client is None or not account:
+            raise RuntimeError("API/account not ready")
+
+        for index, (quantity, price) in enumerate(child_orders, start=1):
+            qty = max(0, int(quantity or 0))
+            limit_price = max(1, int(price or 0))
+            if qty <= 0:
+                continue
+            try:
+                result = client.buy_limit(account, code, qty, limit_price)
+                results.append(
+                    {
+                        "index": index,
+                        "quantity": qty,
+                        "price": limit_price,
+                        "success": bool(getattr(result, "success", False)),
+                        "order_no": str(getattr(result, "order_no", "") or ""),
+                        "message": str(getattr(result, "message", "") or ""),
+                    }
+                )
+            except Exception as exc:
+                results.append(
+                    {
+                        "index": index,
+                        "quantity": qty,
+                        "price": limit_price,
+                        "success": False,
+                        "order_no": "",
+                        "message": str(exc),
+                    }
+                )
+        return results
 
     @staticmethod
     def _spread_pct(info: dict) -> float:
@@ -562,8 +639,57 @@ class ExecutionEngineMixin(TraderMixinBase):
             return
 
         current_price = int(price) if int(price) > 0 else int(info.get("current", 0) or 0)
-        required_cash = int(quantity) * current_price if current_price > 0 else 0
         available_cash = getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
+        cfg = getattr(self, "config", None)
+        policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))
+        use_split = bool(getattr(cfg, "use_split", False)) if cfg is not None else False
+
+        if use_split:
+            split_orders = getattr(getattr(self, "strategy", None), "get_split_orders", None)
+            planned_orders = split_orders(quantity, current_price, "buy") if callable(split_orders) else []
+            child_orders = [
+                (max(0, int(qty or 0)), max(1, int(child_price or 0)))
+                for qty, child_price in planned_orders
+                if int(qty or 0) > 0
+            ]
+            if len(child_orders) > 1:
+                if policy != ExecutionPolicy.LIMIT:
+                    self.log(f"BUY blocked [{name}]: split buy requires limit execution policy")
+                    return
+
+                required_cash = sum(int(qty) * int(child_price) for qty, child_price in child_orders)
+                if required_cash > available_cash:
+                    self.log(
+                        f"BUY skipped [{name}]: required={required_cash:,} available(V)={available_cash:,} (INSUFFICIENT_CASH)"
+                    )
+                    seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
+                    info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                    info["status"] = "cooldown"
+                    self.log(f"BUY cooldown [{name}] {seconds}s (INSUFFICIENT_CASH)")
+                    self._dirty_codes.add(code)
+                    if not hasattr(self, "_ui_flush_timer"):
+                        self.sig_update_table.emit()
+                    return
+
+                self._reserve_cash_for_buy(code, required_cash)
+                if info.get("held", 0) <= 0:
+                    self._holding_or_pending_count += 1
+
+                info["status"] = "buying"
+                diag_touch = getattr(self, "_diag_touch", None)
+                if callable(diag_touch):
+                    diag_touch(code, pending_side="buy", pending_reason="BUY_SPLIT_SUBMITTING", sync_status="buying")
+                self._dirty_codes.add(code)
+
+                worker = Worker(self._submit_split_buy_orders, code, child_orders)
+                worker.signals.result.connect(
+                    lambda rows: self._on_split_buy_result(rows, code, name, child_orders)
+                )
+                worker.signals.error.connect(lambda e: self._on_split_buy_error(e, code, name))
+                self.threadpool.start(worker)
+                return
+
+        required_cash = int(quantity) * current_price if current_price > 0 else 0
 
         if required_cash > available_cash:
             self.log(
@@ -590,13 +716,117 @@ class ExecutionEngineMixin(TraderMixinBase):
             diag_touch(code, pending_side="buy", pending_reason="SUBMITTING", sync_status="buying")
         self._dirty_codes.add(code)
 
-        cfg = getattr(self, "config", None)
-        policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))
         buy_fn, args = ExecutionPolicy.select_buy(self.rest_client, policy, self.current_account, code, quantity, price)
         worker = Worker(buy_fn, *args)
         worker.signals.result.connect(lambda res: self._on_buy_result(res, code, name, quantity, price))
         worker.signals.error.connect(lambda e: self._on_buy_error(e, code, name))
         self.threadpool.start(worker)
+
+    def _on_split_buy_error(self, e, code, name):
+        self.log(f"BUY split error [{name}]: {e}")
+        record_failure = getattr(self, "_record_order_failure", None)
+        if callable(record_failure):
+            record_failure("BUY_SPLIT_ERROR", code=code)
+        self._release_reserved_cash(code, reason="BUY_SPLIT_ERROR", refund=True)
+        self._clear_pending_order(code)
+        if code in self.universe:
+            info = self.universe[code]
+            seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
+            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+            info["status"] = "cooldown"
+            self.log(f"BUY cooldown [{name}] {seconds}s (BUY_SPLIT_ERROR)")
+            diag_touch = getattr(self, "_diag_touch", None)
+            if callable(diag_touch):
+                diag_touch(code, sync_status="cooldown")
+        self._recompute_holding_or_pending_count()
+        self._dirty_codes.add(code)
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+
+    def _on_split_buy_result(self, rows, code, name, child_orders: list[tuple[int, int]]):
+        normalized_rows = list(rows or [])
+        successful: list[dict] = []
+        rejected_reserved = 0
+        rejected_count = 0
+
+        for row in normalized_rows:
+            qty = max(0, int(row.get("quantity", 0) or 0))
+            price = max(1, int(row.get("price", 0) or 0))
+            if bool(row.get("success", False)):
+                successful.append(
+                    {
+                        "index": max(1, int(row.get("index", 0) or len(successful) + 1)),
+                        "submitted_qty": qty,
+                        "filled_qty": 0,
+                        "remaining_qty": qty,
+                        "expected_price": price,
+                        "order_no": str(row.get("order_no", "") or ""),
+                        "state": "submitted",
+                        "reserved_cash": qty * price,
+                        "reason": f"BUY_SPLIT#{max(1, int(row.get('index', 0) or len(successful) + 1))}",
+                    }
+                )
+            else:
+                rejected_count += 1
+                rejected_reserved += qty * price
+
+        if successful:
+            success_qty = sum(int(child.get("submitted_qty", 0) or 0) for child in successful)
+            success_cash = sum(int(child.get("reserved_cash", 0) or 0) for child in successful)
+            weighted_price = int(round(success_cash / success_qty)) if success_qty > 0 else 0
+            if code in self.universe:
+                self.universe[code]["status"] = "buy_submitted"
+                self.universe[code]["cooldown_until"] = None
+                self.universe[code]["breakout_hits"] = 0
+            self._set_pending_order(
+                code,
+                "buy",
+                "BUY_SPLIT",
+                expected_price=weighted_price,
+                submitted_qty=success_qty,
+                order_no=str(successful[0].get("order_no", "") or ""),
+                child_orders=successful,
+            )
+            if rejected_reserved > 0:
+                self._release_reserved_cash_amount(
+                    code,
+                    rejected_reserved,
+                    reason="BUY_SPLIT_PARTIAL_REJECT",
+                    refund=True,
+                )
+            if rejected_count > 0:
+                record_failure = getattr(self, "_record_order_failure", None)
+                if callable(record_failure):
+                    record_failure("BUY_SPLIT_PARTIAL_REJECT", code=code)
+            self.log(
+                f"BUY split submitted: {name} {success_qty} shares "
+                f"({len(successful)} orders, rejected={rejected_count})"
+            )
+            self._sync_position_from_account(code)
+        else:
+            message = ""
+            if normalized_rows:
+                message = str(normalized_rows[0].get("message", "") or "")
+            self.log(f"BUY split rejected [{name}]: {message or 'no child order accepted'}")
+            record_failure = getattr(self, "_record_order_failure", None)
+            if callable(record_failure):
+                record_failure("BUY_SPLIT_REJECTED", code=code)
+            self._release_reserved_cash(code, reason="BUY_SPLIT_REJECTED", refund=True)
+            if code in self.universe:
+                info = self.universe[code]
+                seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
+                info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                info["status"] = "cooldown"
+                self.log(f"BUY cooldown [{name}] {seconds}s (BUY_SPLIT_REJECTED)")
+                diag_touch = getattr(self, "_diag_touch", None)
+                if callable(diag_touch):
+                    diag_touch(code, sync_status="cooldown")
+            self._clear_pending_order(code)
+            self._recompute_holding_or_pending_count()
+
+        self._dirty_codes.add(code)
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
 
     def _on_buy_error(self, e, code, name):
         """Handle buy error."""
@@ -615,15 +845,7 @@ class ExecutionEngineMixin(TraderMixinBase):
             diag_touch = getattr(self, "_diag_touch", None)
             if callable(diag_touch):
                 diag_touch(code, sync_status="cooldown")
-        held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
-        pending_buy = sum(
-            1
-            for c, state in self._pending_order_state.items()
-            if self._is_pending_active(state)
-            and state.get("side") == "buy"
-            and int(self.universe.get(c, {}).get("held", 0)) == 0
-        )
-        self._holding_or_pending_count = held_count + pending_buy
+        self._recompute_holding_or_pending_count()
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
@@ -662,15 +884,7 @@ class ExecutionEngineMixin(TraderMixinBase):
                     diag_touch(code, sync_status="cooldown")
 
             self._clear_pending_order(code)
-            held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
-            pending_buy = sum(
-                1
-                for c, state in self._pending_order_state.items()
-                if self._is_pending_active(state)
-                and state.get("side") == "buy"
-                and int(self.universe.get(c, {}).get("held", 0)) == 0
-            )
-            self._holding_or_pending_count = held_count + pending_buy
+            self._recompute_holding_or_pending_count()
 
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):

@@ -559,6 +559,7 @@ class UIBuildMixin(TraderMixinBase):
         g4.setSpacing(10)
 
         self.chk_use_split = QCheckBox("분할 매수")
+        self.chk_use_split.setToolTip("지정가 우선 주문 방식에서만 동작하며, 분할 가격으로 즉시 다건 제출됩니다.")
         g4.addWidget(self.chk_use_split, 0, 0)
         g4.addWidget(QLabel("나눌 횟수:"), 0, 1)
         self.spin_split_count = NoScrollSpinBox()
@@ -639,6 +640,7 @@ class UIBuildMixin(TraderMixinBase):
         g5.addWidget(self.combo_portfolio_mode, 0, 4)
 
         self.chk_short_enabled = QCheckBox("공매도 허용 (모의/백테스트 전용)")
+        self.chk_short_enabled.setToolTip("SHORT 전략은 현재 자동매매에서 지원하지 않으며, 백테스트/연구용 표기입니다.")
         self.chk_short_enabled.setChecked(Config.DEFAULT_SHORT_ENABLED)
         g5.addWidget(self.chk_short_enabled, 1, 0, 1, 2)
 
@@ -687,11 +689,20 @@ class UIBuildMixin(TraderMixinBase):
         self.chk_feature_modular_pack.setChecked(bool(Config.FEATURE_FLAGS.get("use_modular_strategy_pack", True)))
         g5.addWidget(self.chk_feature_modular_pack, 4, 0, 1, 2)
         self.chk_feature_backtest = QCheckBox("백테스트 기능 사용")
+        self.chk_feature_backtest.setToolTip("현재는 연구용 설정으로 저장만 되며, UI에서 직접 실행되지는 않습니다.")
         self.chk_feature_backtest.setChecked(bool(Config.FEATURE_FLAGS.get("enable_backtest", True)))
         g5.addWidget(self.chk_feature_backtest, 4, 2)
         self.chk_feature_external_data = QCheckBox("외부 데이터 사용")
         self.chk_feature_external_data.setChecked(bool(Config.FEATURE_FLAGS.get("enable_external_data", True)))
         g5.addWidget(self.chk_feature_external_data, 4, 3, 1, 2)
+
+        lbl_pack_note = QLabel(
+            "포트폴리오 방식/백테스트 시간 단위/조회 기간/수수료/슬리피지는 현재 연구용 설정입니다. "
+            "설정 저장은 지원하지만 자동매매 런타임에는 직접 연결되지 않습니다."
+        )
+        lbl_pack_note.setWordWrap(True)
+        lbl_pack_note.setStyleSheet("color: #8b949e; font-size: 11px;")
+        g5.addWidget(lbl_pack_note, 5, 0, 1, 6)
 
         grp_v5.setLayout(g5)
         pack_layout.addWidget(grp_v5)

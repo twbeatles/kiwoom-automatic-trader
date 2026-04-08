@@ -27,8 +27,10 @@ build/
 dist/
 dist_new/
 release/
+.pyinstaller/
 *.egg-info/
 pip-wheel-metadata/
+*.spec.bak
 
 # Virtual environments
 .venv/

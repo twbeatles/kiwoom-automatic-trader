@@ -118,6 +118,8 @@ class KiwoomProTrader(
         self._force_quit_requested = False
         self._shutdown_in_progress = False
         self._connect_inflight = False
+        self._trading_start_inflight = False
+        self._scheduled_start_requested = False
         self._dirty_codes: Set[str] = set()
         self._code_to_row: Dict[str, int] = {}
         self._last_status_badge = None

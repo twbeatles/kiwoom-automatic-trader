@@ -8,6 +8,7 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-03-24: 시장 인텔리전스 믹스인/프로바이더/백테스트 sidecar 확장 반영, collect_submodules + explicit import 동기화
 2026-03-25: 리플레이 탭/decision audit 로그/viewer 추가 반영, 신규 런타임 JSONL 산출물은 계속 번들 제외
 2026-03-25: 초보자 친화 한글 UI, 전용 인텔리전스 설정 탭, ui_text 표시 헬퍼 반영
+2026-04-08: dialogs 패키지 분리, strategy_manager orchestrator + strategies.manager_mixins 구조 반영
 """
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -68,6 +69,7 @@ hiddenimports = [
     'app.support.ui_text',
     'config',
     'strategy_manager',
+    'dialogs',
     'sound_notifier',
     'profile_manager',
     'dark_theme',
@@ -94,6 +96,7 @@ hiddenimports = [
 hiddenimports += collect_submodules('api')
 hiddenimports += collect_submodules('app')
 hiddenimports += collect_submodules('strategies')
+hiddenimports += collect_submodules('dialogs')
 hiddenimports += collect_submodules('backtest')
 hiddenimports += collect_submodules('portfolio')
 hiddenimports += collect_submodules('data.providers')
