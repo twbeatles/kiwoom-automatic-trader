@@ -9,6 +9,7 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-03-25: 리플레이 탭/decision audit 로그/viewer 추가 반영, 신규 런타임 JSONL 산출물은 계속 번들 제외
 2026-03-25: 초보자 친화 한글 UI, 전용 인텔리전스 설정 탭, ui_text 표시 헬퍼 반영
 2026-04-08: dialogs 패키지 분리, strategy_manager orchestrator + strategies.manager_mixins 구조 반영
+2026-04-12: live/mock API endpoint router(api.endpoints)와 외부 보유/주문 정리 런타임 보강 반영, 패키징 메타데이터 동기화
 """
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -44,6 +45,7 @@ hiddenimports = [
     # API 모듈
     'api',
     'api.auth',
+    'api.endpoints',
     'api.rest_client',
     'api.websocket_client',
     'api.models',

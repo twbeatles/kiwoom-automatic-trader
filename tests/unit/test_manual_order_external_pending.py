@@ -29,14 +29,14 @@ class _Harness(DialogsProfilesMixin, OrderSyncMixin):
 
 
 class TestManualOrderExternalPending(unittest.TestCase):
-    def test_external_manual_order_uses_manual_pending_map_only(self):
+    def test_external_manual_order_uses_manual_pending_map_only_and_requests_sync(self):
         trader = _Harness()
         trader._on_manual_order_result(_OrderResult(success=True), {"qty": 0, "price": 0}, "매수", "123456")
 
         self.assertIn("123456", trader._manual_pending_state)
         self.assertNotIn("123456", trader._pending_order_state)
         self.assertEqual(trader._holding_or_pending_count, 0)
-        self.assertEqual(trader.sync_calls, 0)
+        self.assertEqual(trader.sync_calls, 1)
 
 
 if __name__ == "__main__":

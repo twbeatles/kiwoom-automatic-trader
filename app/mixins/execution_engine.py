@@ -140,16 +140,39 @@ class ExecutionEngineMixin(TraderMixinBase):
 
     def _recompute_holding_or_pending_count(self) -> int:
         universe = getattr(self, "universe", {})
+        external_positions = getattr(self, "external_positions", {})
         pending_state = getattr(self, "_pending_order_state", {})
+        manual_pending_state = getattr(self, "_manual_pending_state", {})
         held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
+        if isinstance(external_positions, dict):
+            held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
         pending_buy = sum(
             1
             for c, state in pending_state.items()
             if self._is_pending_active(state)
             and state.get("side") == "buy"
-            and int(universe.get(c, {}).get("held", 0)) == 0
+            and int(
+                (
+                    universe.get(c, {})
+                    if c in universe
+                    else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                ).get("held", 0)
+            ) == 0
         )
-        self._holding_or_pending_count = held_count + pending_buy
+        manual_pending_buy = sum(
+            1
+            for c, state in manual_pending_state.items()
+            if self._is_pending_active(state)
+            and state.get("side") == "buy"
+            and int(
+                (
+                    universe.get(c, {})
+                    if c in universe
+                    else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                ).get("held", 0)
+            ) == 0
+        )
+        self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
         return self._holding_or_pending_count
 
     def _submit_split_buy_orders(self, code: str, child_orders: list[tuple[int, int]]) -> list[dict]:
@@ -892,7 +915,10 @@ class ExecutionEngineMixin(TraderMixinBase):
 
     def _execute_sell(self, code: str, quantity: int, price: int, reason: str):
         """Submit sell order asynchronously."""
-        info = self.universe.get(code, {})
+        tracked_getter = getattr(self, "_get_tracked_position_info", None)
+        info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+        external_positions = getattr(self, "external_positions", {})
+        is_external = code not in self.universe and isinstance(external_positions, dict) and code in external_positions
         name = info.get("name", code)
         buy_price = info.get("buy_price", 0)
 
@@ -938,15 +964,22 @@ class ExecutionEngineMixin(TraderMixinBase):
         self._clear_pending_order(code)
         if code in self.universe:
             self.universe[code]["status"] = "holding"
+        else:
+            external_positions = getattr(self, "external_positions", {})
+            if isinstance(external_positions, dict) and code in external_positions:
+                external_positions[code]["status"] = "external_holding"
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
 
     def _on_sell_result(self, result, code, name, quantity, price, buy_price, reason):
         """Handle sell result in main thread."""
+        external_positions = getattr(self, "external_positions", {})
         if result.success:
             if code in self.universe:
                 self.universe[code]["status"] = "sell_submitted"
+            elif isinstance(external_positions, dict) and code in external_positions:
+                external_positions[code]["status"] = "sell_submitted"
             self._set_pending_order(
                 code,
                 "sell",
@@ -964,6 +997,8 @@ class ExecutionEngineMixin(TraderMixinBase):
                 record_failure("SELL_REJECTED", code=code)
             if code in self.universe:
                 self.universe[code]["status"] = "holding"
+            elif isinstance(external_positions, dict) and code in external_positions:
+                external_positions[code]["status"] = "external_holding"
             self._clear_pending_order(code)
 
         self._dirty_codes.add(code)

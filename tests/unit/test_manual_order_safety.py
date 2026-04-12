@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from PyQt6.QtWidgets import QDialog
 
+from api.models import Position
 from app.mixins.dialogs_profiles import DialogsProfilesMixin
 from app.mixins.execution_engine import ExecutionEngineMixin
 from app.mixins.order_sync import OrderSyncMixin
@@ -24,6 +25,9 @@ class _DummyREST:
 
     def get_stock_quote(self, _code):
         return None
+
+    def get_positions(self, _account):
+        return [Position(code="005930", quantity=1, available_qty=1, buy_price=1000, buy_amount=1000)]
 
 
 class _DummyThreadPool:
@@ -51,7 +55,7 @@ class _Harness(DialogsProfilesMixin, OrderSyncMixin, ExecutionEngineMixin):
         self.rest_client = _DummyREST()
         self.threadpool = _DummyThreadPool()
         self.chk_mock = _DummyCheck(False)
-        self.universe = {"005930": {"name": "삼성전자", "current": 1000, "held": 0, "status": "watch"}}
+        self.universe = {"005930": {"name": "삼성전자", "current": 1000, "held": 1, "available_qty": 1, "status": "holding"}}
         self._pending_order_state = {}
         self._manual_pending_state = {}
         self._reserved_cash_by_code = {}
@@ -139,6 +143,17 @@ class TestManualOrderSafety(unittest.TestCase):
 
         self.assertFalse(valid)
         self.assertTrue(warning.called)
+
+    @patch("app.mixins.dialogs_profiles.QMessageBox.warning")
+    def test_manual_sell_rejects_quantity_above_available_qty(self, warning):
+        trader = _Harness()
+
+        valid = trader._validate_manual_order_request(
+            {"code": "005930", "type": "매도", "qty": 2, "price_type": "시장가", "price": 0}
+        )
+
+        self.assertFalse(valid)
+        warning.assert_called_once()
 
 
 if __name__ == "__main__":

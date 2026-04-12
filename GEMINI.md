@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-04-08
+> **최종 업데이트**: 2026-04-12
 
 ---
 
@@ -20,6 +20,7 @@
 - 타입 보조: `app/mixins/_typing.py`의 `TraderMixinBase`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
 - 주문 라우팅 지원: `app/support/execution_policy.py`
+- API 모드 라우팅: `api/endpoints.py`
 - UI 텍스트/콤보 표시값 헬퍼: `app/support/ui_text.py`
 
 ---
@@ -145,11 +146,30 @@ pyinstaller --clean KiwoomTrader.spec
 |------|------|
 | `kiwoom_settings.json` | 사용자 설정 저장 |
 | `kiwoom_presets.json` | 프리셋 저장(필요 시 생성) |
-| `kiwoom_token_cache.json` | 인증 토큰 캐시 |
+| `kiwoom_token_cache_live.json` | 실전 인증 토큰 캐시 |
+| `kiwoom_token_cache_mock.json` | 모의 인증 토큰 캐시 |
 | `data/*.json` | 프로필 데이터 |
 | `data/market_intelligence_events.jsonl` | 시장 인텔리전스 이벤트 로그 |
 | `data/decision_audit.jsonl` | 시장 인텔리전스 결정 감사 로그 |
 | `data/dart_corp_codes.json` | OpenDART 종목코드 캐시 |
+
+---
+
+## 2026-04-12 API 모드/외부보유/종료 정합성
+
+1. API 모드 라우팅
+- `api/endpoints.py`가 live/mock REST/WebSocket 엔드포인트와 토큰 캐시 파일을 분리합니다.
+- `KiwoomAuth`, `KiwoomRESTClient`, `KiwoomWebSocketClient`는 이 라우팅 결과를 공유합니다.
+
+2. 외부 보유/수동 매도
+- 유니버스 외 계좌 보유는 `external_positions`에 읽기 전용 상태로 추적됩니다.
+- 진단 표, 상세 패널, 수동 매도 가능수량 검증은 `universe`와 `external_positions`를 함께 참조합니다.
+- 시간청산/긴급청산도 현재는 외부 보유 종목을 포함해 대상을 수집합니다.
+
+3. 종료/재연결 정리
+- `stop_trading()`와 긴급청산은 활성 주문 취소를 먼저 시도하고 pending/manual pending/reserved cash를 정리합니다.
+- API 재연결/연결 해제 시 Telegram notifier는 `_stop_telegram_notifier()`로 중지 후 교체됩니다.
+- `KiwoomTrader.spec`는 `api.endpoints` explicit hiddenimport를 포함합니다.
 
 ---
 
@@ -173,14 +193,14 @@ pyinstaller --clean KiwoomTrader.spec
 ## 2026-04-08 주문/예약/구조 동기화
 
 1. `start_trading(from_schedule=False) -> bool` 로 예약 시작 상태머신을 정리했습니다.
-2. 수동 주문은 실계좌에서 주문마다 `_confirm_live_trading_guard()` 를 다시 통과하고, 6자리 숫자 코드/지정가 1원 이상을 강제합니다.
+2. 수동 주문은 실계좌에서 주문마다 `_confirm_live_trading_guard()` 를 다시 통과하고, 6자리 숫자 코드/지정가 1원 이상/매도 가능수량 검증을 강제합니다.
 3. `strategy_manager.py` 는 현재 orchestration 레이어이고 실제 전략 구현 책임은 `strategies/manager_mixins/` 로 분리되었습니다.
 4. `ui_dialogs.py` 는 호환 re-export 레이어이고 실제 다이얼로그는 `dialogs/` 패키지에 있습니다.
-5. `KiwoomTrader.spec` 는 `dialogs` 와 `strategies` 하위 모듈을 `collect_submodules(...)` 로 함께 수집합니다.
+5. `KiwoomTrader.spec` 는 `api.endpoints`, `dialogs`, `strategies` 하위 모듈을 explicit import + `collect_submodules(...)` 로 함께 수집합니다.
 6. 최신 검증 기준:
    - `python -m pytest -q tests/unit`
    - `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit`
-7. 현재 작업 기준 `tests/unit` 전체 113개 테스트 통과, 문법 컴파일 검증 통과입니다.
+7. 현재 작업 기준 `tests/unit` 전체 120개 테스트 통과, 문법 컴파일 검증 통과입니다.
 
 ---
 

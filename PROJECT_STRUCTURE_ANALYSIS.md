@@ -1,7 +1,7 @@
 # Kiwoom Automatic Trader 프로젝트 구조 분석
 
 작성일: 2026-03-05  
-최종 동기화: 2026-04-08  
+최종 동기화: 2026-04-12
 분석 기준: 현재 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`, `REAL_API_PREPARATION_GUIDE.md`, `IMPLEMENTATION_REVIEW_2026-04-08.md`
 
 ## 1) 요약
@@ -13,23 +13,25 @@
 - UI 다이얼로그: `app/mixins/dialogs_profiles.py`, `dialogs/*.py`, `ui_dialogs.py`
 - 운영/검증/패키징: `config.py`, `KiwoomTrader.spec`, `tests/unit`, `tools/*`
 
-2026-04-08 기준 가장 중요한 구조 변화는 두 가지다.
+2026-04-12 기준 가장 중요한 구조 변화는 세 가지다.
 
 1. `strategy_manager.py`는 더 이상 대형 단일 구현 파일이 아니라 orchestration 레이어다.  
    실제 계산 책임은 `strategies/manager_mixins/`로 분리됐다.
 2. `ui_dialogs.py`는 더 이상 실제 구현 파일이 아니라 compatibility re-export 레이어다.  
    실제 다이얼로그 구현은 `dialogs/` 패키지에 있다.
+3. `api/endpoints.py`, `external_positions`, `stop_trading()` 주문 정리 helper가 추가되면서
+   API 모드 분기, 유니버스 외 보유 추적, 종료 정리 흐름이 각각 별도 구조로 승격됐다.
 
-## 2) 실제 코드베이스 규모 (2026-04-08 실측)
+## 2) 실제 코드베이스 규모 (2026-04-12 실측)
 
 패키지별 Python 파일 수와 라인 수:
 
 | 패키지 | py 파일 수 | 라인 수 |
 |---|---:|---:|
-| `app/` | 19 | 9854 |
-| `api/` | 5 | 1755 |
-| `tests/` | 62 | 4024 |
-| `strategies/` | 11 | 1773 |
+| `app/` | 19 | 10616 |
+| `api/` | 6 | 1802 |
+| `tests/` | 66 | 4287 |
+| `strategies/` | 11 | 1781 |
 | `dialogs/` | 7 | 575 |
 | `tools/` | 4 | 405 |
 | `backtest/` | 2 | 735 |
@@ -39,14 +41,14 @@
 핵심 파일 Top 10:
 
 1. `app/mixins/market_intelligence.py` (2265)
-2. `app/mixins/ui_build.py` (1184)
-3. `app/mixins/trading_session.py` (1081)
-4. `app/mixins/order_sync.py` (939)
-5. `app/mixins/execution_engine.py` (876)
+2. `app/mixins/trading_session.py` (1619)
+3. `app/mixins/ui_build.py` (1184)
+4. `app/mixins/order_sync.py` (1039)
+5. `app/mixins/execution_engine.py` (911)
 6. `config.py` (839)
 7. `app/mixins/persistence_settings.py` (836)
-8. `api/rest_client.py` (792)
-9. `app/main_window.py` (736)
+8. `api/rest_client.py` (795)
+9. `app/main_window.py` (753)
 10. `backtest/engine.py` (727)
 
 루트 orchestration / compatibility 파일:
@@ -59,7 +61,7 @@
 
 ```text
 kiwoom-automatic-trader/
-├── api/                     # REST/WS 인증, 모델, 통신 클라이언트
+├── api/                     # REST/WS 인증, live/mock 라우팅, 모델, 통신 클라이언트
 ├── app/
 │   ├── main_window.py       # KiwoomProTrader 조립 클래스
 │   ├── mixins/              # UI/세션/API/실행/동기화/인텔리전스/저장
@@ -98,7 +100,7 @@ kiwoom-automatic-trader/
 
 - `ui_build.py`: 메인 탭/핵심 설정/상세 설정/진단 표 구성
 - `api_account.py`: API 연결, 계좌 갱신, 실거래 보호 가드
-- `trading_session.py`: 시작/중지, 유니버스 초기화, 예약/세션 수명주기
+- `trading_session.py`: 시작/중지, 유니버스 초기화, 외부 보유 추적, 예약/세션 수명주기
 - `execution_engine.py`: 실시간 체결 기반 매수/매도 판단 및 실행
 - `order_sync.py`: 주문/체결 상태 동기화와 fail-safe
 - `market_intelligence.py`: 외부 데이터 수집, 정책 계산, 브리핑, 리플레이
@@ -168,6 +170,7 @@ kiwoom-automatic-trader/
 1. `connect_api()` 호출
 2. Worker 기반 인증/계좌조회
 3. 성공 시 REST/WS 클라이언트 및 계좌 상태 반영
+4. 재연결 시 기존 Telegram notifier 정리 후 새 notifier 생성
 
 ### 매매 시작
 
@@ -176,6 +179,7 @@ kiwoom-automatic-trader/
 3. 유니버스 초기화
 4. 포지션 스냅샷 동기화 성공 시 시작
 5. WebSocket 체결/주문체결/지수 구독 시작
+6. 유니버스 외 보유는 `external_positions`에 읽기 전용 상태로 편입
 
 ### 실시간 진입/청산
 
@@ -183,12 +187,14 @@ kiwoom-automatic-trader/
 - `StrategyManager.evaluate_buy_conditions()`
 - `action_policy`, `size_multiplier`, `portfolio_budget_scale` 반영
 - `decision_audit.jsonl` 기록 후 주문 실행
+- 시간청산/긴급청산은 `universe` + `external_positions`를 함께 청산 대상으로 본다
 
 ### 주문/동기화
 
 - `pending_order_state` / aggregate pending / reserved cash 추적
 - 분할 매수는 `use_split=True` + `execution_policy=limit` 에서 child 지정가 주문 즉시 제출
 - 일부 reject/cancel 은 해당 slice 예약금만 환원
+- 중지/긴급청산 경로는 활성 주문 취소를 먼저 시도하고 unresolved 건만 로컬 finalization 한다
 
 ## 8) 문서 / 패키징 정합성
 
@@ -204,6 +210,7 @@ kiwoom-automatic-trader/
 
 - explicit hiddenimports + `collect_submodules(...)` 를 함께 사용
 - 현재는 `api`, `app`, `strategies`, `dialogs`, `backtest`, `portfolio`, `data.providers`를 수집
+- `api.endpoints` explicit hiddenimport로 live/mock 라우터를 패키징에 명시 반영
 - `dialogs/` 패키지 분리 후에도 빌드 누락이 없도록 `collect_submodules('dialogs')` 가 추가되었다
 
 ### `.gitignore`
@@ -213,14 +220,14 @@ kiwoom-automatic-trader/
 
 ## 9) 검증 현황
 
-2026-04-08 기준 재검증:
+2026-04-12 기준 재검증:
 
 - `python -m pytest -q tests/unit`
 - `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit`
 
 결과:
 
-- `tests/unit` 전체 113개 테스트 통과
+- `tests/unit` 전체 120개 테스트 통과
 - 문법 컴파일 검증 통과
 
 ## 10) 현재 남아 있는 큰 파일 / 다음 분리 후보

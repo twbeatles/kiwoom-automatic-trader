@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-04-08
+> **최종 업데이트**: 2026-04-12
 
 ---
 
@@ -31,6 +31,7 @@
 │       └── worker.py
 ├── api/
 │   ├── auth.py
+│   ├── endpoints.py
 │   ├── rest_client.py
 │   ├── websocket_client.py
 │   └── models.py
@@ -124,7 +125,7 @@
 - 포지션 동기화 재시도 초과 시 종목 상태 `sync_failed`로 fail-safe 차단
 
 5. 종료:
-- `stop_trading()` -> 구독 해제/타이머 정리
+- `stop_trading()` -> 활성 주문 취소 시도 -> pending/manual pending/reserved cash 정리 -> 구독 해제/타이머 정리
 - `closeEvent()`에서 종료 플로우 보장
 
 ---
@@ -307,6 +308,31 @@ python -m pytest -q tests/unit
 
 ---
 
+## 2026-04-12 API 모드/외부보유/종료 정합성 메모
+
+1. API 모드 라우팅
+- `api/endpoints.py`가 live/mock REST/WebSocket URL과 토큰 캐시 파일을 분기합니다.
+- `KiwoomAuth`, `KiwoomRESTClient`, `KiwoomWebSocketClient`는 이 라우팅 결과를 공유합니다.
+- 토큰 캐시는 `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`으로 분리됩니다.
+
+2. 외부 보유 종목 추적
+- 유니버스 외 계좌 보유는 `external_positions`에 `read_only=True` 상태로 유지됩니다.
+- 진단 표/상세 패널/수동 매도 가능수량 검증은 `universe`뿐 아니라 `external_positions`도 함께 봅니다.
+- 시간청산/긴급청산은 현재 `external_positions`까지 포함해 청산 대상을 수집합니다.
+
+3. 종료/재연결 정리
+- `stop_trading()`와 긴급청산 경로는 활성 주문 취소를 먼저 시도한 뒤 로컬 pending 상태를 정리합니다.
+- API 재연결/연결 해제 시 기존 Telegram notifier는 `_stop_telegram_notifier()`로 명시적으로 중지 후 교체합니다.
+- `KiwoomTrader.spec`는 `api.endpoints` explicit hiddenimport + `collect_submodules('api')`로 현재 구조를 따라갑니다.
+
+4. 최신 검증 기준
+```bash
+python -m pytest -q tests/unit
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
+```
+
+---
+
 ## 2026-04-08 주문/예약 안전화 동기화 메모
 
 1. 예약/시작 상태머신
@@ -323,7 +349,7 @@ python -m pytest -q tests/unit
 
 3. 수동 주문
 - 수동 주문은 실계좌에서 주문마다 `_confirm_live_trading_guard()` 를 다시 통과해야 합니다.
-- `ManualOrderDialog` 와 `_validate_manual_order_request()` 에서 6자리 숫자 코드, 지정가 1원 이상을 강제합니다.
+- `ManualOrderDialog` 와 `_validate_manual_order_request()` 에서 6자리 숫자 코드, 지정가 1원 이상, 매도 가능수량 초과 금지를 강제합니다.
 - 수동 매수는 예약금을 즉시 차감하고, 유니버스 외 종목도 `_manual_pending_state` + reserved cash 로 정합성을 유지합니다.
 
 4. 최신 검증 기준
@@ -331,7 +357,7 @@ python -m pytest -q tests/unit
 python -m pytest -q tests/unit
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 ```
-- 현재 작업 기준 `tests/unit` 전체 113개 테스트 통과
+- 현재 작업 기준 `tests/unit` 전체 120개 테스트 통과
 - 문법 컴파일 검증 통과
 
 ---

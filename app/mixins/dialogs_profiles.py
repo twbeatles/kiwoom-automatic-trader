@@ -58,6 +58,45 @@ class DialogsProfilesMixin(TraderMixinBase):
                 current = 0
         return current
 
+    def _resolve_manual_sell_available_qty(self, code: str):
+        code = str(code or "").strip()
+        if not code:
+            return None
+
+        latest_available = None
+        if getattr(self, "is_connected", False) and getattr(self, "rest_client", None) and getattr(self, "current_account", ""):
+            getter = getattr(self.rest_client, "get_positions", None)
+            if callable(getter):
+                try:
+                    positions = getter(self.current_account)
+                except Exception as exc:
+                    self.log(f"Manual sell position refresh failed [{code}]: {exc}")
+                    positions = None
+                if positions is not None:
+                    latest_available = 0
+                    for position in positions or []:
+                        if str(getattr(position, "code", "") or "").strip() != code:
+                            continue
+                        latest_available = max(
+                            0,
+                            int(getattr(position, "available_qty", getattr(position, "quantity", 0)) or 0),
+                        )
+                        break
+        if latest_available is not None:
+            return latest_available
+
+        tracked_getter = getattr(self, "_get_tracked_position_info", None)
+        info = tracked_getter(code) if callable(tracked_getter) else {}
+        if not info:
+            info = getattr(self, "universe", {}).get(code, {})
+        if not info:
+            external_positions = getattr(self, "external_positions", {})
+            if isinstance(external_positions, dict):
+                info = external_positions.get(code, {})
+        if not info:
+            return None
+        return max(0, int(info.get("available_qty", info.get("held", 0)) or 0))
+
     def _validate_manual_order_request(self, order: dict) -> bool:
         if not isinstance(order, dict):
             QMessageBox.warning(self, "경고", "주문 요청 데이터가 올바르지 않습니다.")
@@ -97,6 +136,22 @@ class DialogsProfilesMixin(TraderMixinBase):
                     self,
                     "경고",
                     f"예상 필요금액 {required_cash:,}원이 주문가능금액 {available_cash:,}원을 초과합니다.",
+                )
+                return False
+        elif order_type == "매도":
+            available_qty = self._resolve_manual_sell_available_qty(code)
+            if available_qty is None:
+                QMessageBox.warning(
+                    self,
+                    "경고",
+                    "최신 보유 가능수량을 확인할 수 없어 매도 주문을 진행하지 않습니다.",
+                )
+                return False
+            if qty > available_qty:
+                QMessageBox.warning(
+                    self,
+                    "경고",
+                    f"매도 가능수량 {available_qty}주를 초과한 주문입니다.",
                 )
                 return False
 
@@ -287,6 +342,10 @@ class DialogsProfilesMixin(TraderMixinBase):
                         order_no=str(getattr(result, "order_no", "") or ""),
                         reserved_cash=reserve_amount,
                     )
+                    recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+                    if callable(recompute_count):
+                        recompute_count()
+                    self._sync_position_from_account(code)
                 else:
                     self._set_pending_order(
                         code,
@@ -299,6 +358,7 @@ class DialogsProfilesMixin(TraderMixinBase):
                     recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
                     if callable(recompute_count):
                         recompute_count()
+                    self._sync_position_from_account(code)
         else:
             self.log(f"❌ 수동 주문 실패: {result.message}")
             if code in getattr(self, "universe", {}):
@@ -309,6 +369,9 @@ class DialogsProfilesMixin(TraderMixinBase):
                     clear_manual_pending(code)
                 else:
                     self._clear_pending_order(code)
+            recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+            if callable(recompute_count):
+                recompute_count()
 
     def _open_profile_manager(self):
         """프로필 관리 다이얼로그 열기"""

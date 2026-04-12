@@ -15,13 +15,14 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 from config import Config
+from .endpoints import LIVE_REST_BASE_URL, resolve_api_endpoints
 
 
 class KiwoomAuth:
     """OAuth2 토큰 기반 인증 관리 클래스"""
     
     # 키움증권 REST API 엔드포인트
-    BASE_URL = "https://api.kiwoom.com"
+    BASE_URL = LIVE_REST_BASE_URL
     TOKEN_ENDPOINT = "/oauth2/token"
     
     # 토큰 캐시 파일
@@ -38,7 +39,7 @@ class KiwoomAuth:
         """
         self.app_key = app_key
         self.secret_key = secret_key
-        self.is_mock = is_mock
+        self.is_mock = bool(is_mock)
         
         # 로거 설정
         self.logger = logging.getLogger('KiwoomAuth')
@@ -52,7 +53,7 @@ class KiwoomAuth:
         base_dir = Path(getattr(Config, "BASE_DIR", Path.cwd()))
         self.cache_dir = Path(cache_dir) if cache_dir else base_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_path = self.cache_dir / self.TOKEN_CACHE_FILE
+        self._configure_mode(self.is_mock)
         
         # 캐싱된 토큰 로드 시도
         self._load_cached_token()
@@ -61,10 +62,19 @@ class KiwoomAuth:
         """자격증명 설정/업데이트"""
         self.app_key = app_key
         self.secret_key = secret_key
-        self.is_mock = is_mock
+        self.is_mock = bool(is_mock)
+        self._configure_mode(self.is_mock)
         # 자격증명 변경 시 토큰 초기화
         self._access_token = None
         self._expires_at = 0
+
+    def _configure_mode(self, is_mock: bool):
+        endpoints = resolve_api_endpoints(is_mock)
+        self.endpoints = endpoints
+        self.base_url = endpoints.rest_base_url
+        self.ws_url = endpoints.ws_url
+        self.session_namespace = endpoints.session_namespace
+        self.cache_path = self.cache_dir / endpoints.token_cache_file
     
     def get_token(self, force_refresh: bool = False) -> Optional[str]:
         """
@@ -91,7 +101,7 @@ class KiwoomAuth:
             return None
         
         try:
-            url = f"{self.BASE_URL}{self.TOKEN_ENDPOINT}"
+            url = f"{self.base_url}{self.TOKEN_ENDPOINT}"
             
             payload = {
                 "grant_type": "client_credentials",
@@ -187,7 +197,8 @@ class KiwoomAuth:
                 "access_token": self._access_token,
                 "token_type": self._token_type,
                 "expires_at": self._expires_at,
-                "app_key_hash": self._app_key_hash()  # 키 변경 감지용
+                "app_key_hash": self._app_key_hash(),  # 키 변경 감지용
+                "mode": self.endpoints.mode,
             }
             
             with open(self.cache_path, 'w', encoding='utf-8') as f:
@@ -205,6 +216,10 @@ class KiwoomAuth:
             with open(self.cache_path, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
             
+            if str(cache_data.get("mode", "live")) != str(self.endpoints.mode):
+                self.logger.info("Auth mode changed, cached token invalidated")
+                return
+
             # 동일한 App Key로 발급된 토큰인지 확인
             if cache_data.get("app_key_hash") != self._app_key_hash():
                 self.logger.info("App Key changed, cached token invalidated")

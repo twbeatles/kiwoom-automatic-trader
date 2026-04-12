@@ -4,6 +4,11 @@
 기준 문서: `README.md`, `CLAUDE.md`, `REAL_API_PREPARATION_GUIDE.md`  
 검토 범위: 예약 매매, 수동 주문, 분할 매수, SHORT 전략 경계, 연구용 백테스트 설정 표시
 
+2026-04-12 재확인 메모:
+
+- 2026-04-08 시점의 핵심 지적사항은 코드에 반영된 상태를 유지하고 있다.
+- 다만 이후 코드에는 `api/endpoints.py`, `external_positions`, 종료 시 주문 정리, Telegram notifier 재초기화 등 추가 구현이 더 들어갔고, 이 문서도 그 사실을 반영해 보강했다.
+
 ## 반영 완료
 
 ### 1. 예약 매매 상태 고착 수정
@@ -39,16 +44,48 @@
 - SHORT 방향 전략은 자동매매에서 차단만 했고, 실시간 실행 엔진이 direction 을 전달하는 구조 확장은 아직 하지 않았다.
 - 백테스트 엔진과 UI 실행/결과 뷰 연결은 후속 구현 범위다.
 
+## 2026-04-12 추가 반영 사항
+
+### 1. API 모드 라우팅 정합화
+
+- `api/endpoints.py` 를 추가해 live/mock REST/WebSocket 엔드포인트와 토큰 캐시 파일을 분리했다.
+- `KiwoomAuth`, `KiwoomRESTClient`, `KiwoomWebSocketClient` 가 이 라우팅 결과를 공통으로 사용한다.
+
+### 2. 유니버스 외 보유 종목 추적 확대
+
+- 계좌 스냅샷 동기화는 유니버스 외 보유 종목을 `external_positions` 에 `read_only=True` 상태로 유지한다.
+- 진단 표/상세 패널/수동 매도 가능수량 확인은 `external_positions` 를 함께 참조한다.
+- 시간청산과 긴급 전체 청산은 현재 `external_positions` 까지 포함해 대상을 수집한다.
+
+### 3. 종료 시 활성 주문 정리
+
+- `stop_trading()` 와 긴급청산 경로는 활성 주문 취소를 먼저 시도하고, unresolved 건은 로컬 pending/manual pending/reserved cash 정리로 마무리한다.
+- split child 주문, 일반 pending 주문, 유니버스 외 수동 주문을 각각 구분해 정리한다.
+
+### 4. 수동 매도 검증 강화
+
+- 수동 매도는 최신 계좌 포지션의 `available_qty` 를 우선 조회해 초과 주문을 차단한다.
+- 이번 재확인 과정에서 매도 검증 분기 문자열이 깨져 있던 버그를 수정했고, 회귀 테스트를 추가했다.
+
+### 5. 연결 재설정 상태 정리
+
+- API 재연결 또는 연결 해제 시 기존 Telegram notifier 를 명시적으로 중지/교체하도록 정리했다.
+- 연결 해제 시 `external_positions` 와 진단 캐시도 함께 초기화한다.
+
 ## 검증
 
 - `python -m pytest -q tests/unit` 통과
-- `python -m compileall -q app api data backtest strategies portfolio` 통과
+- `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit` 통과
+- 현재 기준 `tests/unit` 전체 120개 테스트 통과
 
 ## 이번에 추가한 회귀 테스트 포인트
 
 - 예약 매매 시작 실패 후 다음 tick 재시도
 - 실계좌 수동 주문의 주문별 보호 확인
 - 수동 주문 코드/지정가 검증
+- 수동 매도 가능수량 초과 주문 차단
 - 유니버스 외 수동 매수 예약금 정합성
+- 유니버스 외 수동 매수 체결 시 `external_positions` 승격
+- `stop_trading()`/긴급청산 경로의 활성 주문 정리
 - 분할 매수 child 주문 제출 및 일부 reject 환원
 - SHORT 전략의 자동매매 시작 차단

@@ -2,6 +2,15 @@ import datetime
 
 
 class StrategyManagerPortfolioRiskMixin:
+    def _get_position_info(self, code):
+        universe = getattr(self.trader, "universe", {})
+        if code in universe:
+            return universe.get(code, {})
+        external_positions = getattr(self.trader, "external_positions", {})
+        if isinstance(external_positions, dict):
+            return external_positions.get(code, {})
+        return {}
+
     def calculate_dynamic_position_size(self, code) -> int:
         info = self.trader.universe.get(code, {})
         current_price = info.get("current", 0)
@@ -72,7 +81,7 @@ class StrategyManagerPortfolioRiskMixin:
         return True
 
     def _get_stock_market(self, code) -> str:
-        info = self.trader.universe.get(code, {})
+        info = self._get_position_info(code)
         if "market_type" in info and info["market_type"] != "unknown":
             return info["market_type"].lower()
         if code.startswith("0") or code.startswith("1") or code.startswith("2"):
@@ -109,7 +118,7 @@ class StrategyManagerPortfolioRiskMixin:
         return True
 
     def _get_stock_sector(self, code) -> str:
-        info = self.trader.universe.get(code, {})
+        info = self._get_position_info(code)
         sector = info.get("sector", "")
         if sector and sector != "기타":
             return sector

@@ -1,6 +1,6 @@
 # 실제 API 준비 가이드
 
-기준일: 2026-04-08  
+기준일: 2026-04-12
 기준: 현재 저장소 코드 + 공식 문서 확인
 
 이 문서는 이 프로젝트를 실제 API와 연결해 운영하기 전에 무엇을 준비해야 하는지 정리한 실무용 체크리스트다.  
@@ -23,13 +23,14 @@
 
 현재 코드 기준으로 실거래/실시간 운영에 직접 연결되는 핵심 모듈은 아래와 같다.
 
-- 키움 인증: [api/auth.py](d:\twbeatles-repos\kiwoom-automatic-trader\api\auth.py)
-- 키움 REST 호출: [api/rest_client.py](d:\twbeatles-repos\kiwoom-automatic-trader\api\rest_client.py)
-- 키움 WebSocket: [api/websocket_client.py](d:\twbeatles-repos\kiwoom-automatic-trader\api\websocket_client.py)
-- API 연결 UI: [app/mixins/api_account.py](d:\twbeatles-repos\kiwoom-automatic-trader\app\mixins\api_account.py)
-- 시장 인텔리전스 API 입력 UI: [app/mixins/market_intelligence.py](d:\twbeatles-repos\kiwoom-automatic-trader\app\mixins\market_intelligence.py)
-- 설정/비밀값 저장: [app/mixins/persistence_settings.py](d:\twbeatles-repos\kiwoom-automatic-trader\app\mixins\persistence_settings.py)
-- 실거래 가드: [app/mixins/trading_session.py](d:\twbeatles-repos\kiwoom-automatic-trader\app\mixins\trading_session.py)
+- 키움 인증: `api/auth.py`
+- live/mock 엔드포인트 라우팅: `api/endpoints.py`
+- 키움 REST 호출: `api/rest_client.py`
+- 키움 WebSocket: `api/websocket_client.py`
+- API 연결 UI: `app/mixins/api_account.py`
+- 시장 인텔리전스 API 입력 UI: `app/mixins/market_intelligence.py`
+- 설정/비밀값 저장: `app/mixins/persistence_settings.py`
+- 실거래 가드/계좌 스냅샷/종료 정리: `app/mixins/trading_session.py`
 
 실거래 가드도 이미 들어가 있다.
 
@@ -52,8 +53,10 @@
 - `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`처럼 전략팩에서 SHORT 방향을 반환할 수 있는 전략은 현재 자동매매 비지원/백테스트 전용이다.
 - `portfolio_mode`, `enable_backtest`, `portfolio/allocator.py`는 확장 경로로는 존재하지만 실주문 라우팅의 직접 제어 스위치는 아니다.
 - `분할 매수`는 현재 `use_split=True` + `execution_policy=limit` 일 때 실제 child 지정가 주문을 즉시 다건 제출한다.
-- 실계좌 `수동 주문`은 주문마다 실거래 보호 확인을 다시 요구하고, 6자리 숫자 코드/지정가 1원 이상 검증을 통과해야 한다.
-- 빌드 기준 배포 패키지는 `KiwoomTrader.spec`에서 `dialogs`, `strategies`, `app`, `data.providers` 하위 모듈을 함께 수집하도록 동기화돼 있다.
+- 실계좌 `수동 주문`은 주문마다 실거래 보호 확인을 다시 요구하고, 6자리 숫자 코드/지정가 1원 이상/매도 가능수량 검증을 통과해야 한다.
+- `external_positions` 로 유니버스 외 보유 종목을 읽기 전용 추적하며, 시간청산/긴급청산/진단 표시는 현재 이 상태를 기준으로 동작한다.
+- `stop_trading()` 와 긴급청산 경로는 활성 주문 취소를 먼저 시도하고, 남은 pending/manual pending/reserved cash 를 로컬에서 정리한다.
+- 빌드 기준 배포 패키지는 `KiwoomTrader.spec`에서 `api.endpoints`, `dialogs`, `strategies`, `app`, `data.providers` 하위 모듈을 함께 수집하도록 동기화돼 있다.
 
 ## 3. 가장 먼저 확인할 현재 코드 제약
 
@@ -61,17 +64,17 @@
 
 ### 3.1 `모의투자` 체크박스의 현재 의미
 
-UI에는 `모의투자` 체크박스가 있지만, 현재 코드에서 `KiwoomAuth.BASE_URL` 과 `KiwoomRESTClient.BASE_URL` 은 모두 `https://api.kiwoom.com` 으로 고정돼 있다.
+현재 코드는 `api/endpoints.py` 를 통해 `모의투자` 여부에 따라 엔드포인트와 토큰 캐시를 함께 분기한다.
 
-즉 현재 상태에서는:
-
-- `chk_mock` 는 실주문 가드 완화 판단에는 쓰인다.
-- 하지만 인증/REST/WebSocket 엔드포인트를 모의 전용 주소로 분기하는 구현은 보이지 않는다.
+- 실전: REST `https://api.kiwoom.com`, WebSocket `wss://api.kiwoom.com:10000/api/dostk/websocket`
+- 모의: REST `https://mockapi.kiwoom.com`, WebSocket `wss://mockapi.kiwoom.com:10000/api/dostk/websocket`
+- 토큰 캐시: `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`
 
 운영 의미:
 
-- 실제 실전 연결 전, 모의투자 전용 엔드포인트를 별도로 써야 하는 정책이라면 이 부분은 별도 확인 또는 구현이 필요하다.
-- 문서상 “모의투자” 라벨만 믿고 바로 연결하면 위험하다.
+- `chk_mock` 는 더 이상 보호문구 완화 플래그만이 아니라 실제 연결 대상과 캐시 namespace 를 함께 바꾼다.
+- 모의/실전 전환 직후에는 이전 모드 토큰이 재사용되지 않도록 캐시 파일도 분리되어 있다.
+- 다만 실주문 보호 로직은 별도로 유지되므로, 실전 전환 시에는 여전히 `_confirm_live_trading_guard()` 를 통과해야 한다.
 
 ### 3.2 비밀값 저장 방식
 
@@ -267,14 +270,14 @@ AI는 선택 기능이다. 기본은 규칙 기반이 우선이고, AI는 보조
 현재 코드 기준 주요 파일 경로:
 
 - 설정 파일: `kiwoom_settings.json`
-- 토큰 캐시: `kiwoom_token_cache.json`
+- 토큰 캐시: `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`
 - 시장 인텔리전스 이벤트 로그: `data/market_intelligence_events.jsonl`
 - 의사결정 감사 로그: `data/decision_audit.jsonl`
 - 거래내역: `kiwoom_trade_history.json`
 
 보안 원칙:
 
-1. `kiwoom_settings.json`, `kiwoom_token_cache.json`, `data/*.jsonl` 을 외부 공유나 Git 커밋 대상에서 제외한다.
+1. `kiwoom_settings.json`, `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`, `data/*.jsonl` 을 외부 공유나 Git 커밋 대상에서 제외한다.
 2. `keyring` 이 정상 동작하는 환경을 우선 사용한다.
 3. 운영 PC는 개인용과 분리하거나 최소한 OS 계정을 분리한다.
 4. 원격제어 툴 사용 시 클립보드/파일 전송 로그를 점검한다.

@@ -15,6 +15,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .auth import KiwoomAuth
+from .endpoints import LIVE_REST_BASE_URL
 from .models import (
     StockQuote, OrderBook, AccountInfo, Position, 
     OrderResult, DailyOHLC, OrderType, PriceType
@@ -24,7 +25,7 @@ from .models import (
 class KiwoomRESTClient:
     """키움증권 REST API 클라이언트"""
     
-    BASE_URL = "https://api.kiwoom.com"
+    BASE_URL = LIVE_REST_BASE_URL
     
     # TR 코드 정의
     TR_CODES = {
@@ -56,6 +57,8 @@ class KiwoomRESTClient:
         """
         self.auth = auth
         self.logger = logging.getLogger('KiwoomRESTClient')
+        self.base_url = str(getattr(auth, "base_url", self.BASE_URL) or self.BASE_URL)
+        self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
         
         # 요청 세션 설정 (재시도 로직 포함)
         self.session = self._create_session()
@@ -106,7 +109,7 @@ class KiwoomRESTClient:
         """
         self._rate_limit()
         
-        url = f"{self.BASE_URL}{endpoint}"
+        url = f"{self.base_url}{endpoint}"
         headers = {
             "Content-Type": "application/json",
             **self.auth.get_auth_header()

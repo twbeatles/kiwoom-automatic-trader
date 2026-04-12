@@ -29,6 +29,7 @@ except ImportError:
     ConnectionClosed = Exception
 
 from .auth import KiwoomAuth
+from .endpoints import LIVE_WS_URL
 from .models import StockQuote, ExecutionData, IndexTick
 
 
@@ -44,7 +45,7 @@ class KiwoomWebSocketClient:
     """실시간 데이터 수신을 위한 WebSocket 클라이언트"""
     
     # WebSocket 엔드포인트
-    WS_URL = "wss://api.kiwoom.com/ws/realtime"
+    WS_URL = LIVE_WS_URL
     
     # 실시간 데이터 타입
     REAL_TYPE = {
@@ -64,6 +65,8 @@ class KiwoomWebSocketClient:
         
         self.auth = auth
         self.logger = logging.getLogger('KiwoomWebSocketClient')
+        self.ws_url = str(getattr(auth, "ws_url", self.WS_URL) or self.WS_URL)
+        self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
         
         # 연결 상태
         self._ws: Optional[Any] = None
@@ -154,7 +157,7 @@ class KiwoomWebSocketClient:
                     raise RuntimeError("websocket connect function unavailable")
                 
                 async with connect_fn(
-                    self.WS_URL,
+                    self.ws_url,
                     extra_headers=headers,
                     ping_interval=30,
                     ping_timeout=10

@@ -22,6 +22,15 @@ from ._typing import TraderMixinBase
 
 
 class APIAccountMixin(TraderMixinBase):
+    def _stop_telegram_notifier(self):
+        notifier = getattr(self, "telegram", None)
+        if notifier:
+            try:
+                notifier.stop()
+            except Exception:
+                pass
+        self.telegram = None
+
     def connect_api(self):
         if getattr(self, "_connect_inflight", False):
             self.log("API 연결이 이미 진행 중입니다.")
@@ -99,6 +108,7 @@ class APIAccountMixin(TraderMixinBase):
             if self.combo_acc.count() > 0:
                 self._on_account_changed(self.combo_acc.currentText())
 
+            self._stop_telegram_notifier()
             if self.chk_use_telegram.isChecked():
                 self.telegram = TelegramNotifier(self.input_tg_token.text(), self.input_tg_chat.text())
                 self.telegram.send("Kiwoom Trader 연결됨")
@@ -172,6 +182,7 @@ class APIAccountMixin(TraderMixinBase):
                 self.ws_client.disconnect()
             except Exception:
                 pass
+        self._stop_telegram_notifier()
         self.is_connected = False
         self.auth = None
         self.rest_client = None
@@ -185,6 +196,8 @@ class APIAccountMixin(TraderMixinBase):
         self._last_profit_sign = None
         if hasattr(self, "_reserved_cash_by_code"):
             self._reserved_cash_by_code.clear()
+        if hasattr(self, "external_positions") and isinstance(self.external_positions, dict):
+            self.external_positions.clear()
         if hasattr(self, "_diagnostics_by_code"):
             self._diagnostics_by_code.clear()
         if hasattr(self, "_diagnostics_dirty_codes"):

@@ -5,7 +5,7 @@ import datetime
 import time
 from typing import Any, Deque, Dict, List, Literal, Optional, Tuple, overload
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QCoreApplication, Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
 
@@ -140,6 +140,667 @@ class TradingSessionMixin(TraderMixinBase):
         if "KOSDAQ" in market_type:
             return "KOSDAQ"
         return "KOSPI"
+
+    def _external_positions_map(self) -> Dict[str, Dict[str, Any]]:
+        mapping = getattr(self, "external_positions", None)
+        if not isinstance(mapping, dict):
+            mapping = {}
+            self.external_positions = mapping
+        return mapping
+
+    def _tracked_position_kind(self, code: str) -> str:
+        if code in getattr(self, "universe", {}):
+            return "universe"
+        if code in self._external_positions_map():
+            return "external"
+        return ""
+
+    def _get_tracked_position_info(self, code: str) -> Dict[str, Any]:
+        if code in getattr(self, "universe", {}):
+            return self.universe.get(code, {})
+        return self._external_positions_map().get(code, {})
+
+    def _tracked_position_codes(self, include_external: bool = True) -> List[str]:
+        codes = list(getattr(self, "universe", {}).keys())
+        if not include_external:
+            return codes
+        external_codes = [
+            code for code in sorted(self._external_positions_map().keys()) if code not in getattr(self, "universe", {})
+        ]
+        return codes + external_codes
+
+    def _manual_pending_entries(self) -> Dict[str, Dict[str, Any]]:
+        getter = getattr(self, "_manual_pending_map", None)
+        if callable(getter):
+            mapping = getter()
+            if isinstance(mapping, dict):
+                return mapping
+        mapping = getattr(self, "_manual_pending_state", None)
+        if not isinstance(mapping, dict):
+            mapping = {}
+            self._manual_pending_state = mapping
+        return mapping
+
+    @staticmethod
+    def _pending_active_fallback(pending: Dict[str, Any]) -> bool:
+        if not isinstance(pending, dict) or not pending:
+            return False
+        return str(pending.get("state", "submitted") or "submitted").lower() in {"submitted", "partial"}
+
+    def _pending_is_active_safe(self, pending: Dict[str, Any]) -> bool:
+        checker = getattr(self, "_pending_is_active", None)
+        if callable(checker):
+            return bool(checker(pending))
+        return self._pending_active_fallback(pending)
+
+    def _pending_children_safe(self, pending: Dict[str, Any]) -> List[Dict[str, Any]]:
+        getter = getattr(self, "_pending_children", None)
+        if callable(getter):
+            rows = getter(pending)
+            if isinstance(rows, list):
+                return [row for row in rows if isinstance(row, dict)]
+        rows = pending.get("child_orders", []) if isinstance(pending, dict) else []
+        if not isinstance(rows, list):
+            return []
+        return [row for row in rows if isinstance(row, dict)]
+
+    def _resolve_external_position_metadata(
+        self,
+        code: str,
+        *,
+        name: str = "",
+        current_price: int = 0,
+        existing: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        current_info = existing if isinstance(existing, dict) else {}
+        resolved_name = str(name or current_info.get("name") or code)
+        resolved_current = max(0, int(current_price or 0))
+        if resolved_current <= 0:
+            resolved_current = max(0, int(current_info.get("current", 0) or 0))
+        resolved_market_type = str(current_info.get("market_type", "") or "").strip()
+        resolved_sector = str(current_info.get("sector", "") or "").strip()
+
+        needs_quote = (
+            not resolved_market_type
+            or not resolved_sector
+            or resolved_sector == "기타"
+            or resolved_current <= 0
+            or resolved_name == code
+        )
+        quote_getter = getattr(getattr(self, "rest_client", None), "get_stock_quote", None)
+        if needs_quote and callable(quote_getter):
+            try:
+                quote = quote_getter(code)
+            except Exception:
+                quote = None
+            if quote:
+                quote_name = str(getattr(quote, "name", "") or "").strip()
+                quote_market_type = str(getattr(quote, "market_type", "") or "").strip()
+                quote_sector = str(getattr(quote, "sector", "") or "").strip()
+                quote_current = max(0, int(getattr(quote, "current_price", 0) or 0))
+                if quote_name:
+                    resolved_name = quote_name
+                if quote_current > 0:
+                    resolved_current = quote_current
+                if quote_market_type:
+                    resolved_market_type = quote_market_type
+                if quote_sector:
+                    resolved_sector = quote_sector
+
+        if not resolved_market_type:
+            resolved_market_type = "unknown"
+        if not resolved_sector:
+            resolved_sector = "기타"
+        return {
+            "name": resolved_name,
+            "current": resolved_current,
+            "market_type": resolved_market_type,
+            "sector": resolved_sector,
+        }
+
+    def _sync_external_positions_from_account_positions(
+        self,
+        positions: List[Any],
+        *,
+        rebuild_strategy: bool = False,
+        now_dt: Optional[datetime.datetime] = None,
+    ) -> List[str]:
+        now = now_dt or datetime.datetime.now()
+        mapping = self._external_positions_map()
+        universe = getattr(self, "universe", {})
+        universe_codes = set(universe.keys())
+        manual_pending_map = self._manual_pending_entries()
+        next_external: Dict[str, Any] = {}
+
+        for position in positions or []:
+            code = str(getattr(position, "code", "") or "").strip()
+            if not code or code in universe_codes:
+                continue
+            held = max(0, int(getattr(position, "quantity", 0) or 0))
+            if held <= 0:
+                continue
+            next_external[code] = position
+
+        removed_codes = [code for code in list(mapping.keys()) if code not in next_external]
+        for code in removed_codes:
+            prev_info = mapping.pop(code, None)
+            prev_amount = int(prev_info.get("invest_amount", 0) or 0) if isinstance(prev_info, dict) else 0
+            if not rebuild_strategy and prev_amount > 0 and hasattr(self, "strategy"):
+                self.strategy.update_market_investment(code, prev_amount, is_buy=False, cost_amount=prev_amount)
+                self.strategy.update_sector_investment(code, prev_amount, is_buy=False, cost_amount=prev_amount)
+            if hasattr(self, "_diagnostics_dirty_codes") and isinstance(self._diagnostics_dirty_codes, set):
+                self._diagnostics_dirty_codes.add(code)
+
+        for code, position in next_external.items():
+            previous = mapping.get(code, {})
+            previous_amount = int(previous.get("invest_amount", 0) or 0) if isinstance(previous, dict) else 0
+            buy_price = max(0, int(getattr(position, "buy_price", 0) or 0))
+            invest_amount = max(0, int(getattr(position, "buy_amount", 0) or 0))
+            available_qty = max(
+                0,
+                int(getattr(position, "available_qty", getattr(position, "quantity", 0)) or 0),
+            )
+            metadata = self._resolve_external_position_metadata(
+                code,
+                name=str(getattr(position, "name", "") or ""),
+                current_price=max(0, int(getattr(position, "current_price", 0) or 0)),
+                existing=previous,
+            )
+            pending = getattr(self, "_pending_order_state", {}).get(code, {})
+            if not pending:
+                pending = manual_pending_map.get(code, {})
+            status = "external_holding"
+            if self._pending_is_active_safe(pending):
+                side = str(pending.get("side", "") or "").lower()
+                if side == "sell":
+                    status = "sell_submitted"
+                elif side == "buy":
+                    status = "buy_submitted"
+
+            partial_levels = previous.get("partial_profit_levels", set()) if isinstance(previous, dict) else set()
+            if not isinstance(partial_levels, set):
+                partial_levels = set(partial_levels or [])
+            info = {
+                "code": code,
+                "name": metadata["name"],
+                "held": max(0, int(getattr(position, "quantity", 0) or 0)),
+                "available_qty": available_qty,
+                "buy_price": buy_price,
+                "invest_amount": invest_amount,
+                "current": metadata["current"],
+                "market_type": metadata["market_type"],
+                "sector": metadata["sector"],
+                "status": status,
+                "read_only": True,
+                "entry_origin": "external_account",
+                "time_stop_eligible": False,
+                "buy_time": previous.get("buy_time") or now,
+                "max_profit_rate": float(previous.get("max_profit_rate", 0.0) or 0.0),
+                "partial_profit_levels": partial_levels,
+                "external_updated_at": previous.get("external_updated_at"),
+                "external_status": previous.get("external_status", "idle"),
+                "external_error": previous.get("external_error", ""),
+                "market_state": previous.get("market_state", "normal"),
+                "market_state_until": previous.get("market_state_until"),
+                "last_guard_reason": previous.get("last_guard_reason", ""),
+                "sync_failed_reason": "",
+            }
+            mapping[code] = info
+
+            if hasattr(self, "strategy") and invest_amount > 0:
+                if rebuild_strategy:
+                    self.strategy.update_market_investment(code, invest_amount, is_buy=True)
+                    self.strategy.update_sector_investment(code, invest_amount, is_buy=True)
+                elif invest_amount > previous_amount:
+                    delta = invest_amount - previous_amount
+                    self.strategy.update_market_investment(code, delta, is_buy=True)
+                    self.strategy.update_sector_investment(code, delta, is_buy=True)
+                elif invest_amount < previous_amount:
+                    delta = previous_amount - invest_amount
+                    self.strategy.update_market_investment(code, delta, is_buy=False, cost_amount=delta)
+                    self.strategy.update_sector_investment(code, delta, is_buy=False, cost_amount=delta)
+
+            diag_touch = getattr(self, "_diag_touch", None)
+            if callable(diag_touch):
+                diag_touch(code, sync_status=status, retry_count=0, last_sync_error="")
+            if hasattr(self, "_diagnostics_dirty_codes") and isinstance(self._diagnostics_dirty_codes, set):
+                self._diagnostics_dirty_codes.add(code)
+
+        return sorted(next_external.keys())
+
+    def _apply_account_position_snapshot(
+        self,
+        codes: List[str],
+        positions: List[Any],
+        *,
+        reset_tracking: bool = False,
+        rebuild_strategy: bool = False,
+        log_external: bool = False,
+    ) -> None:
+        if reset_tracking and hasattr(self, "strategy"):
+            self.strategy.reset_tracking()
+
+        positions_by_code = {str(getattr(pos, "code", "") or "").strip(): pos for pos in positions or []}
+        now = datetime.datetime.now()
+
+        for code in codes:
+            info = self.universe.get(code, {})
+            matched = positions_by_code.get(code)
+            held = max(0, int(getattr(matched, "quantity", 0) or 0)) if matched else 0
+            buy_price = max(0, int(getattr(matched, "buy_price", 0) or 0)) if matched else 0
+            invest_amount = max(0, int(getattr(matched, "buy_amount", 0) or 0)) if matched else 0
+            available_qty = max(
+                0,
+                int(getattr(matched, "available_qty", getattr(matched, "quantity", 0)) or 0),
+            ) if matched else 0
+
+            info["held"] = held
+            info["available_qty"] = available_qty
+            info["buy_price"] = buy_price
+            info["invest_amount"] = invest_amount
+
+            pending = getattr(self, "_pending_order_state", {}).get(code, {})
+            if held > 0:
+                info["status"] = "holding"
+                if self._pending_is_active_safe(pending):
+                    side = str(pending.get("side", "") or "").lower()
+                    if side == "sell":
+                        info["status"] = "sell_submitted"
+                    elif side == "buy":
+                        info["status"] = "buy_submitted"
+                info["buy_time"] = info.get("buy_time") or now
+                info["cooldown_until"] = None
+                info["entry_origin"] = str(info.get("entry_origin") or "session_inbound")
+                info["time_stop_eligible"] = bool(info.get("time_stop_eligible", False))
+                info["sync_failed_reason"] = ""
+                if rebuild_strategy and hasattr(self, "strategy") and invest_amount > 0:
+                    self.strategy.update_market_investment(code, invest_amount, is_buy=True)
+                    self.strategy.update_sector_investment(code, invest_amount, is_buy=True)
+            else:
+                info["status"] = "watch"
+                if self._pending_is_active_safe(pending) and str(pending.get("side", "") or "").lower() == "buy":
+                    info["status"] = "buy_submitted"
+                info["buy_time"] = None
+                info["max_profit_rate"] = 0
+                info["partial_profit_levels"] = set()
+                info["entry_origin"] = "watch"
+                info["time_stop_eligible"] = True
+                info["sync_failed_reason"] = ""
+
+            if hasattr(self, "_sync_failed_codes"):
+                self._sync_failed_codes.discard(code)
+            diag_touch = getattr(self, "_diag_touch", None)
+            if callable(diag_touch):
+                diag_touch(code, sync_status=str(info.get("status", "")), retry_count=0, last_sync_error="")
+
+        external_codes = self._sync_external_positions_from_account_positions(
+            positions,
+            rebuild_strategy=rebuild_strategy,
+            now_dt=now,
+        )
+        if log_external and external_codes:
+            preview = ", ".join(external_codes[:5])
+            suffix = " ..." if len(external_codes) > 5 else ""
+            self.log(f"External holdings tracked in read-only mode: {preview}{suffix}")
+
+        recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+        if callable(recompute_count):
+            recompute_count()
+        else:
+            external_positions = self._external_positions_map()
+            manual_pending_state = getattr(self, "_manual_pending_state", {})
+            held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
+            held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
+            pending_buy = sum(
+                1
+                for c, state in getattr(self, "_pending_order_state", {}).items()
+                if self._pending_is_active_safe(state)
+                and state.get("side") == "buy"
+                and int(self._get_tracked_position_info(c).get("held", 0)) == 0
+            )
+            manual_pending_buy = sum(
+                1
+                for c, state in manual_pending_state.items()
+                if self._pending_is_active_safe(state)
+                and state.get("side") == "buy"
+                and int(self._get_tracked_position_info(c).get("held", 0)) == 0
+            )
+            self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
+        self._dirty_codes.update(codes)
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+
+    def _set_trading_stopped_state(self):
+        self.is_running = False
+        self._trading_start_inflight = False
+        self._scheduled_start_requested = False
+        if hasattr(self, "btn_start"):
+            self.btn_start.setEnabled(True)
+        if hasattr(self, "btn_stop"):
+            self.btn_stop.setEnabled(False)
+        if hasattr(self, "btn_emergency"):
+            self.btn_emergency.setEnabled(False)
+        self.schedule_started = False
+        self._position_sync_pending.clear()
+        if hasattr(self, "_position_sync_batch"):
+            self._position_sync_batch.clear()
+        if hasattr(self, "_position_sync_scheduled"):
+            self._position_sync_scheduled = False
+        if hasattr(self, "_position_sync_retry_count"):
+            self._position_sync_retry_count = 0
+        self._last_time_strategy_phase = None
+        self._stop_external_refresh_loop()
+        stop_market_intel = getattr(self, "_stop_market_intelligence_loop", None)
+        if callable(stop_market_intel):
+            stop_market_intel()
+        self._stop_index_feed()
+        self._global_risk_mode = "normal"
+        self._global_risk_until = None
+        self._order_health_mode = "normal"
+        self._order_health_until = None
+        if hasattr(self, "_guard_reason_by_code") and isinstance(self._guard_reason_by_code, dict):
+            self._guard_reason_by_code.clear()
+
+    def _disconnect_realtime_clients(self):
+        try:
+            if self.ws_client:
+                self.ws_client.unsubscribe_all()
+                self.ws_client.disconnect()
+        except Exception as exc:
+            self.log(f"WebSocket 종료 중 오류: {exc}")
+
+    def _collect_liquidation_targets(self) -> List[Tuple[str, Dict[str, Any]]]:
+        targets: List[Tuple[str, Dict[str, Any]]] = []
+        for code, info in getattr(self, "universe", {}).items():
+            if int(info.get("held", 0) or 0) > 0:
+                targets.append((code, info))
+        for code, info in self._external_positions_map().items():
+            if int(info.get("held", 0) or 0) > 0:
+                targets.append((code, info))
+        return targets
+
+    def _force_account_position_sync(self, reason: str = "") -> bool:
+        rest_client = getattr(self, "rest_client", None)
+        current_account = str(getattr(self, "current_account", "") or "")
+        if not (rest_client and current_account):
+            return False
+        try:
+            positions = rest_client.get_positions(current_account)
+        except Exception as exc:
+            self._log_once(f"force_sync_error:{reason}", f"[account-sync] refresh failed ({reason}): {exc}")
+            return False
+        if positions is None:
+            return False
+        self._apply_account_position_snapshot(
+            list(getattr(self, "universe", {}).keys()),
+            positions,
+            reset_tracking=False,
+            rebuild_strategy=False,
+            log_external=False,
+        )
+        return True
+
+    def _collect_active_order_cleanup_targets(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        live_targets: List[Dict[str, Any]] = []
+        placeholders: List[Dict[str, Any]] = []
+
+        for code, pending in list(getattr(self, "_pending_order_state", {}).items()):
+            if not self._pending_is_active_safe(pending):
+                continue
+            side = str(pending.get("side", "") or "").lower()
+            children = self._pending_children_safe(pending)
+            if children:
+                for index, child in enumerate(children, start=1):
+                    remaining_qty = max(0, int(child.get("remaining_qty", 0) or 0))
+                    if remaining_qty <= 0:
+                        continue
+                    target = {
+                        "source": "pending_child",
+                        "code": code,
+                        "side": side,
+                        "order_no": str(child.get("order_no", "") or "").strip(),
+                        "quantity": remaining_qty,
+                        "child_index": index,
+                    }
+                    if target["order_no"]:
+                        live_targets.append(target)
+                    else:
+                        placeholders.append(target)
+                continue
+
+            remaining_qty = max(0, int(pending.get("remaining_qty", 0) or 0))
+            if remaining_qty <= 0:
+                continue
+            target = {
+                "source": "pending",
+                "code": code,
+                "side": side,
+                "order_no": str(pending.get("order_no", "") or "").strip(),
+                "quantity": remaining_qty,
+            }
+            if target["order_no"]:
+                live_targets.append(target)
+            else:
+                placeholders.append(target)
+
+        for code, pending in list(self._manual_pending_entries().items()):
+            if not isinstance(pending, dict):
+                continue
+            side = str(pending.get("side", "") or "").lower()
+            remaining_qty = max(0, int(pending.get("remaining_qty", 0) or 0))
+            reserved_cash = max(0, int(pending.get("reserved_cash", 0) or 0))
+            order_no = str(pending.get("order_no", "") or "").strip()
+            if order_no and remaining_qty > 0:
+                live_targets.append(
+                    {
+                        "source": "manual",
+                        "code": code,
+                        "side": side,
+                        "order_no": order_no,
+                        "quantity": remaining_qty,
+                    }
+                )
+            elif remaining_qty > 0 or reserved_cash > 0 or self._pending_is_active_safe(pending):
+                placeholders.append(
+                    {
+                        "source": "manual",
+                        "code": code,
+                        "side": side,
+                        "order_no": order_no,
+                        "quantity": remaining_qty,
+                    }
+                )
+
+        return live_targets, placeholders
+
+    def _cleanup_target_is_active(self, target: Dict[str, Any]) -> bool:
+        source = str(target.get("source", "") or "")
+        code = str(target.get("code", "") or "")
+        order_no = str(target.get("order_no", "") or "").strip()
+        if source == "manual":
+            pending = self._manual_pending_entries().get(code)
+            if not isinstance(pending, dict) or not self._pending_is_active_safe(pending):
+                return False
+            if order_no and str(pending.get("order_no", "") or "").strip() not in {"", order_no}:
+                return False
+            return max(0, int(pending.get("remaining_qty", 0) or 0)) > 0
+
+        pending = getattr(self, "_pending_order_state", {}).get(code)
+        if not isinstance(pending, dict) or not self._pending_is_active_safe(pending):
+            return False
+        if source == "pending_child":
+            child_index = max(1, int(target.get("child_index", 0) or 0)) - 1
+            children = self._pending_children_safe(pending)
+            if child_index >= len(children):
+                return False
+            child = children[child_index]
+            child_order_no = str(child.get("order_no", "") or "").strip()
+            if order_no and child_order_no not in {"", order_no}:
+                return False
+            state = str(child.get("state", "submitted") or "submitted").lower()
+            active_states = set(getattr(self, "ACTIVE_PENDING_STATES", {"submitted", "partial"}))
+            return state in active_states and max(0, int(child.get("remaining_qty", 0) or 0)) > 0
+
+        pending_order_no = str(pending.get("order_no", "") or "").strip()
+        if order_no and pending_order_no not in {"", order_no}:
+            return False
+        return max(0, int(pending.get("remaining_qty", 0) or 0)) > 0
+
+    def _force_finalize_cleanup_target(self, target: Dict[str, Any], final_state: str, reason: str = ""):
+        source = str(target.get("source", "") or "")
+        code = str(target.get("code", "") or "")
+        side = str(target.get("side", "") or "").lower()
+        order_no = str(target.get("order_no", "") or "").strip()
+        reason_text = reason or final_state
+        now = datetime.datetime.now()
+
+        if source == "manual":
+            pending = self._manual_pending_entries().get(code, {})
+            if side == "buy":
+                refund_amount = max(0, int(pending.get("reserved_cash", 0) or 0))
+                if refund_amount > 0:
+                    self._release_reserved_cash_amount_safe(
+                        code,
+                        refund_amount,
+                        reason=f"MANUAL_CLEANUP_{reason_text}",
+                        refund=True,
+                    )
+            self._clear_manual_pending_order(code)
+        elif source == "pending_child":
+            pending = getattr(self, "_pending_order_state", {}).get(code, {})
+            children = self._pending_children_safe(pending)
+            child_index = max(1, int(target.get("child_index", 0) or 0)) - 1
+            if child_index < len(children):
+                child = children[child_index]
+                child_order_no = str(child.get("order_no", "") or "").strip()
+                if order_no and child_order_no not in {"", order_no}:
+                    child = None
+                if child is not None:
+                    refund_amount = max(0, int(child.get("reserved_cash", 0) or 0)) if side == "buy" else 0
+                    if refund_amount > 0:
+                        self._release_reserved_cash_amount_safe(
+                            code,
+                            refund_amount,
+                            reason=f"PENDING_CHILD_CLEANUP_{reason_text}",
+                            refund=True,
+                        )
+                    child["state"] = final_state
+                    child["remaining_qty"] = 0
+                    child["reserved_cash"] = 0
+                    child["updated_at"] = now
+                    aggregate_state, remaining_qty = self._refresh_pending_order_aggregate(code)
+                    active_states = set(getattr(self, "ACTIVE_PENDING_STATES", {"submitted", "partial"}))
+                    if remaining_qty <= 0 or aggregate_state not in active_states:
+                        clear_state = "filled" if aggregate_state == "filled" else final_state
+                        self._clear_pending_order(code, final_state=clear_state)
+        else:
+            if side == "buy":
+                self._release_reserved_cash_safe(
+                    code,
+                    reason=f"PENDING_CLEANUP_{reason_text}",
+                    refund=True,
+                )
+            self._mark_pending_state(code, final_state)
+            self._clear_pending_order(code, final_state=final_state)
+
+        info = self._get_tracked_position_info(code)
+        if info:
+            pending = getattr(self, "_pending_order_state", {}).get(code, {})
+            kind = self._tracked_position_kind(code)
+            if self._pending_is_active_safe(pending):
+                side_text = str(pending.get("side", "") or "").lower()
+                if side_text == "sell":
+                    info["status"] = "sell_submitted"
+                elif side_text == "buy":
+                    info["status"] = "buy_submitted"
+            elif int(info.get("held", 0) or 0) > 0:
+                info["status"] = "external_holding" if kind == "external" else "holding"
+            elif kind == "universe":
+                info["status"] = "watch"
+
+            diag_touch = getattr(self, "_diag_touch", None)
+            if callable(diag_touch):
+                diag_touch(code, sync_status=str(info.get("status", "")), retry_count=0, last_sync_error="")
+            if kind == "universe":
+                self._dirty_codes.add(code)
+            elif hasattr(self, "_diagnostics_dirty_codes") and isinstance(self._diagnostics_dirty_codes, set):
+                self._diagnostics_dirty_codes.add(code)
+
+    def _cleanup_active_orders(self, reason: str, timeout_sec: float = 8.0) -> Dict[str, Any]:
+        live_targets, placeholders = self._collect_active_order_cleanup_targets()
+        if not live_targets and not placeholders:
+            self._force_account_position_sync(reason=f"{reason}_noop")
+            return {"live_targets": [], "placeholders": [], "unresolved_codes": []}
+
+        if hasattr(self, "log"):
+            self.log(
+                f"[order-cleanup] {reason}: live={len(live_targets)} placeholder={len(placeholders)}"
+            )
+
+        client = getattr(self, "rest_client", None)
+        account = str(getattr(self, "current_account", "") or "")
+        for target in live_targets:
+            order_no = str(target.get("order_no", "") or "").strip()
+            quantity = max(0, int(target.get("quantity", 0) or 0))
+            success = False
+            message = ""
+            if client is not None and account and order_no and quantity > 0:
+                try:
+                    result = client.cancel_order(account, order_no, target["code"], quantity)
+                    success = bool(getattr(result, "success", False))
+                    message = str(getattr(result, "message", "") or "")
+                except Exception as exc:
+                    message = str(exc)
+            else:
+                message = "API/account not ready"
+            target["cancel_success"] = success
+            target["cancel_message"] = message
+            if not success and hasattr(self, "log"):
+                self.log(
+                    f"[order-cleanup] cancel request failed ({reason}) {target['code']} {order_no}: {message}"
+                )
+
+        unresolved = list(live_targets)
+        deadline = time.monotonic() + max(0.1, float(timeout_sec or 0.0))
+        while unresolved and time.monotonic() < deadline:
+            self._force_account_position_sync(reason=f"{reason}_poll")
+            unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
+            if not unresolved:
+                break
+            app = QCoreApplication.instance()
+            if app is not None:
+                app.processEvents()
+            time.sleep(0.2)
+
+        self._force_account_position_sync(reason=f"{reason}_final")
+        unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
+
+        for target in placeholders:
+            self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+
+        for target in live_targets:
+            if not self._cleanup_target_is_active(target):
+                continue
+            final_state = "cancelled" if bool(target.get("cancel_success")) else "sync_failed"
+            self._force_finalize_cleanup_target(target, final_state=final_state, reason=reason)
+
+        unresolved_codes = sorted({str(target.get("code", "") or "") for target in unresolved if target.get("code")})
+        if unresolved_codes and hasattr(self, "log"):
+            preview = ", ".join(unresolved_codes[:5])
+            suffix = " ..." if len(unresolved_codes) > 5 else ""
+            self.log(f"[order-cleanup] unresolved before local finalization ({reason}): {preview}{suffix}")
+
+        self._force_account_position_sync(reason=f"{reason}_post_finalize")
+        recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+        if callable(recompute_count):
+            recompute_count()
+        if not hasattr(self, "_ui_flush_timer"):
+            self.sig_update_table.emit()
+        return {
+            "live_targets": live_targets,
+            "placeholders": placeholders,
+            "unresolved_codes": unresolved_codes,
+        }
 
     def _set_global_risk_mode(self, mode: str, until: Optional[datetime.datetime], reason: str = ""):
         current_mode = str(getattr(self, "_global_risk_mode", "normal"))
@@ -609,66 +1270,13 @@ class TradingSessionMixin(TraderMixinBase):
         if positions is None:
             return False, "계좌 포지션 조회 실패: 응답이 비어 있습니다."
 
-        if hasattr(self, "strategy"):
-            self.strategy.reset_tracking()
-
-        positions_by_code = {getattr(pos, "code", ""): pos for pos in positions or []}
-        universe_codes = set(codes)
-        now = datetime.datetime.now()
-
-        for code in codes:
-            info = self.universe.get(code, {})
-            matched = positions_by_code.get(code)
-            if matched:
-                held = max(0, int(getattr(matched, "quantity", 0)))
-                buy_price = int(getattr(matched, "buy_price", 0))
-                invest_amount = int(getattr(matched, "buy_amount", 0))
-            else:
-                held = 0
-                buy_price = 0
-                invest_amount = 0
-
-            info["held"] = held
-            info["buy_price"] = buy_price
-            info["invest_amount"] = invest_amount
-
-            if held > 0:
-                info["status"] = "holding"
-                info["buy_time"] = now
-                info["cooldown_until"] = None
-                info["entry_origin"] = "session_inbound"
-                info["time_stop_eligible"] = False
-                info["sync_failed_reason"] = ""
-                if hasattr(self, "strategy") and invest_amount > 0:
-                    self.strategy.update_market_investment(code, invest_amount, is_buy=True)
-                    self.strategy.update_sector_investment(code, invest_amount, is_buy=True)
-            else:
-                info["status"] = "watch"
-                info["buy_time"] = None
-                info["max_profit_rate"] = 0
-                info["partial_profit_levels"] = set()
-                info["entry_origin"] = "watch"
-                info["time_stop_eligible"] = True
-                info["sync_failed_reason"] = ""
-
-            if hasattr(self, "_sync_failed_codes"):
-                self._sync_failed_codes.discard(code)
-            diag_touch = getattr(self, "_diag_touch", None)
-            if callable(diag_touch):
-                diag_touch(code, sync_status=str(info.get("status", "")), retry_count=0, last_sync_error="")
-
-        external_codes = sorted(c for c in positions_by_code.keys() if c and c not in universe_codes)
-        if external_codes:
-            preview = ", ".join(external_codes[:5])
-            suffix = " ..." if len(external_codes) > 5 else ""
-            self.log(f"유니버스 외 보유 종목 감지(자동청산 제외): {preview}{suffix}")
-
-        self._holding_or_pending_count = sum(
-            1 for code in codes if int(self.universe.get(code, {}).get("held", 0)) > 0
+        self._apply_account_position_snapshot(
+            codes,
+            positions,
+            reset_tracking=True,
+            rebuild_strategy=True,
+            log_external=True,
         )
-        self._dirty_codes.update(codes)
-        if not hasattr(self, "_ui_flush_timer"):
-            self.sig_update_table.emit()
         return True, ""
 
     def start_trading(self, from_schedule: bool = False) -> bool:
@@ -896,49 +1504,19 @@ class TradingSessionMixin(TraderMixinBase):
 
     def stop_trading(self):
         was_running = self.is_running
-        self.is_running = False
-        self._trading_start_inflight = False
-        self._scheduled_start_requested = False
-        self.btn_start.setEnabled(True)
-        self.btn_stop.setEnabled(False)
-        self.btn_emergency.setEnabled(False)
-        self.schedule_started = False
-        self._position_sync_pending.clear()
-        if hasattr(self, "_position_sync_batch"):
-            self._position_sync_batch.clear()
-        if hasattr(self, "_position_sync_scheduled"):
-            self._position_sync_scheduled = False
-        if hasattr(self, "_position_sync_retry_count"):
-            self._position_sync_retry_count = 0
+        self._set_trading_stopped_state()
+        self._cleanup_active_orders("stop_trading")
         self._pending_order_state.clear()
         if hasattr(self, "_manual_pending_state"):
             self._manual_pending_state.clear()
         self._last_exec_event.clear()
-        self._last_time_strategy_phase = None
-        self._stop_external_refresh_loop()
-        stop_market_intel = getattr(self, "_stop_market_intelligence_loop", None)
-        if callable(stop_market_intel):
-            stop_market_intel()
-        self._stop_index_feed()
-        self._global_risk_mode = "normal"
-        self._global_risk_until = None
-        self._order_health_mode = "normal"
-        self._order_health_until = None
-        if hasattr(self, "_guard_reason_by_code") and isinstance(self._guard_reason_by_code, dict):
-            self._guard_reason_by_code.clear()
         release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
         if callable(release_all_reserved):
             released = release_all_reserved(reason="STOP_TRADING")
             released_total = int(released) if isinstance(released, (int, float, str)) else 0
             if released_total > 0 and hasattr(self, "log"):
                 self.log(f"Reserved cash reconciled on stop: +{released_total:,}")
-
-        try:
-            if self.ws_client:
-                self.ws_client.unsubscribe_all()
-                self.ws_client.disconnect()
-        except Exception as exc:
-            self.log(f"WebSocket 종료 중 오류: {exc}")
+        self._disconnect_realtime_clients()
 
         if was_running:
             self.log("매매 중지")
@@ -948,7 +1526,7 @@ class TradingSessionMixin(TraderMixinBase):
     def _time_liquidate(self):
         """장마감 시간 청산."""
         liquidated_count = 0
-        for code, info in self.universe.items():
+        for code, info in self._collect_liquidation_targets():
             held = info.get("held", 0)
             if held > 0:
                 name = info.get("name", code)
@@ -1178,7 +1756,8 @@ class TradingSessionMixin(TraderMixinBase):
             self.log("API 연결 필요")
             return
 
-        holding_count = sum(1 for info in self.universe.values() if info.get("held", 0) > 0)
+        holding_targets = self._collect_liquidation_targets()
+        holding_count = len(holding_targets)
         if holding_count == 0:
             QMessageBox.information(self, "알림", "청산할 보유 종목이 없습니다.")
             return
@@ -1193,9 +1772,12 @@ class TradingSessionMixin(TraderMixinBase):
         )
 
         if confirm == QMessageBox.StandardButton.Yes:
+            self._set_trading_stopped_state()
+            self._cleanup_active_orders("emergency_liquidate")
+            holding_targets = self._collect_liquidation_targets()
             self.log("긴급 전체 청산 시작")
             liquidated_count = 0
-            for code, info in self.universe.items():
+            for code, info in holding_targets:
                 held = info.get("held", 0)
                 if held > 0:
                     name = info.get("name", code)

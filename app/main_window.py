@@ -61,6 +61,7 @@ class KiwoomProTrader(
         
         # 상태 변수
         self.universe: Dict[str, Dict[str, Any]] = {}
+        self.external_positions: Dict[str, Dict[str, Any]] = {}
         self.deposit = 0
         self.initial_deposit = 0
         self.is_running = False
@@ -551,25 +552,37 @@ class KiwoomProTrader(
         if not hasattr(self, "diagnostic_table"):
             return
 
-        if not self._diagnostics_dirty_codes and self.diagnostic_table.rowCount() == len(self.universe):
+        external_positions = getattr(self, "external_positions", {})
+        codes = list(self.universe.keys())
+        if isinstance(external_positions, dict):
+            codes.extend(code for code in sorted(external_positions.keys()) if code not in self.universe)
+
+        if not self._diagnostics_dirty_codes and self.diagnostic_table.rowCount() == len(codes):
             has_external_clock = any(
                 isinstance(info.get("external_updated_at"), datetime.datetime)
                 for info in self.universe.values()
             )
-            if not has_external_clock:
+            if isinstance(external_positions, dict):
+                has_external_clock = has_external_clock or any(
+                    isinstance(info.get("external_updated_at"), datetime.datetime)
+                    for info in external_positions.values()
+                )
+            if not has_external_clock and not external_positions:
                 return
 
-        codes = list(self.universe.keys())
         self.diagnostic_table.setUpdatesEnabled(False)
         try:
             self.diagnostic_table.setRowCount(len(codes))
             row_to_code: Dict[int, str] = {}
             for row, code in enumerate(codes):
                 row_to_code[row] = code
-                info = self.universe.get(code, {})
+                tracked_getter = getattr(self, "_get_tracked_position_info", None)
+                info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
                 market_intel = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
                 diag = self._diagnostics_by_code.get(code, {})
                 pending = self._pending_order_state.get(code, {})
+                if not pending:
+                    pending = getattr(self, "_manual_pending_state", {}).get(code, {})
                 sync_status = str(info.get("status", ""))
                 if sync_status == "sync_failed":
                     sync_status = "sync_failed"
@@ -717,15 +730,20 @@ class KiwoomProTrader(
             panel.setPlainText("선택된 종목이 없습니다.")
             return
 
-        info = self.universe.get(code, {})
+        tracked_getter = getattr(self, "_get_tracked_position_info", None)
+        info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
         market_intel = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
         pending = self._pending_order_state.get(code, {})
+        if not pending:
+            pending = getattr(self, "_manual_pending_state", {}).get(code, {})
         detail = [
             f"코드: {code}",
             f"종목명: {info.get('name', code)}",
             f"상태: {display_status(info.get('status', ''))}",
             f"동기화 실패 사유: {info.get('sync_failed_reason', '')}",
             f"진입 경로: {info.get('entry_origin', '')}",
+            f"읽기 전용: {bool(info.get('read_only', False))}",
+            f"가용 수량: {info.get('available_qty', info.get('held', ''))}",
             f"시간 청산 가능 여부: {bool(info.get('time_stop_eligible', True))}",
             f"대기 주문 상태: {display_status(pending.get('state', ''))}",
             f"대기 주문 방향: {pending.get('side', '')}",

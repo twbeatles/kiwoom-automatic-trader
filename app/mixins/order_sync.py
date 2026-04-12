@@ -544,10 +544,26 @@ class OrderSyncMixin(TraderMixinBase):
                         sync_status=self.universe[code]["status"],
                         retry_count=0,
                     )
+                else:
+                    external_positions = getattr(self, "external_positions", {})
+                    if isinstance(external_positions, dict) and code in external_positions:
+                        held = int(external_positions[code].get("held", 0))
+                        if pending_side == "buy" and self._pending_is_active(self._pending_order_state.get(code, {})):
+                            external_positions[code]["status"] = "buy_submitted"
+                        elif pending_side == "sell" and self._pending_is_active(self._pending_order_state.get(code, {})):
+                            external_positions[code]["status"] = "sell_submitted"
+                        else:
+                            external_positions[code]["status"] = "external_holding" if held > 0 else "watch"
+                        self._diag_touch_safe(
+                            code,
+                            sync_status=external_positions[code]["status"],
+                            retry_count=0,
+                        )
                 self._dirty_codes.add(code)
             if code and code not in self.universe and code in self._manual_pending_map():
                 manual_pending = self._manual_pending_map().get(code, {})
                 manual_side = str(manual_pending.get("side", ""))
+                external_positions = getattr(self, "external_positions", {})
                 if cancel_like:
                     if manual_side == "buy":
                         refund = int(manual_pending.get("reserved_cash", 0) or 0)
@@ -559,6 +575,9 @@ class OrderSyncMixin(TraderMixinBase):
                                 refund=True,
                             )
                     self._clear_manual_pending_order(code)
+                    if isinstance(external_positions, dict) and code in external_positions:
+                        external_positions[code]["status"] = "external_holding"
+                        self._diag_touch_safe(code, sync_status="external_holding", retry_count=0)
                 elif exec_qty > 0 or fill_like:
                     if manual_side == "buy":
                         state_text, remaining_qty, reserved_consumed = self._apply_manual_pending_fill(code, exec_qty)
@@ -578,6 +597,9 @@ class OrderSyncMixin(TraderMixinBase):
                                     refund=False,
                                 )
                             self._clear_manual_pending_order(code)
+                            if isinstance(external_positions, dict) and code in external_positions:
+                                external_positions[code]["status"] = "external_holding"
+                                self._diag_touch_safe(code, sync_status="external_holding", retry_count=0)
                         elif state_text == "filled" or remaining_qty <= 0:
                             remaining_reserved = int(manual_pending.get("reserved_cash", 0) or 0)
                             if remaining_reserved > 0:
@@ -588,8 +610,14 @@ class OrderSyncMixin(TraderMixinBase):
                                     refund=False,
                                 )
                             self._clear_manual_pending_order(code)
+                            if isinstance(external_positions, dict) and code in external_positions:
+                                external_positions[code]["status"] = "external_holding"
+                                self._diag_touch_safe(code, sync_status="external_holding", retry_count=0)
                     else:
                         self._clear_manual_pending_order(code)
+                        if isinstance(external_positions, dict) and code in external_positions:
+                            external_positions[code]["status"] = "external_holding"
+                            self._diag_touch_safe(code, sync_status="external_holding", retry_count=0)
         except Exception as e:
             self.logger.error(f"주문 체결 처리 오류: {e}")
 
@@ -718,7 +746,13 @@ class OrderSyncMixin(TraderMixinBase):
 
     def _sync_position_from_account(self, code: str):
         """Sync positions from account API with debounce/batch."""
-        if code and code in self.universe:
+        external_positions = getattr(self, "external_positions", {})
+        manual_pending = self._manual_pending_map()
+        if code and (
+            code in self.universe
+            or (isinstance(external_positions, dict) and code in external_positions)
+            or code in manual_pending
+        ):
             self._position_sync_batch.add(code)
 
         if not (self.rest_client and self.current_account):
@@ -768,6 +802,9 @@ class OrderSyncMixin(TraderMixinBase):
         positions_by_code = {getattr(pos, "code", ""): pos for pos in positions or []}
         now = datetime.datetime.now()
         self._update_order_health_mode(now)
+        sync_external_positions = getattr(self, "_sync_external_positions_from_account_positions", None)
+        if callable(sync_external_positions):
+            sync_external_positions(list(positions or []), rebuild_strategy=False, now_dt=now)
 
         for code_item in target_codes:
             info = self.universe.get(code_item)
@@ -877,6 +914,10 @@ class OrderSyncMixin(TraderMixinBase):
                     self._clear_pending_order(code_item, final_state="filled")
 
             info["held"] = new_held
+            info["available_qty"] = max(
+                0,
+                int(getattr(matched, "available_qty", getattr(matched, "quantity", 0)) or 0),
+            ) if matched else 0
             info["buy_price"] = new_buy_price
             info["invest_amount"] = new_invest_amount
 
@@ -926,15 +967,38 @@ class OrderSyncMixin(TraderMixinBase):
         if callable(recompute_count):
             recompute_count()
         else:
+            external_positions = getattr(self, "external_positions", {})
+            manual_pending_state = getattr(self, "_manual_pending_state", {})
             held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
+            if isinstance(external_positions, dict):
+                held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
             pending_buy = sum(
                 1
                 for c, state in self._pending_order_state.items()
                 if self._pending_is_active(state)
                 and state.get("side") == "buy"
-                and int(self.universe.get(c, {}).get("held", 0)) == 0
+                and int(
+                    (
+                        self.universe.get(c, {})
+                        if c in self.universe
+                        else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                    ).get("held", 0)
+                ) == 0
             )
-            self._holding_or_pending_count = held_count + pending_buy
+            manual_pending_buy = sum(
+                1
+                for c, state in manual_pending_state.items()
+                if self._pending_is_active(state)
+                and state.get("side") == "buy"
+                and int(
+                    (
+                        self.universe.get(c, {})
+                        if c in self.universe
+                        else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                    ).get("held", 0)
+                ) == 0
+            )
+            self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
 
         if self._position_sync_batch and not self._position_sync_scheduled:
             self._position_sync_scheduled = True
@@ -974,11 +1038,24 @@ class OrderSyncMixin(TraderMixinBase):
             for code_item in dropped_codes:
                 pending = getattr(self, "_pending_order_state", {}).get(code_item, {})
                 side = str(pending.get("side", ""))
+                manual_pending = self._manual_pending_map().get(code_item, {})
                 if hasattr(self, "_pending_order_state"):
                     self._mark_pending_state(code_item, "sync_failed")
                     self._clear_pending_order(code_item, final_state="sync_failed")
                 if side == "buy":
                     self._release_reserved_cash_safe(code_item, reason="SYNC_FAILED", refund=True)
+                manual_side = str(manual_pending.get("side", ""))
+                if manual_side == "buy":
+                    refund_amount = int(manual_pending.get("reserved_cash", 0) or 0)
+                    if refund_amount > 0:
+                        self._release_reserved_cash_amount_safe(
+                            code_item,
+                            refund_amount,
+                            reason="MANUAL_SYNC_FAILED",
+                            refund=True,
+                        )
+                if manual_pending:
+                    self._clear_manual_pending_order(code_item)
                 info = getattr(self, "universe", {}).get(code_item)
                 if info is None:
                     continue
@@ -1009,16 +1086,39 @@ class OrderSyncMixin(TraderMixinBase):
                 recompute_count()
             else:
                 universe = getattr(self, "universe", {})
+                external_positions = getattr(self, "external_positions", {})
                 pending_state = getattr(self, "_pending_order_state", {})
+                manual_pending_state = getattr(self, "_manual_pending_state", {})
                 held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
+                if isinstance(external_positions, dict):
+                    held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
                 pending_buy = sum(
                     1
                     for c, state in pending_state.items()
                     if self._pending_is_active(state)
                     and state.get("side") == "buy"
-                    and int(universe.get(c, {}).get("held", 0)) == 0
+                    and int(
+                        (
+                            universe.get(c, {})
+                            if c in universe
+                            else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                        ).get("held", 0)
+                    ) == 0
                 )
-                self._holding_or_pending_count = held_count + pending_buy
+                manual_pending_buy = sum(
+                    1
+                    for c, state in manual_pending_state.items()
+                    if self._pending_is_active(state)
+                    and state.get("side") == "buy"
+                    and int(
+                        (
+                            universe.get(c, {})
+                            if c in universe
+                            else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                        ).get("held", 0)
+                    ) == 0
+                )
+                self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
             if hasattr(self, "sig_update_table") and not hasattr(self, "_ui_flush_timer"):
                 self.sig_update_table.emit()
             return
