@@ -1,9 +1,12 @@
 ﻿"""UI construction mixin for KiwoomProTrader."""
 
 # pyright: reportWildcardImportFromLibrary=false
+import json
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import *
 
+from app.support.backtest_runner import backtest_result_to_dict, metric_rows, run_backtest_from_files
 from app.support.ui_text import (
     ASSET_SCOPE_CHOICES,
     BACKTEST_TIMEFRAME_CHOICES,
@@ -13,6 +16,7 @@ from app.support.ui_text import (
     STRATEGY_CHOICES,
     populate_combo,
 )
+from app.support.worker import Worker
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
 from dark_theme import DARK_STYLESHEET
@@ -43,6 +47,104 @@ class UIBuildMixin(TraderMixinBase):
         layout.addWidget(main_splitter)
         
         self._create_statusbar()
+
+    def _select_backtest_bars_file(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "백테스트 가격 CSV 선택", "", "CSV (*.csv)")
+        if filename and hasattr(self, "input_backtest_bars_path"):
+            self.input_backtest_bars_path.setText(filename)
+
+    def _select_backtest_intel_file(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "인텔리전스 JSONL 선택", "", "JSONL (*.jsonl);;JSON (*.json);;All Files (*)")
+        if filename and hasattr(self, "input_backtest_intel_path"):
+            self.input_backtest_intel_path.setText(filename)
+
+    def _backtest_config_values_from_ui(self):
+        cfg = getattr(self, "config", None)
+        values = dict(getattr(cfg, "backtest_config", {}) if cfg is not None else {})
+        if hasattr(self, "combo_backtest_timeframe"):
+            values["timeframe"] = self.combo_backtest_timeframe.currentData() or self.combo_backtest_timeframe.currentText()
+        if hasattr(self, "spin_backtest_commission"):
+            values["commission_bps"] = float(self.spin_backtest_commission.value())
+        if hasattr(self, "spin_backtest_slippage"):
+            values["slippage_bps"] = float(self.spin_backtest_slippage.value())
+        return values
+
+    def _run_backtest_from_ui(self):
+        if hasattr(self, "chk_feature_backtest") and not self.chk_feature_backtest.isChecked():
+            QMessageBox.warning(self, "경고", "백테스트 기능이 비활성화되어 있습니다.")
+            return
+        bars_path = str(self.input_backtest_bars_path.text()).strip() if hasattr(self, "input_backtest_bars_path") else ""
+        intel_path = str(self.input_backtest_intel_path.text()).strip() if hasattr(self, "input_backtest_intel_path") else ""
+        if not bars_path:
+            QMessageBox.warning(self, "경고", "백테스트 가격 CSV를 선택해주세요.")
+            return
+        if hasattr(self, "btn_run_backtest"):
+            self.btn_run_backtest.setEnabled(False)
+        if hasattr(self, "btn_save_backtest"):
+            self.btn_save_backtest.setEnabled(False)
+        if hasattr(self, "lbl_backtest_status"):
+            self.lbl_backtest_status.setText("실행 중...")
+
+        worker = Worker(
+            run_backtest_from_files,
+            bars_path,
+            intel_path or None,
+            self._backtest_config_values_from_ui(),
+        )
+        worker.signals.result.connect(self._on_backtest_result)
+        worker.signals.error.connect(self._on_backtest_error)
+        self.threadpool.start(worker)
+
+    def _on_backtest_result(self, result):
+        self._last_backtest_result = result
+        if hasattr(self, "btn_run_backtest"):
+            self.btn_run_backtest.setEnabled(True)
+        if hasattr(self, "btn_save_backtest"):
+            self.btn_save_backtest.setEnabled(True)
+        if hasattr(self, "lbl_backtest_status"):
+            self.lbl_backtest_status.setText("완료")
+        if hasattr(self, "backtest_metrics_table"):
+            rows = metric_rows(result)
+            self.backtest_metrics_table.setRowCount(len(rows))
+            for row_idx, (name, value) in enumerate(rows):
+                self.backtest_metrics_table.setItem(row_idx, 0, QTableWidgetItem(name))
+                self.backtest_metrics_table.setItem(row_idx, 1, QTableWidgetItem(value))
+        if hasattr(self, "backtest_trades_table"):
+            trades = list(getattr(result, "trades", []) or [])[-50:]
+            self.backtest_trades_table.setRowCount(len(trades))
+            for row_idx, trade in enumerate(trades):
+                values = [
+                    trade.get("ts", ""),
+                    trade.get("symbol", ""),
+                    trade.get("side", ""),
+                    f"{float(trade.get('price', 0.0) or 0.0):.2f}",
+                    f"{float(trade.get('qty', 0.0) or 0.0):.4f}",
+                ]
+                for col_idx, value in enumerate(values):
+                    self.backtest_trades_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+        if hasattr(self, "log"):
+            self.log(f"백테스트 완료: trades={len(getattr(result, 'trades', []) or [])}")
+
+    def _on_backtest_error(self, error):
+        if hasattr(self, "btn_run_backtest"):
+            self.btn_run_backtest.setEnabled(True)
+        if hasattr(self, "lbl_backtest_status"):
+            self.lbl_backtest_status.setText("실패")
+        if hasattr(self, "log"):
+            self.log(f"백테스트 실패: {error}")
+        QMessageBox.warning(self, "백테스트 실패", str(error))
+
+    def _save_backtest_result(self):
+        result = getattr(self, "_last_backtest_result", None)
+        if result is None:
+            return
+        filename, _ = QFileDialog.getSaveFileName(self, "백테스트 결과 저장", "backtest_result.json", "JSON (*.json)")
+        if not filename:
+            return
+        with open(filename, "w", encoding="utf-8") as handle:
+            json.dump(backtest_result_to_dict(result), handle, ensure_ascii=False, indent=2)
+        if hasattr(self, "log"):
+            self.log(f"백테스트 결과 저장: {filename}")
 
     def _create_dashboard(self):
         """
@@ -178,7 +280,9 @@ class UIBuildMixin(TraderMixinBase):
         tabs.addTab(self._create_advanced_tab(), "🛠 상세 설정")
         if hasattr(self, "_create_market_intelligence_settings_tab"):
             tabs.addTab(self._create_market_intelligence_settings_tab(), "🧠 인텔리전스 설정")
-        tabs.addTab(self._create_api_tab(), "🔐 API/알림")
+        api_tab = self._create_api_tab()
+        api_tab.setObjectName("api_tab")
+        tabs.addTab(api_tab, "🔐 API/알림")
         tabs.addTab(self._create_chart_tab(), "📈 차트")
         tabs.addTab(self._create_orderbook_tab(), "📋 호가")
         tabs.addTab(self._create_condition_tab(), "🔍 조건 검색")
@@ -696,13 +800,48 @@ class UIBuildMixin(TraderMixinBase):
         self.chk_feature_external_data.setChecked(bool(Config.FEATURE_FLAGS.get("enable_external_data", True)))
         g5.addWidget(self.chk_feature_external_data, 4, 3, 1, 2)
 
+        g5.addWidget(QLabel("가격 CSV:"), 5, 0)
+        self.input_backtest_bars_path = QLineEdit()
+        self.input_backtest_bars_path.setPlaceholderText("symbol,ts,open,high,low,close,volume")
+        g5.addWidget(self.input_backtest_bars_path, 5, 1, 1, 4)
+        self.btn_backtest_bars_browse = QPushButton("찾기")
+        self.btn_backtest_bars_browse.clicked.connect(self._select_backtest_bars_file)
+        g5.addWidget(self.btn_backtest_bars_browse, 5, 5)
+
+        g5.addWidget(QLabel("인텔 JSONL:"), 6, 0)
+        self.input_backtest_intel_path = QLineEdit()
+        self.input_backtest_intel_path.setPlaceholderText("선택 사항")
+        g5.addWidget(self.input_backtest_intel_path, 6, 1, 1, 4)
+        self.btn_backtest_intel_browse = QPushButton("찾기")
+        self.btn_backtest_intel_browse.clicked.connect(self._select_backtest_intel_file)
+        g5.addWidget(self.btn_backtest_intel_browse, 6, 5)
+
+        self.btn_run_backtest = QPushButton("백테스트 실행")
+        self.btn_run_backtest.clicked.connect(self._run_backtest_from_ui)
+        g5.addWidget(self.btn_run_backtest, 7, 0, 1, 2)
+        self.btn_save_backtest = QPushButton("결과 저장")
+        self.btn_save_backtest.setEnabled(False)
+        self.btn_save_backtest.clicked.connect(self._save_backtest_result)
+        g5.addWidget(self.btn_save_backtest, 7, 2, 1, 2)
+        self.lbl_backtest_status = QLabel("")
+        g5.addWidget(self.lbl_backtest_status, 7, 4, 1, 2)
+
+        self.backtest_metrics_table = QTableWidget(0, 2)
+        self.backtest_metrics_table.setHorizontalHeaderLabels(["지표", "값"])
+        self.backtest_metrics_table.setMaximumHeight(120)
+        g5.addWidget(self.backtest_metrics_table, 8, 0, 1, 6)
+
+        self.backtest_trades_table = QTableWidget(0, 5)
+        self.backtest_trades_table.setHorizontalHeaderLabels(["시각", "종목", "구분", "가격", "수량"])
+        self.backtest_trades_table.setMaximumHeight(130)
+        g5.addWidget(self.backtest_trades_table, 9, 0, 1, 6)
+
         lbl_pack_note = QLabel(
-            "포트폴리오 방식/백테스트 시간 단위/조회 기간/수수료/슬리피지는 현재 연구용 설정입니다. "
-            "설정 저장은 지원하지만 자동매매 런타임에는 직접 연결되지 않습니다."
+            "백테스트는 CSV 가격 데이터와 선택적 인텔리전스 JSONL을 사용하며 실거래 API를 호출하지 않습니다."
         )
         lbl_pack_note.setWordWrap(True)
         lbl_pack_note.setStyleSheet("color: #8b949e; font-size: 11px;")
-        g5.addWidget(lbl_pack_note, 5, 0, 1, 6)
+        g5.addWidget(lbl_pack_note, 10, 0, 1, 6)
 
         grp_v5.setLayout(g5)
         pack_layout.addWidget(grp_v5)

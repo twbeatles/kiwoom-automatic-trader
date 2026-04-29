@@ -4,9 +4,10 @@ from typing import Dict, Optional, Tuple
 
 from config import Config
 from strategies import StrategyContext
+from ._typing import StrategyManagerMixinBase
 
 
-class StrategyManagerEvaluationMixin:
+class StrategyManagerEvaluationMixin(StrategyManagerMixinBase):
     def _evaluate_with_strategy_pack(
         self,
         code: str,
@@ -68,6 +69,7 @@ class StrategyManagerEvaluationMixin:
                 "risk:news_risk_guard",
                 "risk:disclosure_event_guard",
                 "risk:macro_regime_guard",
+                "risk:intel_fresh_guard",
                 "risk:liquidity_stress_guard",
                 "risk:slippage_guard",
                 "risk:order_health_guard",
@@ -292,8 +294,8 @@ class StrategyManagerEvaluationMixin:
         conditions["news_risk_guard"] = bool(news_guard_ok)
         conditions["disclosure_event_guard"] = bool(disclosure_guard_ok)
         conditions["macro_regime_guard"] = bool(macro_guard_ok)
-        conditions["theme_heat_filter"] = bool(theme_filter_ok) if market_intel_status not in {"idle", "disabled"} else True
-        conditions["intel_fresh_guard"] = bool(intel_fresh_ok) if market_intel_status not in {"idle", "disabled"} else True
+        conditions["theme_heat_filter"] = bool(theme_filter_ok) if market_intel_status != "disabled" else True
+        conditions["intel_fresh_guard"] = bool(intel_fresh_ok) if market_intel_status != "disabled" else True
         if market_intel["enabled"] and not conditions["news_risk_guard"]:
             log_once(
                 "market_news_risk",
@@ -422,6 +424,7 @@ class StrategyManagerEvaluationMixin:
                 "news_risk_guard",
                 "disclosure_event_guard",
                 "macro_regime_guard",
+                "intel_fresh_guard",
                 "liquidity_stress_guard",
                 "slippage_guard",
                 "order_health_guard",

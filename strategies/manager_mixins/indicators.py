@@ -1,9 +1,10 @@
 from typing import Tuple
 
 from config import Config
+from ._typing import StrategyManagerMixinBase
 
 
-class StrategyManagerIndicatorMixin:
+class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
     def calculate_atr_stop_loss(self, code, multiplier=2.0) -> float:
         info = self.trader.universe.get(code, {})
         current_price = info.get("current", 0)

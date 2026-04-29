@@ -86,6 +86,20 @@ class TestMarketIntelligenceStrategyPack(unittest.TestCase):
         self.assertFalse(conditions["risk:news_risk_guard"])
         self.assertLessEqual(metrics["news_score"], -60.0)
 
+    def test_default_pack_includes_market_intelligence_guards(self):
+        trader = _DummyTrader()
+        trader.universe["005930"]["market_intel"]["news_score"] = -80.0
+        cfg = self._config()
+        cfg.strategy_pack = dict(Config.DEFAULT_STRATEGY_PACK)
+        sm = StrategyManager(trader, cfg)
+
+        passed, conditions, _metrics = sm.evaluate_buy_conditions("005930", now_ts=2000.0)
+
+        self.assertFalse(passed)
+        self.assertIn("risk:news_risk_guard", conditions)
+        self.assertIn("risk:intel_fresh_guard", conditions)
+        self.assertFalse(conditions["risk:news_risk_guard"])
+
     def test_pack_accepts_theme_and_fresh_filters_when_state_is_fresh(self):
         trader = _DummyTrader()
         trader.universe["005930"]["market_intel"]["news_score"] = 20.0

@@ -186,10 +186,13 @@ class MarketIntelligenceMixin(TraderMixinBase):
         has_empty = any(status == "ok_empty" for status in normalized)
         has_error = any(status == "error" for status in normalized)
         has_partial = any(status == "partial" for status in normalized)
+        has_missing_credentials = any(status == "disabled_by_missing_credentials" for status in normalized)
         if has_partial or (has_error and has_success):
             return "partial"
         if has_error:
             return "error"
+        if has_missing_credentials:
+            return "disabled_by_missing_credentials"
         if has_data:
             return "ok_with_data"
         if has_empty:
@@ -325,7 +328,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
                     core_error = True
             elif status == "stale":
                 any_success = True
-            elif status == "error":
+            elif status in {"error", "disabled_by_missing_credentials"}:
                 any_error = True
                 if source in core_sources:
                     core_error = True
@@ -852,7 +855,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
         block_until = state.get("dart_block_until")
         dart_blocking = isinstance(block_until, datetime.datetime) and datetime.datetime.now() < block_until
 
-        if status in {"error", "stale"}:
+        if status in {"error", "stale", "refreshing", "idle", "disabled_by_missing_credentials"}:
             policy = "block_entry"
             reason = "source_unhealthy"
         elif status == "partial" and not bool(cfg.get("source_policy", {}).get("allow_partial_for_entry", False)):
@@ -1332,7 +1335,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
                     macro_status = str(getattr(provider, "last_status", "idle") or "idle")
                     macro_error = str(getattr(provider, "last_error", "") or "")
             else:
-                macro_status = "disabled"
+                macro_status = "disabled_by_missing_credentials"
                 macro_error = "api_key_missing"
         else:
             macro_status = "disabled"
@@ -1361,19 +1364,19 @@ class MarketIntelligenceMixin(TraderMixinBase):
                 "trend_ratio": 0.0,
                 "source_meta": {
                     "news": {
-                        "status": "idle" if news_available else "disabled",
+                        "status": "idle" if news_available else ("disabled" if not news_enabled else "disabled_by_missing_credentials"),
                         "error": "" if news_available else ("provider_disabled" if not news_enabled else "api_key_missing"),
                         "updated_at": datetime.datetime.now(),
                         "count": 0,
                     },
                     "dart": {
-                        "status": "idle" if dart_available else "disabled",
+                        "status": "idle" if dart_available else ("disabled" if not dart_enabled else "disabled_by_missing_credentials"),
                         "error": "" if dart_available else ("provider_disabled" if not dart_enabled else "api_key_missing"),
                         "updated_at": datetime.datetime.now(),
                         "count": 0,
                     },
                     "datalab": {
-                        "status": "idle" if datalab_available else "disabled",
+                        "status": "idle" if datalab_available else ("disabled" if not datalab_enabled else "disabled_by_missing_credentials"),
                         "error": "" if datalab_available else ("provider_disabled" if not datalab_enabled else "api_key_missing"),
                         "updated_at": datetime.datetime.now(),
                         "value": 0.0,
@@ -1425,7 +1428,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
             elif not news_enabled:
                 _track_source("news", "disabled", "provider_disabled")
             else:
-                _track_source("news", "disabled", "api_key_missing")
+                _track_source("news", "disabled_by_missing_credentials", "api_key_missing")
             if dart_available:
                 try:
                     disclosures = dart_provider.get_recent_disclosures(code, start_date=start_date, end_date=end_date, page_count=10)
@@ -1454,7 +1457,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
             elif not dart_enabled:
                 _track_source("dart", "disabled", "provider_disabled")
             else:
-                _track_source("dart", "disabled", "api_key_missing")
+                _track_source("dart", "disabled_by_missing_credentials", "api_key_missing")
             if datalab_available:
                 ratios = trend_provider.latest_ratios(self._news_queries_for_symbol(info, code))
                 best_ratio = 0.0
@@ -1473,7 +1476,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
             elif not datalab_enabled:
                 _track_source("datalab", "disabled", "provider_disabled")
             else:
-                _track_source("datalab", "disabled", "api_key_missing")
+                _track_source("datalab", "disabled_by_missing_credentials", "api_key_missing")
             payload["codes"][code] = row
         for source_name, bucket in source_buckets.items():
             status = self._combine_source_statuses(list(bucket.get("statuses", [])))
@@ -1541,6 +1544,19 @@ class MarketIntelligenceMixin(TraderMixinBase):
             selected.extend(code for code in codes if code in active_candidates and code not in selected)
         if not selected:
             return False
+        now_dt = datetime.datetime.now()
+        for code in selected:
+            info = self._market_intel_entity(code)
+            if not info:
+                continue
+            state = self._ensure_market_intel_state(info)
+            state["status"] = "refreshing"
+            state["intel_status"] = "refreshing"
+            state["intel_error"] = str(reason or "refreshing")
+            state["updated_at"] = now_dt
+            info["external_status"] = "refreshing"
+            info["external_error"] = str(reason or "refreshing")
+            self._market_intel_dirty_codes.add(code)
         if hasattr(self, "threadpool"):
             from app.support.worker import Worker
 

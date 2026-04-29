@@ -4,6 +4,7 @@ import copy
 import json
 import re
 from pathlib import Path
+from typing import Any, Dict
 
 from PyQt6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
@@ -118,9 +119,27 @@ class DialogsProfilesMixin(TraderMixinBase):
             QMessageBox.warning(self, "경고", "지정가 주문은 1원 이상의 가격이 필요합니다.")
             return False
 
+        universe = getattr(self, "universe", {})
+        external_positions = getattr(self, "external_positions", {})
+        has_external_position = isinstance(external_positions, dict) and code in external_positions
+        if code not in universe and not has_external_position:
+            QMessageBox.warning(
+                self,
+                "경고",
+                "감시 유니버스 또는 동기화된 보유 포지션에 없는 종목은 수동 주문할 수 없습니다.",
+            )
+            return False
+
         estimated_price = self._estimate_manual_order_price(order)
         order["expected_price"] = estimated_price
         if order_type == "매수":
+            if code not in universe:
+                QMessageBox.warning(
+                    self,
+                    "경고",
+                    "감시 유니버스 밖 종목은 수동 매수할 수 없습니다.",
+                )
+                return False
             if estimated_price <= 0:
                 QMessageBox.warning(
                     self,
@@ -617,15 +636,35 @@ class DialogsProfilesMixin(TraderMixinBase):
             set_combo_value(self.combo_asset_scope, str(settings['asset_scope']))
         if 'execution_policy' in settings and hasattr(self, "combo_execution_policy"):
             set_combo_value(self.combo_execution_policy, str(settings['execution_policy']))
-        if isinstance(settings.get('strategy_pack'), dict):
+        strategy_pack_settings = settings.get('strategy_pack')
+        if isinstance(strategy_pack_settings, dict):
+            default_pack_raw = getattr(Config, "DEFAULT_STRATEGY_PACK", {})
+            default_pack: Dict[str, Any] = copy.deepcopy(default_pack_raw) if isinstance(default_pack_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_pack = merge_fn(default_pack, strategy_pack_settings)
+                strategy_pack: Dict[str, Any] = dict(merged_pack) if isinstance(merged_pack, dict) else default_pack
+            else:
+                strategy_pack = default_pack
+                strategy_pack.update(strategy_pack_settings)
             if hasattr(self, "combo_strategy_pack"):
-                set_combo_value(self.combo_strategy_pack, str(settings['strategy_pack'].get('primary_strategy', 'volatility_breakout')))
+                set_combo_value(self.combo_strategy_pack, str(strategy_pack.get('primary_strategy', 'volatility_breakout')))
             if hasattr(self, "config"):
-                self.config.strategy_pack = dict(settings['strategy_pack'])
-        if isinstance(settings.get('strategy_params'), dict) and hasattr(self, "config"):
-            self.config.strategy_params = dict(settings['strategy_params'])
-        if isinstance(settings.get('backtest_config'), dict):
-            bt = settings['backtest_config']
+                self.config.strategy_pack = dict(strategy_pack)
+        strategy_params_settings = settings.get('strategy_params')
+        if isinstance(strategy_params_settings, dict) and hasattr(self, "config"):
+            self.config.strategy_params = dict(strategy_params_settings)
+        backtest_settings = settings.get('backtest_config')
+        if isinstance(backtest_settings, dict):
+            default_bt_raw = getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})
+            default_bt: Dict[str, Any] = copy.deepcopy(default_bt_raw) if isinstance(default_bt_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_bt = merge_fn(default_bt, backtest_settings)
+                bt: Dict[str, Any] = dict(merged_bt) if isinstance(merged_bt, dict) else default_bt
+            else:
+                bt = default_bt
+                bt.update(backtest_settings)
             if hasattr(self, "combo_backtest_timeframe"):
                 set_combo_value(self.combo_backtest_timeframe, str(bt.get('timeframe', '1d')))
             if hasattr(self, "spin_backtest_lookback"):
@@ -636,8 +675,17 @@ class DialogsProfilesMixin(TraderMixinBase):
                 self.spin_backtest_slippage.setValue(float(bt.get('slippage_bps', 3.0)))
             if hasattr(self, "config"):
                 self.config.backtest_config = dict(bt)
-        if isinstance(settings.get('feature_flags'), dict):
-            flags = settings['feature_flags']
+        feature_flag_settings = settings.get('feature_flags')
+        if isinstance(feature_flag_settings, dict):
+            default_flags_raw = getattr(Config, "FEATURE_FLAGS", {})
+            default_flags: Dict[str, Any] = copy.deepcopy(default_flags_raw) if isinstance(default_flags_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_flags = merge_fn(default_flags, feature_flag_settings)
+                flags: Dict[str, Any] = dict(merged_flags) if isinstance(merged_flags, dict) else default_flags
+            else:
+                flags = default_flags
+                flags.update(feature_flag_settings)
             if hasattr(self, "chk_feature_modular_pack"):
                 self.chk_feature_modular_pack.setChecked(bool(flags.get('use_modular_strategy_pack', True)))
             if hasattr(self, "chk_feature_backtest"):
@@ -646,14 +694,17 @@ class DialogsProfilesMixin(TraderMixinBase):
                 self.chk_feature_external_data.setChecked(bool(flags.get('enable_external_data', True)))
             if hasattr(self, "config"):
                 self.config.feature_flags = dict(flags)
-        if isinstance(settings.get('market_intelligence'), dict):
-            default_mi = copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+        market_intel_settings = settings.get('market_intelligence')
+        if isinstance(market_intel_settings, dict):
+            default_mi_raw = getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})
+            default_mi: Dict[str, Any] = copy.deepcopy(default_mi_raw) if isinstance(default_mi_raw, dict) else {}
             merge_fn = getattr(self, "_deep_merge_dict", None)
             if callable(merge_fn):
-                mi = merge_fn(default_mi, settings['market_intelligence'])
+                merged_mi = merge_fn(default_mi, market_intel_settings)
+                mi: Dict[str, Any] = dict(merged_mi) if isinstance(merged_mi, dict) else default_mi
             else:
                 mi = default_mi
-                mi.update(settings['market_intelligence'])
+                mi.update(market_intel_settings)
             if hasattr(self, "config"):
                 self.config.market_intelligence = dict(mi)
             if hasattr(self, "chk_market_intel_enabled"):

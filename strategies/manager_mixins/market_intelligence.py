@@ -3,9 +3,10 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 from config import Config
+from ._typing import StrategyManagerMixinBase
 
 
-class StrategyManagerMarketIntelMixin:
+class StrategyManagerMarketIntelMixin(StrategyManagerMixinBase):
     def get_market_intel_snapshot(self, code: str, now_ts: Optional[float] = None) -> Dict[str, Any]:
         info = self.trader.universe.get(code, {})
         state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}

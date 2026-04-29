@@ -273,6 +273,64 @@ class ExecutionEngineMixin(TraderMixinBase):
             return regime_text, float(scale), 1
         return regime_text, float(scale), 0
 
+    def _market_intelligence_entry_guard(self, code: str, info: dict, now: datetime.datetime) -> tuple[bool, str]:
+        cfg = getattr(self, "config", None)
+        flags = getattr(cfg, "feature_flags", {}) if cfg is not None else {}
+        if not isinstance(flags, dict):
+            flags = {}
+        intel_cfg = getattr(cfg, "market_intelligence", {}) if cfg is not None else {}
+        if not isinstance(intel_cfg, dict):
+            intel_cfg = getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})
+        enabled = bool(flags.get("enable_external_data", True) and intel_cfg.get("enabled", True))
+        if not enabled:
+            return True, ""
+
+        state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+        if not state:
+            request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
+            if not callable(request_refresh):
+                return True, ""
+            if callable(request_refresh):
+                request_refresh([code], reason="entry_guard_missing", force=False)
+            return False, "market_intel_fresh_guard"
+
+        status = str(state.get("status", state.get("intel_status", "idle")) or "idle").lower()
+        if status == "disabled":
+            return True, ""
+
+        action_policy = str(state.get("action_policy", "allow") or "allow").lower()
+        if action_policy in {"block_entry", "force_exit"}:
+            return False, "market_intel_action_guard"
+
+        if str(state.get("dart_risk_level", "normal") or "normal").lower() == "high":
+            return False, "market_intel_dart_guard"
+
+        policy = intel_cfg.get("source_policy", {}) if isinstance(intel_cfg.get("source_policy"), dict) else {}
+        allow_partial = bool(policy.get("allow_partial_for_entry", False))
+        if status == "partial" and not allow_partial:
+            return False, "market_intel_source_guard"
+        if status in {"error", "stale", "refreshing", "idle", "disabled_by_missing_credentials"}:
+            if status in {"idle", "stale"}:
+                request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
+                if callable(request_refresh):
+                    request_refresh([code], reason=f"entry_guard_{status}", force=False)
+            return False, "market_intel_fresh_guard" if status in {"idle", "stale", "refreshing"} else "market_intel_source_guard"
+
+        updated_at = state.get("intel_updated_at", state.get("updated_at"))
+        if isinstance(updated_at, str):
+            try:
+                updated_at = datetime.datetime.fromisoformat(updated_at)
+            except ValueError:
+                updated_at = None
+        stale_sec = float(getattr(Config, "MARKET_INTEL_STALE_SEC", 180))
+        if not isinstance(updated_at, datetime.datetime) or (now.timestamp() - updated_at.timestamp()) > stale_sec:
+            request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
+            if callable(request_refresh):
+                request_refresh([code], reason="entry_guard_stale_ts", force=False)
+            return False, "market_intel_fresh_guard"
+
+        return True, ""
+
     def _can_enter_trade(self, code: str, info: dict, now: datetime.datetime) -> tuple[bool, str]:
         cfg = getattr(self, "config", None)
         if cfg is None:
@@ -288,6 +346,10 @@ class ExecutionEngineMixin(TraderMixinBase):
         sync_failed_codes = getattr(self, "_sync_failed_codes", set())
         if str(info.get("status", "")) == "sync_failed" or code in sync_failed_codes:
             return False, "sync_failed"
+
+        market_intel_ok, market_intel_reason = self._market_intelligence_entry_guard(code, info, now)
+        if not market_intel_ok:
+            return False, market_intel_reason
 
         if bool(getattr(cfg, "use_shock_guard", True)):
             if str(getattr(self, "_global_risk_mode", "normal")) == "shock":
@@ -421,7 +483,8 @@ class ExecutionEngineMixin(TraderMixinBase):
                 info["max_profit_rate"] = profit_rate
 
             defense_getter = getattr(getattr(self, "strategy", None), "get_market_position_defense_policy", None)
-            defense = defense_getter(code) if callable(defense_getter) else {}
+            defense_result = defense_getter(code) if callable(defense_getter) else {}
+            defense = defense_result if isinstance(defense_result, dict) else {}
             exit_policy = str(defense.get("exit_policy", "none") or "none")
             defense_event_id = str(
                 defense.get("last_event_id", "") or f"{code}:{exit_policy}:{datetime.date.today().isoformat()}"
@@ -669,7 +732,8 @@ class ExecutionEngineMixin(TraderMixinBase):
 
         if use_split:
             split_orders = getattr(getattr(self, "strategy", None), "get_split_orders", None)
-            planned_orders = split_orders(quantity, current_price, "buy") if callable(split_orders) else []
+            planned_result = split_orders(quantity, current_price, "buy") if callable(split_orders) else []
+            planned_orders = planned_result if isinstance(planned_result, list) else []
             child_orders = [
                 (max(0, int(qty or 0)), max(1, int(child_price or 0)))
                 for qty, child_price in planned_orders

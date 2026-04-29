@@ -50,14 +50,14 @@ class KiwoomRESTClient:
         "RANK_FLUCTUATION": "ka20002",   # 등락률상위
     }
     
-    def __init__(self, auth: KiwoomAuth):
+    def __init__(self, auth: KiwoomAuth, base_url: Optional[str] = None):
         """
         Args:
             auth: KiwoomAuth 인스턴스 (인증 관리)
         """
         self.auth = auth
         self.logger = logging.getLogger('KiwoomRESTClient')
-        self.base_url = str(getattr(auth, "base_url", self.BASE_URL) or self.BASE_URL)
+        self.base_url = str(base_url or getattr(auth, "base_url", self.BASE_URL) or self.BASE_URL).rstrip("/")
         self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
         
         # 요청 세션 설정 (재시도 로직 포함)

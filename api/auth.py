@@ -71,6 +71,7 @@ class KiwoomAuth:
     def _configure_mode(self, is_mock: bool):
         endpoints = resolve_api_endpoints(is_mock)
         self.endpoints = endpoints
+        self.mode = endpoints.mode
         self.base_url = endpoints.rest_base_url
         self.ws_url = endpoints.ws_url
         self.session_namespace = endpoints.session_namespace
@@ -113,7 +114,7 @@ class KiwoomAuth:
                 "Content-Type": "application/json"
             }
             
-            self.logger.info("토큰 발급 요청 중...")
+            self.logger.info(f"토큰 발급 요청 중... (mode={self.mode}, endpoint={self.base_url})")
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             
             if response.status_code == 200:

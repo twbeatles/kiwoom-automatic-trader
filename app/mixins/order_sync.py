@@ -826,10 +826,12 @@ class OrderSyncMixin(TraderMixinBase):
 
             if matched:
                 new_held = max(0, int(getattr(matched, "quantity", 0)))
+                new_available_qty = max(0, int(getattr(matched, "available_qty", new_held)))
                 new_buy_price = int(getattr(matched, "buy_price", 0))
                 new_invest_amount = int(getattr(matched, "buy_amount", 0))
             else:
                 new_held = 0
+                new_available_qty = 0
                 new_buy_price = 0
                 new_invest_amount = 0
 
@@ -914,10 +916,7 @@ class OrderSyncMixin(TraderMixinBase):
                     self._clear_pending_order(code_item, final_state="filled")
 
             info["held"] = new_held
-            info["available_qty"] = max(
-                0,
-                int(getattr(matched, "available_qty", getattr(matched, "quantity", 0)) or 0),
-            ) if matched else 0
+            info["available_qty"] = new_available_qty
             info["buy_price"] = new_buy_price
             info["invest_amount"] = new_invest_amount
 

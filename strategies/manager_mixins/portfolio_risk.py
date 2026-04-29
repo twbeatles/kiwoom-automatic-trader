@@ -1,7 +1,9 @@
 import datetime
 
+from ._typing import StrategyManagerMixinBase
 
-class StrategyManagerPortfolioRiskMixin:
+
+class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
     def _get_position_info(self, code):
         universe = getattr(self.trader, "universe", {})
         if code in universe:

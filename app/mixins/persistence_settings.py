@@ -103,6 +103,17 @@ class PersistenceSettingsMixin(TraderMixinBase):
             settings.setdefault("execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
             settings.setdefault("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
 
+        for key, default in (
+            ("strategy_pack", getattr(Config, "DEFAULT_STRATEGY_PACK", {})),
+            ("backtest_config", getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})),
+            ("feature_flags", getattr(Config, "FEATURE_FLAGS", {})),
+        ):
+            existing = settings.get(key, {})
+            if isinstance(existing, dict):
+                settings[key] = self._deep_merge_dict(copy.deepcopy(default), existing)
+            else:
+                settings[key] = copy.deepcopy(default)
+
         settings.setdefault(
             "daily_loss_basis",
             getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
@@ -854,13 +865,22 @@ class PersistenceSettingsMixin(TraderMixinBase):
 
             cfg = getattr(self, "config", None)
             if cfg is not None:
-                cfg.strategy_pack = dict(settings.get("strategy_pack", getattr(cfg, "strategy_pack", {})))
+                cfg.strategy_pack = self._deep_merge_dict(
+                    copy.deepcopy(getattr(Config, "DEFAULT_STRATEGY_PACK", {})),
+                    settings.get("strategy_pack", {}) if isinstance(settings.get("strategy_pack"), dict) else {},
+                )
                 cfg.strategy_params = dict(settings.get("strategy_params", getattr(cfg, "strategy_params", {})))
                 cfg.portfolio_mode = str(settings.get("portfolio_mode", getattr(cfg, "portfolio_mode", "single_strategy")))
                 cfg.short_enabled = bool(settings.get("short_enabled", getattr(cfg, "short_enabled", False)))
                 cfg.asset_scope = str(settings.get("asset_scope", getattr(cfg, "asset_scope", "kr_stock_live")))
-                cfg.backtest_config = dict(settings.get("backtest_config", getattr(cfg, "backtest_config", {})))
-                cfg.feature_flags = dict(settings.get("feature_flags", getattr(cfg, "feature_flags", {})))
+                cfg.backtest_config = self._deep_merge_dict(
+                    copy.deepcopy(getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})),
+                    settings.get("backtest_config", {}) if isinstance(settings.get("backtest_config"), dict) else {},
+                )
+                cfg.feature_flags = self._deep_merge_dict(
+                    copy.deepcopy(getattr(Config, "FEATURE_FLAGS", {})),
+                    settings.get("feature_flags", {}) if isinstance(settings.get("feature_flags"), dict) else {},
+                )
                 cfg.execution_policy = str(settings.get("execution_policy", getattr(cfg, "execution_policy", "market")))
                 cfg.market_intelligence = market_intelligence
                 cfg.max_daily_loss = float(

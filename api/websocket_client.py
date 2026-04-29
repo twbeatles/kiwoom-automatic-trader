@@ -55,7 +55,7 @@ class KiwoomWebSocketClient:
         "INDEX": "40",          # 지수
     }
     
-    def __init__(self, auth: KiwoomAuth):
+    def __init__(self, auth: KiwoomAuth, ws_url: Optional[str] = None):
         """
         Args:
             auth: KiwoomAuth 인스턴스
@@ -65,7 +65,7 @@ class KiwoomWebSocketClient:
         
         self.auth = auth
         self.logger = logging.getLogger('KiwoomWebSocketClient')
-        self.ws_url = str(getattr(auth, "ws_url", self.WS_URL) or self.WS_URL)
+        self.ws_url = str(ws_url or getattr(auth, "ws_url", self.WS_URL) or self.WS_URL)
         self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
         
         # 연결 상태

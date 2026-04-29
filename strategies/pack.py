@@ -142,6 +142,7 @@ class StrategyPackEngine:
                 "risk:news_risk_guard",
                 "risk:disclosure_event_guard",
                 "risk:macro_regime_guard",
+                "risk:intel_fresh_guard",
                 "risk:liquidity_stress_guard",
                 "risk:slippage_guard",
                 "risk:order_health_guard",
@@ -397,6 +398,10 @@ class StrategyPackEngine:
 
         if name == "macro_regime_guard":
             passed, _regime = self.manager.check_market_macro_regime_guard(code, now_ts=context.now_ts)
+            return passed
+
+        if name == "intel_fresh_guard":
+            passed, _age = self.manager.check_market_intel_fresh_guard(code, now_ts=context.now_ts)
             return passed
 
         if name == "liquidity_stress_guard":

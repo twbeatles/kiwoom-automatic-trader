@@ -2,9 +2,10 @@ import time
 from typing import Optional
 
 from config import Config
+from ._typing import StrategyManagerMixinBase
 
 
-class StrategyManagerLoggingMixin:
+class StrategyManagerLoggingMixin(StrategyManagerMixinBase):
     def log(self, msg):
         self.trader.log(msg)
 

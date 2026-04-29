@@ -111,6 +111,8 @@ class TestManualOrderSafety(unittest.TestCase):
 
     def test_manual_live_guard_runs_for_each_order(self):
         trader = _Harness()
+        trader.universe["005930"]["held"] = 2
+        trader.universe["005930"]["available_qty"] = 2
         sell_order = {"code": "005930", "type": "매도", "qty": 1, "price_type": "시장가", "price": 0}
 
         with patch("app.mixins.dialogs_profiles.ManualOrderDialog", side_effect=lambda *_args: _DialogStub(sell_order)):
@@ -118,6 +120,30 @@ class TestManualOrderSafety(unittest.TestCase):
             trader._open_manual_order()
 
         self.assertEqual(trader.guard_calls, 2)
+
+    @patch("app.mixins.dialogs_profiles.QMessageBox.warning")
+    def test_manual_order_rejects_code_outside_universe(self, warning):
+        trader = _Harness()
+
+        valid = trader._validate_manual_order_request(
+            {"code": "123456", "type": "매수", "qty": 1, "price_type": "지정가", "price": 1000}
+        )
+
+        self.assertFalse(valid)
+        self.assertTrue(warning.called)
+
+    @patch("app.mixins.dialogs_profiles.QMessageBox.warning")
+    def test_manual_sell_rejects_quantity_above_available(self, warning):
+        trader = _Harness()
+        trader.universe["005930"]["held"] = 5
+        trader.universe["005930"]["available_qty"] = 2
+
+        valid = trader._validate_manual_order_request(
+            {"code": "005930", "type": "매도", "qty": 3, "price_type": "시장가", "price": 0}
+        )
+
+        self.assertFalse(valid)
+        self.assertTrue(warning.called)
 
     def test_external_manual_buy_reserves_cash_until_order_sync(self):
         trader = _Harness()

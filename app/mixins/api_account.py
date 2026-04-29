@@ -31,6 +31,20 @@ class APIAccountMixin(TraderMixinBase):
                 pass
         self.telegram = None
 
+    def _focus_api_tab(self) -> bool:
+        central = self.centralWidget()
+        tabs = central.findChild(QTabWidget) if central is not None else None
+        if tabs is None:
+            return False
+        for index in range(tabs.count()):
+            widget = tabs.widget(index)
+            object_name = str(widget.objectName() if widget is not None else "")
+            title = str(tabs.tabText(index) or "")
+            if object_name == "api_tab" or "API" in title:
+                tabs.setCurrentIndex(index)
+                return True
+        return False
+
     def connect_api(self):
         if getattr(self, "_connect_inflight", False):
             self.log("API 연결이 이미 진행 중입니다.")
@@ -41,10 +55,7 @@ class APIAccountMixin(TraderMixinBase):
         is_mock = self.chk_mock.isChecked()
 
         if not app_key or not secret_key:
-            central = self.centralWidget()
-            tabs = central.findChild(QTabWidget) if central is not None else None
-            if tabs:
-                tabs.setCurrentIndex(8)
+            self._focus_api_tab()
 
             self.input_app_key.setStyleSheet("border: 2px solid #ff5555;" if not app_key else "")
             self.input_secret.setStyleSheet("border: 2px solid #ff5555;" if not secret_key else "")
@@ -73,6 +84,11 @@ class APIAccountMixin(TraderMixinBase):
 
         rest_client = KiwoomRESTClient(auth)
         ws_client = KiwoomWebSocketClient(auth)
+        if hasattr(self, "log"):
+            self.log(
+                f"API endpoint selected: mode={getattr(auth, 'mode', 'mock' if is_mock else 'live')}, "
+                f"rest={getattr(rest_client, 'base_url', '')}, ws={getattr(ws_client, 'ws_url', '')}"
+            )
         accounts = rest_client.get_account_list()
         if not accounts:
             raise RuntimeError("계좌 목록이 비어 있습니다. 계좌 권한/연결 상태를 확인해주세요.")

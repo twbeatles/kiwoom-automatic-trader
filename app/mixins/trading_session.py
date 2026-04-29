@@ -722,9 +722,55 @@ class TradingSessionMixin(TraderMixinBase):
             if callable(diag_touch):
                 diag_touch(code, sync_status=str(info.get("status", "")), retry_count=0, last_sync_error="")
             if kind == "universe":
-                self._dirty_codes.add(code)
+                dirty_codes = getattr(self, "_dirty_codes", None)
+                if isinstance(dirty_codes, set):
+                    dirty_codes.add(code)
             elif hasattr(self, "_diagnostics_dirty_codes") and isinstance(self._diagnostics_dirty_codes, set):
                 self._diagnostics_dirty_codes.add(code)
+
+    def _mark_cleanup_target_failed(self, target: Dict[str, Any], reason: str = ""):
+        source = str(target.get("source", "") or "")
+        code = str(target.get("code", "") or "")
+        now = datetime.datetime.now()
+        if not code:
+            return
+
+        if source == "manual":
+            pending = self._manual_pending_entries().get(code)
+            if isinstance(pending, dict):
+                pending["state"] = "sync_failed"
+                pending["updated_at"] = now
+            return
+
+        if source == "pending_child":
+            pending = getattr(self, "_pending_order_state", {}).get(code, {})
+            if not isinstance(pending, dict):
+                return
+            children = self._pending_children_safe(pending)
+            child_index = max(1, int(target.get("child_index", 0) or 0)) - 1
+            if child_index < len(children):
+                child = children[child_index]
+                child["state"] = "sync_failed"
+                child["updated_at"] = now
+                refresher = getattr(self, "_refresh_pending_order_aggregate", None)
+                if callable(refresher):
+                    refresher(code)
+                else:
+                    pending["state"] = "sync_failed"
+                    pending["updated_at"] = now
+            return
+
+        marker = getattr(self, "_mark_pending_state", None)
+        if callable(marker):
+            marker(code, "sync_failed")
+        else:
+            pending = getattr(self, "_pending_order_state", {}).get(code)
+            if isinstance(pending, dict):
+                pending["state"] = "sync_failed"
+                pending["updated_at"] = now
+
+        if hasattr(self, "log"):
+            self.log(f"[order-cleanup] cancel unresolved ({reason}) {code}: state=sync_failed")
 
     def _cleanup_active_orders(self, reason: str, timeout_sec: float = 8.0) -> Dict[str, Any]:
         live_targets, placeholders = self._collect_active_order_cleanup_targets()
@@ -781,8 +827,10 @@ class TradingSessionMixin(TraderMixinBase):
         for target in live_targets:
             if not self._cleanup_target_is_active(target):
                 continue
-            final_state = "cancelled" if bool(target.get("cancel_success")) else "sync_failed"
-            self._force_finalize_cleanup_target(target, final_state=final_state, reason=reason)
+            if bool(target.get("cancel_success")):
+                self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+            else:
+                self._mark_cleanup_target_failed(target, reason=reason)
 
         unresolved_codes = sorted({str(target.get("code", "") or "") for target in unresolved if target.get("code")})
         if unresolved_codes and hasattr(self, "log"):
@@ -795,12 +843,18 @@ class TradingSessionMixin(TraderMixinBase):
         if callable(recompute_count):
             recompute_count()
         if not hasattr(self, "_ui_flush_timer"):
-            self.sig_update_table.emit()
+            signal = getattr(self, "sig_update_table", None)
+            emit = getattr(signal, "emit", None)
+            if callable(emit):
+                emit()
         return {
             "live_targets": live_targets,
             "placeholders": placeholders,
             "unresolved_codes": unresolved_codes,
         }
+
+    def _cancel_pending_orders_before_stop(self) -> Dict[str, Any]:
+        return self._cleanup_active_orders("stop_trading", timeout_sec=0.1)
 
     def _set_global_risk_mode(self, mode: str, until: Optional[datetime.datetime], reason: str = ""):
         current_mode = str(getattr(self, "_global_risk_mode", "normal"))
@@ -1505,13 +1559,11 @@ class TradingSessionMixin(TraderMixinBase):
     def stop_trading(self):
         was_running = self.is_running
         self._set_trading_stopped_state()
-        self._cleanup_active_orders("stop_trading")
-        self._pending_order_state.clear()
-        if hasattr(self, "_manual_pending_state"):
-            self._manual_pending_state.clear()
+        cleanup_result = self._cancel_pending_orders_before_stop()
         self._last_exec_event.clear()
+        unresolved_codes = set(cleanup_result.get("unresolved_codes", [])) if isinstance(cleanup_result, dict) else set()
         release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
-        if callable(release_all_reserved):
+        if callable(release_all_reserved) and not unresolved_codes:
             released = release_all_reserved(reason="STOP_TRADING")
             released_total = int(released) if isinstance(released, (int, float, str)) else 0
             if released_total > 0 and hasattr(self, "log"):

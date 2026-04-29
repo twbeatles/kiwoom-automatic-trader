@@ -219,7 +219,14 @@ class TradingConfig:
         "primary_strategy": "volatility_breakout",
         "entry_filters": ["rsi", "volume", "macd"],
         "exit_overlays": ["trailing_stop", "atr_stop"],
-        "risk_overlays": ["max_holdings", "daily_loss_limit"],
+        "risk_overlays": [
+            "max_holdings",
+            "daily_loss_limit",
+            "news_risk_guard",
+            "disclosure_event_guard",
+            "macro_regime_guard",
+            "intel_fresh_guard",
+        ],
     })
     strategy_params: Dict[str, Any] = field(default_factory=dict)
     portfolio_mode: str = "single_strategy"
@@ -286,8 +293,12 @@ class Config:
     # =========================================================================
     # REST API 설정
     # =========================================================================
-    REST_API_BASE_URL = "https://api.kiwoom.com"
-    WEBSOCKET_URL = "wss://api.kiwoom.com/ws/realtime"
+    KIWOOM_LIVE_REST_API_BASE_URL = "https://api.kiwoom.com"
+    KIWOOM_MOCK_REST_API_BASE_URL = "https://mockapi.kiwoom.com"
+    KIWOOM_LIVE_WEBSOCKET_URL = "wss://api.kiwoom.com:10000/api/dostk/websocket"
+    KIWOOM_MOCK_WEBSOCKET_URL = "wss://mockapi.kiwoom.com:10000/api/dostk/websocket"
+    REST_API_BASE_URL = KIWOOM_LIVE_REST_API_BASE_URL
+    WEBSOCKET_URL = KIWOOM_LIVE_WEBSOCKET_URL
     
     # 인증 설정
     DEFAULT_APP_KEY = ""
@@ -796,7 +807,14 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         "primary_strategy": "volatility_breakout",
         "entry_filters": ["rsi", "volume", "macd"],
         "exit_overlays": ["trailing_stop", "atr_stop"],
-        "risk_overlays": ["max_holdings", "daily_loss_limit"],
+        "risk_overlays": [
+            "max_holdings",
+            "daily_loss_limit",
+            "news_risk_guard",
+            "disclosure_event_guard",
+            "macro_regime_guard",
+            "intel_fresh_guard",
+        ],
     }
     DEFAULT_STRATEGY_PARAMS: Dict[str, Any] = {}
     DEFAULT_PORTFOLIO_MODE = "single_strategy"
