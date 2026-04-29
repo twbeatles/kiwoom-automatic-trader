@@ -1,10 +1,18 @@
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from app.mixins.api_account import APIAccountMixin
 
 
 class _Harness(APIAccountMixin):
+    telegram: Any
+    combo_acc: Any
+    chk_use_telegram: Any
+    input_tg_token: Any
+    input_tg_chat: Any
+    log: Any
+
     def __init__(self):
         self.ws_client = None
         self.telegram = None

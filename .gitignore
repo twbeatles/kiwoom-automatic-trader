@@ -16,6 +16,7 @@ __pycache__/
 *.so
 .pytest_cache/
 .mypy_cache/
+.pyright_cache/
 .ruff_cache/
 .tox/
 .nox/
@@ -49,12 +50,17 @@ log/
 # Trading runtime state (local only)
 kiwoom_settings.json
 kiwoom_token_cache.json
+kiwoom_token_cache_live.json
+kiwoom_token_cache_mock.json
 kiwoom_trade_history.json
 kiwoom_presets.json
 data/market_intelligence_events.jsonl
 data/decision_audit.jsonl
 data/dart_corp_codes.json
 data/favorites.json
+backtest_result.json
+backtest_results/
+data/backtest_results/
 
 # User-requested exclusions: text/json/db artifacts
 *.txt

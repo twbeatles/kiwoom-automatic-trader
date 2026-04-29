@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-04-12
+> **최종 업데이트**: 2026-04-29
 
 ---
 
@@ -20,6 +20,7 @@
 - 타입 보조: `app/mixins/_typing.py`의 `TraderMixinBase`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
 - 주문 라우팅 지원: `app/support/execution_policy.py`
+- 백테스트 UI 실행 adapter: `app/support/backtest_runner.py`
 - API 모드 라우팅: `api/endpoints.py`
 - UI 텍스트/콤보 표시값 헬퍼: `app/support/ui_text.py`
 
@@ -46,7 +47,7 @@ app/mixins/api_account.py
   - API 연결, 계좌 갱신, 실거래 확인 가드
 
 app/mixins/trading_session.py
-  - 시작/중지, 유니버스 초기화, 긴급청산
+  - 시작/중지, 유니버스 초기화, 긴급청산, 취소 우선 종료 정리
 
 app/mixins/order_sync.py
   - 주문 상태 추적, 체결 동기화
@@ -70,7 +71,10 @@ strategy_manager.py
   - StrategyManager 조립/orchestration
 
 strategies/manager_mixins/
-  - evaluation / indicators / market_intelligence / portfolio_risk / signal_filters
+  - _typing / evaluation / indicators / market_intelligence / portfolio_risk / signal_filters
+
+app/support/backtest_runner.py
+  - CSV/JSONL 입력을 이벤트 드리븐 백테스트 엔진으로 연결
 
 dialogs/
   - 프리셋 / 도움말 / 종목검색 / 수동주문 / 프로필 / 예약 다이얼로그 구현
@@ -96,6 +100,8 @@ ui_dialogs.py
 
 4. 주문 안전성
 - 실행 이벤트는 `is_running` 상태 가드 하에서만 신규 주문 검토
+- `stop_trading()`은 활성 주문 취소를 먼저 시도하고, 실패/미확인 주문은 `sync_failed`로 남겨 예약 현금을 보존
+- 유니버스 밖 수동 매수는 기본 차단, 유니버스 밖 수동 매도는 `external_positions` 가능수량 검증 후 허용
 
 ---
 
@@ -155,6 +161,37 @@ pyinstaller --clean KiwoomTrader.spec
 
 ---
 
+## 2026-04-29 실행 안전장치/백테스트 UI/패키징 동기화
+
+1. 시장 인텔리전스 가드
+- 기본 `risk_overlays`에 뉴스/공시/매크로/신선도 가드가 포함됩니다.
+- `_can_enter_trade()`는 `block_entry`, 고위험 DART, `idle`/`refreshing`/`stale`/`error` 상태를 신규 진입 차단으로 처리합니다.
+
+2. API/토큰 모드 분리
+- `api/endpoints.py`가 live/mock REST/WebSocket URL과 token cache suffix를 단일 기준으로 제공합니다.
+- REST/WS 클라이언트는 auth에서 선택된 endpoint를 기본 사용하고 테스트 override를 허용합니다.
+
+3. 주문/수동주문
+- `stop_trading()`은 취소 성공/상태 확인된 주문만 로컬 pending과 reserved cash에서 정리합니다.
+- 취소 실패 또는 미확인 주문은 `sync_failed`로 남깁니다.
+- 유니버스 밖 수동 매수는 차단하고, 유니버스 밖 수동 매도는 `external_positions` 보유 수량 검증을 통과해야 합니다.
+
+4. 백테스트 UI
+- 상세 설정의 백테스트 영역은 CSV bar 파일과 선택 JSONL 인텔리전스 이벤트 파일을 Worker로 실행합니다.
+- 결과 표시는 `BacktestResult.metrics`, `trades`, `equity_curve` 범위로 제한됩니다.
+
+5. 최신 검증 기준
+```bash
+python -m pytest -q tests/unit
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
+pyright .
+```
+- 현재 기준 `tests/unit` 전체 134개 테스트 통과
+- 문법 컴파일 검증 통과
+- `pyright .` 0 errors
+
+---
+
 ## 2026-04-12 API 모드/외부보유/종료 정합성
 
 1. API 모드 라우팅
@@ -167,9 +204,9 @@ pyinstaller --clean KiwoomTrader.spec
 - 시간청산/긴급청산도 현재는 외부 보유 종목을 포함해 대상을 수집합니다.
 
 3. 종료/재연결 정리
-- `stop_trading()`와 긴급청산은 활성 주문 취소를 먼저 시도하고 pending/manual pending/reserved cash를 정리합니다.
+- `stop_trading()`와 긴급청산은 활성 주문 취소를 먼저 시도하고 성공/상태 확인된 pending/manual pending/reserved cash만 정리합니다.
 - API 재연결/연결 해제 시 Telegram notifier는 `_stop_telegram_notifier()`로 중지 후 교체됩니다.
-- `KiwoomTrader.spec`는 `api.endpoints` explicit hiddenimport를 포함합니다.
+- `KiwoomTrader.spec`는 `api.endpoints`와 `app.support.backtest_runner` explicit hiddenimport를 포함합니다.
 
 ---
 
@@ -180,13 +217,13 @@ pyinstaller --clean KiwoomTrader.spec
 3. 메인 UI는 `🎯 핵심 설정`, `🛠 상세 설정`, `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`, `🔐 API/알림` 구조이며, 감사 로그는 `data/decision_audit.jsonl`에 기록됩니다.
 4. 운영 문서:
    - `REAL_API_PREPARATION_GUIDE.md`
-   - `IMPLEMENTATION_REVIEW_2026-04-08.md`
-5. 최신 검증 결과는 상단 `2026-04-08 주문/예약/구조 동기화` 섹션을 기준으로 확인합니다.
+   - `PROJECT_STRUCTURE_ANALYSIS.md`
+5. 최신 검증 결과는 상단 `2026-04-29 실행 안전장치/백테스트 UI/패키징 동기화` 섹션을 기준으로 확인합니다.
 
 6. 구현 정합성 메모
 - `분할 매수`는 현재 `use_split=True` + `execution_policy=limit` 조건에서 실제 child 지정가 주문까지 연결됩니다.
 - 전략팩의 SHORT 방향 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`)은 현재 실주문이 아니라 백테스트/시뮬레이션 범위로 취급해야 합니다.
-- 문서 정합성 점검 시 `QApplication + KiwoomProTrader()` 오프스크린 UI 생성 스모크 테스트를 함께 보는 편이 안전합니다.
+- 문서 정합성 점검 시 `QApplication + KiwoomProTrader()` 오프스크린 UI 생성 스모크 테스트와 백테스트 runner 단위 테스트를 함께 보는 편이 안전합니다.
 
 ---
 
@@ -200,7 +237,7 @@ pyinstaller --clean KiwoomTrader.spec
 6. 최신 검증 기준:
    - `python -m pytest -q tests/unit`
    - `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit`
-7. 현재 작업 기준 `tests/unit` 전체 120개 테스트 통과, 문법 컴파일 검증 통과입니다.
+7. 당시 작업 기준 `tests/unit` 전체 120개 테스트 통과, 문법 컴파일 검증 통과입니다.
 
 ---
 

@@ -73,9 +73,9 @@ class DialogsProfilesMixin(TraderMixinBase):
                 except Exception as exc:
                     self.log(f"Manual sell position refresh failed [{code}]: {exc}")
                     positions = None
-                if positions is not None:
+                if isinstance(positions, list):
                     latest_available = 0
-                    for position in positions or []:
+                    for position in positions:
                         if str(getattr(position, "code", "") or "").strip() != code:
                             continue
                         latest_available = max(
@@ -87,13 +87,18 @@ class DialogsProfilesMixin(TraderMixinBase):
             return latest_available
 
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
-        info = tracked_getter(code) if callable(tracked_getter) else {}
+        raw_info = tracked_getter(code) if callable(tracked_getter) else {}
+        info: Dict[str, Any] = raw_info if isinstance(raw_info, dict) else {}
         if not info:
-            info = getattr(self, "universe", {}).get(code, {})
+            universe = getattr(self, "universe", {})
+            if isinstance(universe, dict):
+                raw_info = universe.get(code, {})
+                info = raw_info if isinstance(raw_info, dict) else {}
         if not info:
             external_positions = getattr(self, "external_positions", {})
             if isinstance(external_positions, dict):
-                info = external_positions.get(code, {})
+                raw_info = external_positions.get(code, {})
+                info = raw_info if isinstance(raw_info, dict) else {}
         if not info:
             return None
         return max(0, int(info.get("available_qty", info.get("held", 0)) or 0))

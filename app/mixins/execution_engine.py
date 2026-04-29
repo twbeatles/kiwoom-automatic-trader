@@ -980,7 +980,8 @@ class ExecutionEngineMixin(TraderMixinBase):
     def _execute_sell(self, code: str, quantity: int, price: int, reason: str):
         """Submit sell order asynchronously."""
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
-        info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+        raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+        info = raw_info if isinstance(raw_info, dict) else {}
         external_positions = getattr(self, "external_positions", {})
         is_external = code not in self.universe and isinstance(external_positions, dict) and code in external_positions
         name = info.get("name", code)

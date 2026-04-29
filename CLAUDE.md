@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-04-12
+> **최종 업데이트**: 2026-04-29
 
 ---
 
@@ -26,6 +26,7 @@
 │   │   ├── persistence_settings.py
 │   │   └── dialogs_profiles.py
 │   └── support/
+│       ├── backtest_runner.py
 │       ├── execution_policy.py
 │       ├── widgets.py
 │       └── worker.py
@@ -44,6 +45,7 @@
 ├── strategies/
 │   ├── pack.py
 │   └── manager_mixins/
+│       ├── _typing.py
 │       ├── evaluation.py
 │       ├── indicators.py
 │       ├── market_intelligence.py
@@ -69,6 +71,7 @@
 - `StrategyManager`의 실제 구현은 `strategies/manager_mixins/`에 분산되어 있고, 루트 `strategy_manager.py`는 조립 레이어입니다.
 - 다이얼로그 실제 구현은 `dialogs/`에 있고, `ui_dialogs.py`는 기존 import 호환용입니다.
 - 정적 분석 시 믹스인은 `app/mixins/_typing.py`의 `TraderMixinBase`를 공통 베이스로 사용합니다.
+- 백테스트 UI 실행 adapter는 `app/support/backtest_runner.py`입니다.
 
 ---
 
@@ -125,7 +128,8 @@
 - 포지션 동기화 재시도 초과 시 종목 상태 `sync_failed`로 fail-safe 차단
 
 5. 종료:
-- `stop_trading()` -> 활성 주문 취소 시도 -> pending/manual pending/reserved cash 정리 -> 구독 해제/타이머 정리
+- `stop_trading()` -> 활성 주문 취소 시도 -> 성공/상태 확인된 pending/manual pending/reserved cash 정리 -> 구독 해제/타이머 정리
+- 취소 실패 또는 미확인 주문은 `sync_failed`로 남기고 예약 현금을 보존
 - `closeEvent()`에서 종료 플로우 보장
 
 ---
@@ -222,7 +226,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 
 3. 운영 문서
 - `REAL_API_PREPARATION_GUIDE.md`는 실제 API 준비물, 보안, 로그 파일, 실계좌 전 체크리스트를 정리합니다.
-- `IMPLEMENTATION_REVIEW_2026-04-08.md`는 최근 주문/예약 안전화 반영 결과와 남은 경계를 정리합니다.
+- 구조/정합성 기준 문서는 `PROJECT_STRUCTURE_ANALYSIS.md`와 `README.md`에 통합해 유지합니다.
 
 4. 최신 검증 결과
 ```bash
@@ -308,6 +312,36 @@ python -m pytest -q tests/unit
 
 ---
 
+## 2026-04-29 실행 안전장치/백테스트 UI/패키징 동기화 메모
+
+1. 시장 인텔리전스 진입 가드
+- 기본 `risk_overlays`에 뉴스/공시/매크로/신선도 가드가 포함됩니다.
+- `_can_enter_trade()`는 전략팩 설정 누락 시에도 `block_entry`, 고위험 DART, `idle`/`refreshing`/`stale`/`error` 상태를 신규 진입 차단으로 처리합니다.
+
+2. API 모드와 토큰 캐시
+- live/mock REST/WS URL은 `api/endpoints.py`가 단일 기준입니다.
+- `KiwoomAuth.mode`, `base_url`, `ws_url`, `session_namespace`, token cache suffix는 같은 endpoint object에서 결정됩니다.
+
+3. 주문/수동주문
+- `stop_trading()`은 활성 주문 취소를 먼저 시도하고, 실패/미확인 주문은 `sync_failed`로 남깁니다.
+- 유니버스 밖 수동 매수는 차단합니다. 유니버스 밖 수동 매도는 `external_positions` 보유 수량 검증을 통과해야 합니다.
+
+4. 백테스트 UI
+- 상세 설정의 백테스트 영역은 CSV bar 파일과 선택 JSONL 인텔리전스 이벤트를 Worker로 실행합니다.
+- UI 표시는 `BacktestResult.metrics`, `trades`, `equity_curve` 범위로 제한합니다.
+
+5. 최신 검증 기준
+```bash
+python -m pytest -q tests/unit
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
+pyright .
+```
+- 현재 기준 `tests/unit` 전체 134개 테스트 통과
+- 문법 컴파일 검증 통과
+- `pyright .` 0 errors
+
+---
+
 ## 2026-04-12 API 모드/외부보유/종료 정합성 메모
 
 1. API 모드 라우팅
@@ -321,7 +355,7 @@ python -m pytest -q tests/unit
 - 시간청산/긴급청산은 현재 `external_positions`까지 포함해 청산 대상을 수집합니다.
 
 3. 종료/재연결 정리
-- `stop_trading()`와 긴급청산 경로는 활성 주문 취소를 먼저 시도한 뒤 로컬 pending 상태를 정리합니다.
+- `stop_trading()`와 긴급청산 경로는 활성 주문 취소를 먼저 시도한 뒤 성공/상태 확인된 pending 상태만 정리합니다.
 - API 재연결/연결 해제 시 기존 Telegram notifier는 `_stop_telegram_notifier()`로 명시적으로 중지 후 교체합니다.
 - `KiwoomTrader.spec`는 `api.endpoints` explicit hiddenimport + `collect_submodules('api')`로 현재 구조를 따라갑니다.
 
@@ -343,21 +377,23 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 2. 구현 경계
 - `분할 매수`는 이제 `use_split=True` + `execution_policy=limit` 조건에서 child 지정가 주문을 즉시 다건 제출합니다.
 - 전략팩의 SHORT 방향 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`)은 현재 자동매매 비지원/백테스트 전용으로 차단됩니다.
-- `portfolio/allocator.py`, `portfolio_mode`, `feature_flags.enable_backtest`는 여전히 연구용/확장 경로이며 자동매매 런타임에는 직접 연결되지 않습니다.
+- `portfolio/allocator.py`, `portfolio_mode`는 여전히 연구용/확장 경로이며 자동매매 런타임에는 직접 연결되지 않습니다.
+- `feature_flags.enable_backtest`는 백테스트 UI 실행 토글로 사용되며 실주문 라우팅과는 분리됩니다.
 - `strategy_manager.py`는 현재 orchestration 레이어이며, 전략 평가/지표/리스크/인텔 책임은 `strategies/manager_mixins/`로 이동했습니다.
 - `ui_dialogs.py`는 호환 re-export 레이어로 유지되고, 실제 다이얼로그 구현은 `dialogs/` 패키지에 있습니다.
 
 3. 수동 주문
 - 수동 주문은 실계좌에서 주문마다 `_confirm_live_trading_guard()` 를 다시 통과해야 합니다.
 - `ManualOrderDialog` 와 `_validate_manual_order_request()` 에서 6자리 숫자 코드, 지정가 1원 이상, 매도 가능수량 초과 금지를 강제합니다.
-- 수동 매수는 예약금을 즉시 차감하고, 유니버스 외 종목도 `_manual_pending_state` + reserved cash 로 정합성을 유지합니다.
+- 수동 매수는 예약금을 즉시 차감하고, 유니버스 외 종목은 기본 차단합니다.
+- 수동 매도는 유니버스 또는 `external_positions`에 있는 보유 종목만 가능수량 검증 후 허용합니다.
 
 4. 최신 검증 기준
 ```bash
 python -m pytest -q tests/unit
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 ```
-- 현재 작업 기준 `tests/unit` 전체 120개 테스트 통과
+- 당시 기준 `tests/unit` 전체 120개 테스트 통과
 - 문법 컴파일 검증 통과
 
 ---

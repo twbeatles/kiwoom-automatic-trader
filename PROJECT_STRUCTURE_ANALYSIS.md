@@ -1,8 +1,8 @@
 # Kiwoom Automatic Trader 프로젝트 구조 분석
 
 작성일: 2026-03-05  
-최종 동기화: 2026-04-12
-분석 기준: 현재 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`, `REAL_API_PREPARATION_GUIDE.md`, `IMPLEMENTATION_REVIEW_2026-04-08.md`
+최종 동기화: 2026-04-29
+분석 기준: 현재 저장소 코드 + `README.md`, `CLAUDE.md`, `GEMINI.md`, `REAL_API_PREPARATION_GUIDE.md`
 
 ## 1) 요약
 
@@ -13,7 +13,7 @@
 - UI 다이얼로그: `app/mixins/dialogs_profiles.py`, `dialogs/*.py`, `ui_dialogs.py`
 - 운영/검증/패키징: `config.py`, `KiwoomTrader.spec`, `tests/unit`, `tools/*`
 
-2026-04-12 기준 가장 중요한 구조 변화는 세 가지다.
+2026-04-29 기준 가장 중요한 구조 변화는 다섯 가지다.
 
 1. `strategy_manager.py`는 더 이상 대형 단일 구현 파일이 아니라 orchestration 레이어다.  
    실제 계산 책임은 `strategies/manager_mixins/`로 분리됐다.
@@ -21,17 +21,19 @@
    실제 다이얼로그 구현은 `dialogs/` 패키지에 있다.
 3. `api/endpoints.py`, `external_positions`, `stop_trading()` 주문 정리 helper가 추가되면서
    API 모드 분기, 유니버스 외 보유 추적, 종료 정리 흐름이 각각 별도 구조로 승격됐다.
+4. `app/support/backtest_runner.py`가 백테스트 UI와 `backtest/engine.py` 사이의 실행 adapter 역할을 맡는다.
+5. `strategies/manager_mixins/_typing.py`와 공통 Protocol/base typing으로 전략 mixin의 pyright 정합성을 유지한다.
 
-## 2) 실제 코드베이스 규모 (2026-04-12 실측)
+## 2) 실제 코드베이스 규모 (2026-04-29 실측)
 
 패키지별 Python 파일 수와 라인 수:
 
 | 패키지 | py 파일 수 | 라인 수 |
 |---|---:|---:|
-| `app/` | 19 | 10616 |
-| `api/` | 6 | 1802 |
-| `tests/` | 66 | 4287 |
-| `strategies/` | 11 | 1781 |
+| `app/` | 20 | 11076 |
+| `api/` | 6 | 1803 |
+| `tests/` | 70 | 4572 |
+| `strategies/` | 12 | 1797 |
 | `dialogs/` | 7 | 575 |
 | `tools/` | 4 | 405 |
 | `backtest/` | 2 | 735 |
@@ -40,16 +42,16 @@
 
 핵심 파일 Top 10:
 
-1. `app/mixins/market_intelligence.py` (2265)
-2. `app/mixins/trading_session.py` (1619)
-3. `app/mixins/ui_build.py` (1184)
-4. `app/mixins/order_sync.py` (1039)
-5. `app/mixins/execution_engine.py` (911)
-6. `config.py` (839)
-7. `app/mixins/persistence_settings.py` (836)
+1. `app/mixins/market_intelligence.py` (2281)
+2. `app/mixins/trading_session.py` (1665)
+3. `app/mixins/ui_build.py` (1309)
+4. `app/mixins/order_sync.py` (1038)
+5. `app/mixins/execution_engine.py` (967)
+6. `config.py` (857)
+7. `app/mixins/persistence_settings.py` (855)
 8. `api/rest_client.py` (795)
-9. `app/main_window.py` (753)
-10. `backtest/engine.py` (727)
+9. `app/main_window.py` (760)
+10. `app/mixins/dialogs_profiles.py` (752)
 
 루트 orchestration / compatibility 파일:
 
@@ -65,7 +67,7 @@ kiwoom-automatic-trader/
 ├── app/
 │   ├── main_window.py       # KiwoomProTrader 조립 클래스
 │   ├── mixins/              # UI/세션/API/실행/동기화/인텔리전스/저장
-│   └── support/             # worker/widgets/execution_policy/ui_text
+│   └── support/             # worker/widgets/execution_policy/ui_text/backtest_runner
 ├── backtest/                # 이벤트 드리븐 백테스트 엔진
 ├── data/providers/          # 뉴스/DART/매크로/트렌드/AI provider
 ├── dialogs/                 # 실제 다이얼로그 구현
@@ -107,6 +109,13 @@ kiwoom-automatic-trader/
 - `persistence_settings.py`: 설정 저장/복원, 스키마 마이그레이션, keyring 연동
 - `dialogs_profiles.py`: 다이얼로그 호출/결과 반영, 프로필/프리셋 연동
 - `system_shell.py`: 로깅, 메뉴, 단축키, 트레이, 종료
+
+### `app/support/*` 책임
+
+- `worker.py`: UI 프리징 방지를 위한 QRunnable/WorkerSignals 공통 실행기
+- `execution_policy.py`: 시장가/지정가 우선/분할 주문 정책 변환
+- `ui_text.py`: 콤보 표시값과 저장값 매핑
+- `backtest_runner.py`: CSV bar/선택 JSONL 이벤트를 `EventDrivenBacktestEngine` 입력으로 변환하고 UI 표시용 결과 dict/rows를 생성
 
 ## 5) 전략 계층
 
@@ -194,7 +203,15 @@ kiwoom-automatic-trader/
 - `pending_order_state` / aggregate pending / reserved cash 추적
 - 분할 매수는 `use_split=True` + `execution_policy=limit` 에서 child 지정가 주문 즉시 제출
 - 일부 reject/cancel 은 해당 slice 예약금만 환원
-- 중지/긴급청산 경로는 활성 주문 취소를 먼저 시도하고 unresolved 건만 로컬 finalization 한다
+- 중지/긴급청산 경로는 활성 주문 취소를 먼저 시도하고 성공/상태 확인된 건만 로컬 finalization 한다
+- 취소 실패 또는 미확인 활성 주문은 `sync_failed` 상태로 남기고 예약 현금을 보존해 브로커 상태와 내부 상태가 섞이지 않게 한다
+
+### 백테스트 UI 실행
+
+1. 상세 설정의 백테스트 영역에서 CSV bar 파일과 선택 JSONL 인텔리전스 이벤트 파일을 지정
+2. `app/support/backtest_runner.py`가 CSV를 `BacktestBar` 목록으로 파싱
+3. Worker가 `EventDrivenBacktestEngine.run()`을 실행
+4. UI는 `BacktestResult.metrics`, `trades`, `equity_curve`만 표시/저장
 
 ## 8) 문서 / 패키징 정합성
 
@@ -204,39 +221,44 @@ kiwoom-automatic-trader/
 - `CLAUDE.md`
 - `GEMINI.md`
 - `REAL_API_PREPARATION_GUIDE.md`
-- `IMPLEMENTATION_REVIEW_2026-04-08.md`
+
+과거 구현 검토 문서는 현재 문서 세트에 흡수됐고, 저장소 기준 문서는 위 5개 파일로 유지한다.
 
 ### `KiwoomTrader.spec`
 
 - explicit hiddenimports + `collect_submodules(...)` 를 함께 사용
 - 현재는 `api`, `app`, `strategies`, `dialogs`, `backtest`, `portfolio`, `data.providers`를 수집
 - `api.endpoints` explicit hiddenimport로 live/mock 라우터를 패키징에 명시 반영
+- `app.support.backtest_runner` explicit hiddenimport로 백테스트 UI 실행 adapter를 패키징에 명시 반영
 - `dialogs/` 패키지 분리 후에도 빌드 누락이 없도록 `collect_submodules('dialogs')` 가 추가되었다
 
 ### `.gitignore`
 
 - `build/`, `dist/`, `release/` 외에 `.pyinstaller/`, `*.spec.bak` 를 무시
+- live/mock 토큰 캐시(`kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`)와 백테스트 결과(`backtest_result.json`, `backtest_results/`)를 로컬 산출물로 명시
 - 런타임 산출물(`*.json`, `*.jsonl`, `*.db`)은 기본적으로 무시하되 필요한 정적 기준 파일은 예외로 추적
 
 ## 9) 검증 현황
 
-2026-04-12 기준 재검증:
+2026-04-29 기준 재검증:
 
 - `python -m pytest -q tests/unit`
 - `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit`
+- `pyright .`
 
 결과:
 
-- `tests/unit` 전체 120개 테스트 통과
+- `tests/unit` 전체 134개 테스트 통과
 - 문법 컴파일 검증 통과
+- `pyright .` 0 errors
 
 ## 10) 현재 남아 있는 큰 파일 / 다음 분리 후보
 
 다음 후보는 여전히 크기가 큰 다음 파일들이다.
 
 1. `app/mixins/market_intelligence.py`
-2. `app/mixins/ui_build.py`
-3. `app/mixins/trading_session.py`
+2. `app/mixins/trading_session.py`
+3. `app/mixins/ui_build.py`
 4. `app/mixins/order_sync.py`
 5. `app/mixins/execution_engine.py`
 

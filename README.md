@@ -26,6 +26,7 @@
 - [키보드 단축키](#-키보드-단축키)
 - [매매 전략](#-매매-전략)
 - [리스크 관리](#-리스크-관리)
+- [2026-04-29 실행 안전장치·백테스트 UI·문서 동기화 업데이트](#-2026-04-29-실행-안전장치백테스트-ui문서-동기화-업데이트)
 - [2026-04-12 API 모드·외부보유·종료 정합성 업데이트](#-2026-04-12-api-모드외부보유종료-정합성-업데이트)
 - [2026-04-08 주문·예약 안전화 업데이트](#-2026-04-08-주문예약-안전화-업데이트)
 - [2026-03-25 문서·리플레이·운영 가이드 동기화 업데이트](#-2026-03-25-문서리플레이운영-가이드-동기화-업데이트)
@@ -179,7 +180,7 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-> 기준: 2026-04-12, 현재 저장소 코드
+> 기준: 2026-04-29, 현재 저장소 코드
 
 ```text
 kiwoom-automatic-trader/
@@ -189,7 +190,7 @@ kiwoom-automatic-trader/
 │   ├── mixins/
 │   │   ├── _typing.py       # pyright용 type-only Qt base
 │   │   └── ...              # UI/세션/인텔리전스/실행/동기화/저장/프로필
-│   └── support/             # worker/widgets/execution_policy/ui_text
+│   └── support/             # worker/widgets/execution_policy/ui_text/backtest_runner
 ├── backtest/                # 이벤트 드리븐 백테스트 엔진
 ├── dialogs/                 # 프리셋/검색/주문/프로필/예약 다이얼로그 구현
 ├── strategies/              # 전략팩 + strategy_manager helper mixins
@@ -203,20 +204,20 @@ kiwoom-automatic-trader/
 ├── strategy_manager.py      # orchestration 레이어 (실구현은 strategies/manager_mixins)
 ├── KiwoomTrader.spec
 ├── ui_dialogs.py            # dialogs 패키지 호환 re-export
-└── 문서: README.md / CLAUDE.md / GEMINI.md / PROJECT_STRUCTURE_ANALYSIS.md / REAL_API_PREPARATION_GUIDE.md / IMPLEMENTATION_REVIEW_2026-04-08.md
+└── 문서: README.md / CLAUDE.md / GEMINI.md / PROJECT_STRUCTURE_ANALYSIS.md / REAL_API_PREPARATION_GUIDE.md
 ```
 
 ### 파일별 역할
 
-| 파일 | 라인 수(2026-04-08) | 주요 기능 |
+| 파일 | 라인 수(2026-04-29) | 주요 기능 |
 |------|---------------------:|-----------|
 | `키움증권 자동매매.py` | 27 | `app.main_window.KiwoomProTrader` 실행 래퍼 |
-| `app/main_window.py` | 753 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태(`external_positions` 포함) |
+| `app/main_window.py` | 760 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태(`external_positions` 포함) |
 | `app/mixins/*.py` | 분할 모듈 | UI/API/주문/저장/다이얼로그 기능별 구현 |
-| `app/mixins/market_intelligence.py` | 2265 | 시장 인텔리전스 수집, 정책 계산, 리플레이/감사 뷰어 |
-| `strategies/manager_mixins/*.py` | 1741 | 전략 평가, 지표 계산, 포지션/리스크, 인텔 가드 |
+| `app/mixins/market_intelligence.py` | 2281 | 시장 인텔리전스 수집, 정책 계산, 리플레이/감사 뷰어 |
+| `strategies/manager_mixins/*.py` | 1797 | 전략 평가, 지표 계산, 포지션/리스크, 인텔 가드 |
 | `strategy_manager.py` | 32 | `StrategyManager` 조립/orchestration 레이어 |
-| `config.py` | 839 | 설정 상수, v6 스키마, 가드/market intelligence 기본값 |
+| `config.py` | 857 | 설정 상수, v6 스키마, 가드/market intelligence 기본값 |
 | `dialogs/*.py` | 575 | 프리셋/검색/수동주문/프로필/예약 다이얼로그 구현 |
 | `ui_dialogs.py` | 22 | 기존 import 경로 호환 re-export |
 
@@ -304,6 +305,33 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 
 ---
 
+## 🔄 2026-04-29 실행 안전장치·백테스트 UI·문서 동기화 업데이트
+
+이번 업데이트는 2026-04-29 위험 검토 계획 항목을 코드, 테스트, 문서, 패키징 기준으로 실제 동작에 맞춘 반영입니다.
+
+### 반영된 핵심 변경
+
+- 시장 인텔리전스 가드는 기본 `risk_overlays`와 `_can_enter_trade()` 양쪽에서 fail-closed로 동작합니다. `block_entry`, 고위험 DART, `idle`/`refreshing`/`stale`/`error` 상태는 신규 진입을 막습니다.
+- `Config`, `api.endpoints`, `KiwoomAuth`, REST/WebSocket 클라이언트가 실전/모의 REST·WS URL과 토큰 캐시 namespace를 분리합니다.
+- `stop_trading()`은 활성 주문 취소를 먼저 시도하고, 취소 실패 또는 미확인 주문은 `sync_failed`로 남겨 pending/reserved cash를 보존합니다.
+- 유니버스 밖 수동 매수는 차단하고, 수동 매도는 계좌 스냅샷 또는 `external_positions`의 매도 가능수량을 기준으로 검증합니다.
+- 백테스트 설정 UI는 CSV bar 입력과 선택 JSONL 인텔리전스 이벤트를 `EventDrivenBacktestEngine`으로 실행하고, metrics/trades/equity curve 저장 경로를 제공합니다.
+- `KiwoomTrader.spec`는 `app.support.backtest_runner`를 explicit hiddenimport에 추가했고, `.gitignore`는 live/mock 토큰 캐시와 백테스트 결과 산출물을 명시적으로 로컬 산출물로 분류합니다.
+
+### 최신 검증 결과
+
+```bash
+python -m pytest -q tests/unit
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
+pyright .
+```
+
+- 결과: **`tests/unit` 전체 134개 테스트 통과**
+- 결과: Python 문법 컴파일 검증 통과
+- 결과: `pyright .` 0 errors
+
+---
+
 ## 🔄 2026-04-08 주문·예약 안전화 업데이트
 
 이번 업데이트는 예약 매매, 수동 주문, 분할 매수, 전략 선택 UI의 실제 런타임 동작을 현재 코드 기준으로 다시 맞춘 정합성/안전화 반영입니다.
@@ -314,7 +342,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 - 수동 주문에 실계좌 주문별 보호 확인, 6자리 숫자 코드 검증, 지정가 1원 이상 검증, 매수 예약금 즉시 반영을 추가
 - `use_split=True` + `지정가 우선` 정책에서 child 지정가 주문을 즉시 다건 제출하도록 분할 매수를 실주문 경로에 연결
 - `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls` 를 자동매매 비지원/백테스트 전용 전략으로 명시
-- `portfolio_mode`, `enable_backtest`, 백테스트 세부 설정은 연구용 상태 라벨을 추가하고 저장 기능만 유지
+- `portfolio_mode`는 실주문 라우팅과 분리하고, 백테스트 세부 설정은 2026-04-29 업데이트에서 UI 실행 경로로 승격
 
 ### Capability Matrix
 
@@ -324,7 +352,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 | 수동 주문 | O | - | O | - | O |
 | 분할 매수 | O | O | O (`limit` 전용) | - | O |
 | SHORT 가능 전략 | O (백테스트 전용 표기) | O | X | O | O |
-| `portfolio_mode` / `enable_backtest` / 백테스트 세부 설정 | O (연구용 표기) | O | X | 엔진/설정만 존재, UI 실행 미연결 | 부분 |
+| `portfolio_mode` / 백테스트 세부 설정 | O | O | X | CSV/JSONL UI 실행 연결 | O |
 
 ### 최신 검증 결과
 
@@ -333,7 +361,7 @@ python -m pytest -q tests/unit
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 ```
 
-- 결과: **`tests/unit` 전체 120개 테스트 통과**
+- 당시 결과: **`tests/unit` 전체 120개 테스트 통과**
 - 결과: Python 문법 컴파일 검증 통과
 
 ---
@@ -346,7 +374,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 
 - `api/endpoints.py` 를 기준으로 live/mock REST/WebSocket 엔드포인트와 토큰 캐시 파일(`kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`)을 분리해 문서와 코드 설명을 일치시켰습니다.
 - `external_positions` 를 통해 유니버스 외 계좌 보유 종목을 읽기 전용으로 추적하고, 진단 탭/상세 패널/수동 매도 가능수량 확인에 반영하는 동작을 문서화했습니다.
-- `stop_trading()` / `긴급 전체 청산` 경로에서 활성 주문 취소를 먼저 시도하고, 남은 pending/manual pending/reserved cash 를 정리하는 종료 절차를 문서에 추가했습니다.
+- `stop_trading()` / `긴급 전체 청산` 경로에서 활성 주문 취소를 먼저 시도하고, 성공/상태 확인된 주문만 pending/manual pending/reserved cash 를 정리하는 종료 절차를 문서에 추가했습니다.
 - 외부 보유 종목도 시간청산/긴급청산 대상에 포함되는 현재 동작을 문서에 반영했습니다.
 - API 재연결 또는 연결 해제 시 기존 텔레그램 notifier 를 명시적으로 중지/교체하는 상태 정리 흐름을 문서화했습니다.
 - `KiwoomTrader.spec` 에 `api.endpoints` explicit hiddenimport 를 추가해 패키징 메타데이터를 현재 구조와 맞췄습니다.
@@ -355,7 +383,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 
 - 수동 매도는 이제 최신 계좌 포지션의 `available_qty` 를 우선 조회해 초과 주문을 차단합니다.
 - `external_positions` 는 `read_only=True` 상태로 관리되지만, 자동 청산과 수동 매도 수량 검증에는 실제 계좌 잔고 기준으로 참여합니다.
-- `IMPLEMENTATION_REVIEW_2026-04-08.md` 의 미반영 경계는 여전히 `portfolio_mode`/`enable_backtest` 직접 실행 연결과 SHORT direction 엔진 확장 영역에 남아 있습니다.
+- `portfolio_mode`는 여전히 실주문 라우팅의 직접 제어 스위치가 아니며, SHORT direction 엔진 확장은 백테스트/연구 영역으로 남아 있습니다.
 
 ---
 
@@ -377,13 +405,13 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 python -m pytest -q tests/unit
 ```
 
-- 결과: **`tests/unit` 전체 104개 테스트 통과** (2026-03-25 재실행 기준)
+- 당시 결과: **`tests/unit` 전체 104개 테스트 통과** (2026-03-25 재실행 기준)
 - 로컬 재실행 시간: **약 21.44초**
 
 ### 구현 정합성 메모
 
-- `IMPLEMENTATION_REVIEW_2026-04-08.md`를 추가해 코드 기준 점검 결과와 반영 후 남은 경계를 정리했습니다.
-- 이 메모의 `분할 매수`, `SHORT 전략`, `예약 매매`, `수동 주문` 관련 후속 구현은 상단 `2026-04-08 주문·예약 안전화 업데이트`에 반영되었습니다.
+- 과거 구현 검토 문서는 현재 문서 세트에 흡수됐고, 저장소 기준 문서는 `PROJECT_STRUCTURE_ANALYSIS.md`와 `REAL_API_PREPARATION_GUIDE.md`를 기준으로 유지합니다.
+- 이 메모의 `분할 매수`, `SHORT 전략`, `예약 매매`, `수동 주문` 관련 후속 구현은 상단 `2026-04-08 주문·예약 안전화 업데이트`와 `2026-04-29 실행 안전장치·백테스트 UI·문서 동기화 업데이트`에 반영되었습니다.
 - 오프스크린 UI 초기화 스모크 테스트 기준으로 `ui_build.py`의 분할매수 기본값 상수명을 현재 코드와 맞게 정리했습니다.
 
 ---

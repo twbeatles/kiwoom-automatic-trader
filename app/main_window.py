@@ -2,7 +2,7 @@
 
 from collections import deque
 import datetime
-from typing import Any, Deque, Dict, List, Optional, Set
+from typing import Any, Deque, Dict, List, Optional, Set, cast
 
 from PyQt6.QtCore import QThreadPool, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -36,6 +36,10 @@ from .mixins.persistence_settings import PersistenceSettingsMixin
 from .mixins.system_shell import SystemShellMixin
 from .mixins.trading_session import TradingSessionMixin
 from .mixins.ui_build import UIBuildMixin
+
+
+def _dict_or_empty(value: object) -> Dict[str, Any]:
+    return cast(Dict[str, Any], value) if isinstance(value, dict) else {}
 
 
 class KiwoomProTrader(
@@ -552,21 +556,19 @@ class KiwoomProTrader(
         if not hasattr(self, "diagnostic_table"):
             return
 
-        external_positions = getattr(self, "external_positions", {})
+        external_positions = _dict_or_empty(getattr(self, "external_positions", {}))
         codes = list(self.universe.keys())
-        if isinstance(external_positions, dict):
-            codes.extend(code for code in sorted(external_positions.keys()) if code not in self.universe)
+        codes.extend(code for code in sorted(external_positions.keys()) if code not in self.universe)
 
         if not self._diagnostics_dirty_codes and self.diagnostic_table.rowCount() == len(codes):
             has_external_clock = any(
                 isinstance(info.get("external_updated_at"), datetime.datetime)
                 for info in self.universe.values()
             )
-            if isinstance(external_positions, dict):
-                has_external_clock = has_external_clock or any(
-                    isinstance(info.get("external_updated_at"), datetime.datetime)
-                    for info in external_positions.values()
-                )
+            has_external_clock = has_external_clock or any(
+                isinstance(_dict_or_empty(info).get("external_updated_at"), datetime.datetime)
+                for info in external_positions.values()
+            )
             if not has_external_clock and not external_positions:
                 return
 
@@ -577,12 +579,14 @@ class KiwoomProTrader(
             for row, code in enumerate(codes):
                 row_to_code[row] = code
                 tracked_getter = getattr(self, "_get_tracked_position_info", None)
-                info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
-                market_intel = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+                raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+                info = _dict_or_empty(raw_info)
+                market_intel = _dict_or_empty(info.get("market_intel", {}))
                 diag = self._diagnostics_by_code.get(code, {})
                 pending = self._pending_order_state.get(code, {})
                 if not pending:
-                    pending = getattr(self, "_manual_pending_state", {}).get(code, {})
+                    pending = _dict_or_empty(getattr(self, "_manual_pending_state", {})).get(code, {})
+                pending = _dict_or_empty(pending)
                 sync_status = str(info.get("status", ""))
                 if sync_status == "sync_failed":
                     sync_status = "sync_failed"
@@ -719,7 +723,10 @@ class KiwoomProTrader(
                         row_value = row_fn()
                         if isinstance(row_value, int):
                             row = row_value
-        return str(getattr(self, "_diagnostic_row_to_code", {}).get(row, "") or "")
+        row_to_code = getattr(self, "_diagnostic_row_to_code", {})
+        if isinstance(row_to_code, dict):
+            return str(row_to_code.get(row, "") or "")
+        return ""
 
     def _render_selected_diagnostic_detail(self):
         panel = getattr(self, "diag_detail_panel", None)
@@ -731,11 +738,13 @@ class KiwoomProTrader(
             return
 
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
-        info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
-        market_intel = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+        raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+        info = _dict_or_empty(raw_info)
+        market_intel = _dict_or_empty(info.get("market_intel", {}))
         pending = self._pending_order_state.get(code, {})
         if not pending:
-            pending = getattr(self, "_manual_pending_state", {}).get(code, {})
+            pending = _dict_or_empty(getattr(self, "_manual_pending_state", {})).get(code, {})
+        pending = _dict_or_empty(pending)
         detail = [
             f"코드: {code}",
             f"종목명: {info.get('name', code)}",
@@ -780,7 +789,7 @@ class KiwoomProTrader(
             self.log("[진단] sync_failed 해제 대상 종목이 선택되지 않았습니다.")
             return
 
-        info = self.universe.get(code, {})
+        info = _dict_or_empty(self.universe.get(code, {}))
         in_failed = code in getattr(self, "_sync_failed_codes", set())
         if str(info.get("status", "")) != "sync_failed" and not in_failed:
             self.log(f"[진단] {code}는 sync_failed 상태가 아닙니다.")

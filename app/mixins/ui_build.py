@@ -793,7 +793,7 @@ class UIBuildMixin(TraderMixinBase):
         self.chk_feature_modular_pack.setChecked(bool(Config.FEATURE_FLAGS.get("use_modular_strategy_pack", True)))
         g5.addWidget(self.chk_feature_modular_pack, 4, 0, 1, 2)
         self.chk_feature_backtest = QCheckBox("백테스트 기능 사용")
-        self.chk_feature_backtest.setToolTip("현재는 연구용 설정으로 저장만 되며, UI에서 직접 실행되지는 않습니다.")
+        self.chk_feature_backtest.setToolTip("CSV/JSONL 입력을 이벤트 드리븐 백테스트 엔진으로 실행합니다.")
         self.chk_feature_backtest.setChecked(bool(Config.FEATURE_FLAGS.get("enable_backtest", True)))
         g5.addWidget(self.chk_feature_backtest, 4, 2)
         self.chk_feature_external_data = QCheckBox("외부 데이터 사용")

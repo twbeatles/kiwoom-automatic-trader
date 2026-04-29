@@ -1,6 +1,6 @@
 # 실제 API 준비 가이드
 
-기준일: 2026-04-12
+기준일: 2026-04-29
 기준: 현재 저장소 코드 + 공식 문서 확인
 
 이 문서는 이 프로젝트를 실제 API와 연결해 운영하기 전에 무엇을 준비해야 하는지 정리한 실무용 체크리스트다.  
@@ -51,12 +51,15 @@
 추가 정합성 메모:
 
 - `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`처럼 전략팩에서 SHORT 방향을 반환할 수 있는 전략은 현재 자동매매 비지원/백테스트 전용이다.
-- `portfolio_mode`, `enable_backtest`, `portfolio/allocator.py`는 확장 경로로는 존재하지만 실주문 라우팅의 직접 제어 스위치는 아니다.
+- `portfolio_mode`, `portfolio/allocator.py`는 확장 경로로는 존재하지만 실주문 라우팅의 직접 제어 스위치는 아니다.
+- `enable_backtest`, `backtest_config`, `app/support/backtest_runner.py`는 UI 백테스트 실행 경로에 연결되어 있지만 실제 주문 라우팅과는 분리되어 있다.
 - `분할 매수`는 현재 `use_split=True` + `execution_policy=limit` 일 때 실제 child 지정가 주문을 즉시 다건 제출한다.
 - 실계좌 `수동 주문`은 주문마다 실거래 보호 확인을 다시 요구하고, 6자리 숫자 코드/지정가 1원 이상/매도 가능수량 검증을 통과해야 한다.
+- 유니버스 밖 수동 매수는 차단된다. 유니버스 밖 수동 매도는 계좌 스냅샷으로 동기화된 `external_positions` 보유 종목에 한해 가능수량 검증 후 허용된다.
 - `external_positions` 로 유니버스 외 보유 종목을 읽기 전용 추적하며, 시간청산/긴급청산/진단 표시는 현재 이 상태를 기준으로 동작한다.
-- `stop_trading()` 와 긴급청산 경로는 활성 주문 취소를 먼저 시도하고, 남은 pending/manual pending/reserved cash 를 로컬에서 정리한다.
-- 빌드 기준 배포 패키지는 `KiwoomTrader.spec`에서 `api.endpoints`, `dialogs`, `strategies`, `app`, `data.providers` 하위 모듈을 함께 수집하도록 동기화돼 있다.
+- `stop_trading()` 와 긴급청산 경로는 활성 주문 취소를 먼저 시도하고, 성공 또는 계좌 스냅샷으로 상태 확인된 pending/manual pending/reserved cash 만 정리한다. 취소 실패/미확인 주문은 `sync_failed`로 남겨 예약 현금을 보존한다.
+- 시장 인텔리전스는 enabled 상태에서 credential/provider/freshness가 확인되지 않으면 `disabled_by_missing_credentials`, `stale`, `error`, `refreshing`, `idle` 상태를 신규 진입 차단으로 처리한다.
+- 빌드 기준 배포 패키지는 `KiwoomTrader.spec`에서 `api.endpoints`, `app.support.backtest_runner`, `dialogs`, `strategies`, `app`, `data.providers` 하위 모듈을 함께 수집하도록 동기화돼 있다.
 
 ## 3. 가장 먼저 확인할 현재 코드 제약
 
