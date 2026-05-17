@@ -18,13 +18,16 @@ class TestSettingsSchemaV4(unittest.TestCase):
 
         trader._apply_settings_schema_migration(settings)
 
-        self.assertEqual(settings["settings_version"], 6)
+        self.assertEqual(settings["settings_version"], 7)
         self.assertEqual(settings["shock_1m_pct"], 2.0)
         self.assertIn("use_vi_guard", settings)
         self.assertIn("max_slippage_bps", settings)
         self.assertIn("order_health_fail_count", settings)
         self.assertIn("market_intelligence", settings)
         self.assertIsInstance(settings["market_intelligence"], dict)
+        self.assertEqual(settings["execution_mode"], "signal_only")
+        self.assertFalse(settings["allow_plaintext_secret_fallback"])
+        self.assertFalse(settings["market_intelligence"]["source_policy"]["strict_entry_guard"])
 
 
 if __name__ == "__main__":

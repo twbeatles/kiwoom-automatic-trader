@@ -1,8 +1,10 @@
 ﻿"""Execution engine mixin for KiwoomProTrader."""
 
 import datetime
+import json
 import time
 from collections import deque
+from pathlib import Path
 
 from api.models import ExecutionData
 from app.support.execution_policy import ExecutionPolicy
@@ -12,6 +14,56 @@ from ._typing import TraderMixinBase
 
 
 class ExecutionEngineMixin(TraderMixinBase):
+    def _execution_mode(self) -> str:
+        cfg = getattr(self, "config", None)
+        mode = str(getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")) or "")
+        if mode not in getattr(Config, "EXECUTION_MODES", {"signal_only", "live"}):
+            return str(getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))
+        return mode
+
+    def _is_signal_only_mode(self) -> bool:
+        return self._execution_mode() == "signal_only"
+
+    def _record_order_lifecycle_event(self, event: dict) -> None:
+        payload = dict(event)
+        payload.setdefault("ts", datetime.datetime.now().isoformat())
+        path = Path(getattr(Config, "ORDER_LIFECYCLE_EVENTS_FILE", "data/order_lifecycle_events.jsonl"))
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as file:
+                file.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        except OSError as exc:
+            logger = getattr(self, "logger", None)
+            if logger is not None:
+                logger.warning(f"order lifecycle event write failed: {exc}")
+
+    def _record_signal_only_order(
+        self,
+        *,
+        side: str,
+        code: str,
+        quantity: int,
+        price: int = 0,
+        reason: str = "",
+        payload: dict | None = None,
+    ) -> None:
+        event = {
+            "event": "signal_only_order_skipped",
+            "execution_mode": "signal_only",
+            "side": side,
+            "code": code,
+            "quantity": max(0, int(quantity or 0)),
+            "price": max(0, int(price or 0)),
+            "reason": reason,
+            "payload": payload or {},
+        }
+        self._record_order_lifecycle_event(event)
+        if hasattr(self, "log"):
+            self.log(
+                f"[signal-only] {side.upper()} skipped {code} "
+                f"qty={event['quantity']} price={event['price']} reason={reason or '-'}"
+            )
+
     def _record_decision_audit_once(
         self,
         code: str,
@@ -284,6 +336,20 @@ class ExecutionEngineMixin(TraderMixinBase):
         enabled = bool(flags.get("enable_external_data", True) and intel_cfg.get("enabled", True))
         if not enabled:
             return True, ""
+        policy = intel_cfg.get("source_policy", {}) if isinstance(intel_cfg.get("source_policy"), dict) else {}
+        strict_entry_guard = bool(policy.get("strict_entry_guard", False))
+
+        def allow_relaxed(reason: str) -> tuple[bool, str]:
+            if strict_entry_guard:
+                return False, reason
+            info["last_guard_warning"] = reason
+            logger = getattr(self, "_log_once", None)
+            if callable(logger):
+                logger(
+                    f"market_intel_relaxed:{code}:{reason}",
+                    f"[market-intel] relaxed entry guard allowed {code}: {reason}",
+                )
+            return True, ""
 
         state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
         if not state:
@@ -292,7 +358,7 @@ class ExecutionEngineMixin(TraderMixinBase):
                 return True, ""
             if callable(request_refresh):
                 request_refresh([code], reason="entry_guard_missing", force=False)
-            return False, "market_intel_fresh_guard"
+            return allow_relaxed("market_intel_fresh_guard")
 
         status = str(state.get("status", state.get("intel_status", "idle")) or "idle").lower()
         if status == "disabled":
@@ -305,16 +371,16 @@ class ExecutionEngineMixin(TraderMixinBase):
         if str(state.get("dart_risk_level", "normal") or "normal").lower() == "high":
             return False, "market_intel_dart_guard"
 
-        policy = intel_cfg.get("source_policy", {}) if isinstance(intel_cfg.get("source_policy"), dict) else {}
         allow_partial = bool(policy.get("allow_partial_for_entry", False))
         if status == "partial" and not allow_partial:
-            return False, "market_intel_source_guard"
+            return allow_relaxed("market_intel_source_guard")
         if status in {"error", "stale", "refreshing", "idle", "disabled_by_missing_credentials"}:
             if status in {"idle", "stale"}:
                 request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
                 if callable(request_refresh):
                     request_refresh([code], reason=f"entry_guard_{status}", force=False)
-            return False, "market_intel_fresh_guard" if status in {"idle", "stale", "refreshing"} else "market_intel_source_guard"
+            reason = "market_intel_fresh_guard" if status in {"idle", "stale", "refreshing"} else "market_intel_source_guard"
+            return allow_relaxed(reason)
 
         updated_at = state.get("intel_updated_at", state.get("updated_at"))
         if isinstance(updated_at, str):
@@ -327,7 +393,7 @@ class ExecutionEngineMixin(TraderMixinBase):
             request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
             if callable(request_refresh):
                 request_refresh([code], reason="entry_guard_stale_ts", force=False)
-            return False, "market_intel_fresh_guard"
+            return allow_relaxed("market_intel_fresh_guard")
 
         return True, ""
 
@@ -758,6 +824,17 @@ class ExecutionEngineMixin(TraderMixinBase):
                         self.sig_update_table.emit()
                     return
 
+                if self._is_signal_only_mode():
+                    self._record_signal_only_order(
+                        side="buy",
+                        code=code,
+                        quantity=sum(qty for qty, _price in child_orders),
+                        price=current_price,
+                        reason="BUY_SPLIT",
+                        payload={"child_orders": [{"quantity": qty, "price": child_price} for qty, child_price in child_orders]},
+                    )
+                    return
+
                 self._reserve_cash_for_buy(code, required_cash)
                 if info.get("held", 0) <= 0:
                     self._holding_or_pending_count += 1
@@ -789,6 +866,17 @@ class ExecutionEngineMixin(TraderMixinBase):
             self._dirty_codes.add(code)
             if not hasattr(self, "_ui_flush_timer"):
                 self.sig_update_table.emit()
+            return
+
+        if self._is_signal_only_mode():
+            self._record_signal_only_order(
+                side="buy",
+                code=code,
+                quantity=quantity,
+                price=current_price,
+                reason="BUY",
+                payload={"execution_policy": policy, "required_cash": required_cash},
+            )
             return
 
         # Reserve virtual cash before submit to prevent over-commit.
@@ -999,6 +1087,17 @@ class ExecutionEngineMixin(TraderMixinBase):
         held = int(info.get("held", 0))
         if held > 0 and quantity > held:
             quantity = held
+
+        if self._is_signal_only_mode():
+            self._record_signal_only_order(
+                side="sell",
+                code=code,
+                quantity=quantity,
+                price=price,
+                reason=reason,
+                payload={"held": held},
+            )
+            return
 
         if not (self.rest_client and self.current_account):
             self.log(f"SELL failed [{name}]: API/account not ready")

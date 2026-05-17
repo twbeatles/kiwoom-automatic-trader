@@ -26,6 +26,7 @@
 - [키보드 단축키](#-키보드-단축키)
 - [매매 전략](#-매매-전략)
 - [리스크 관리](#-리스크-관리)
+- [2026-05-17 실행 안전장치 종합 업데이트](#-2026-05-17-실행-안전장치-종합-업데이트)
 - [2026-04-29 실행 안전장치·백테스트 UI·문서 동기화 업데이트](#-2026-04-29-실행-안전장치백테스트-ui문서-동기화-업데이트)
 - [2026-04-12 API 모드·외부보유·종료 정합성 업데이트](#-2026-04-12-api-모드외부보유종료-정합성-업데이트)
 - [2026-04-08 주문·예약 안전화 업데이트](#-2026-04-08-주문예약-안전화-업데이트)
@@ -180,7 +181,7 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-> 기준: 2026-04-29, 현재 저장소 코드
+> 기준: 2026-05-17, 현재 저장소 코드
 
 ```text
 kiwoom-automatic-trader/
@@ -200,7 +201,7 @@ kiwoom-automatic-trader/
 ├── tests/unit/              # 단위 테스트
 ├── tools/                   # refactor/perf 검증 도구
 ├── config.py
-├── pyrightconfig.json       # repo-wide pyright 기준(Python 3.14)
+├── pyrightconfig.json       # repo-wide pyright 기준(Python 3.10)
 ├── strategy_manager.py      # orchestration 레이어 (실구현은 strategies/manager_mixins)
 ├── KiwoomTrader.spec
 ├── ui_dialogs.py            # dialogs 패키지 호환 re-export
@@ -217,7 +218,7 @@ kiwoom-automatic-trader/
 | `app/mixins/market_intelligence.py` | 2281 | 시장 인텔리전스 수집, 정책 계산, 리플레이/감사 뷰어 |
 | `strategies/manager_mixins/*.py` | 1797 | 전략 평가, 지표 계산, 포지션/리스크, 인텔 가드 |
 | `strategy_manager.py` | 32 | `StrategyManager` 조립/orchestration 레이어 |
-| `config.py` | 857 | 설정 상수, v6 스키마, 가드/market intelligence 기본값 |
+| `config.py` | 909 | 설정 상수, v7 스키마, 실행 모드, 가드/market intelligence 기본값 |
 | `dialogs/*.py` | 575 | 프리셋/검색/수동주문/프로필/예약 다이얼로그 구현 |
 | `ui_dialogs.py` | 22 | 기존 import 경로 호환 re-export |
 
@@ -254,8 +255,11 @@ kiwoom-automatic-trader/
 # 저장소 클론 (또는 다운로드)
 cd "키움증권 자동 매매 프로그램"
 
-# 의존성 설치
+# 런타임 의존성 설치
 pip install -r requirements.txt
+
+# 개발/검증 의존성 설치
+pip install -r requirements-dev.txt
 ```
 
 ### 3. 실행
@@ -282,7 +286,7 @@ pyinstaller --clean KiwoomTrader.spec
 
 ```bash
 # 정적 분석
-pyright .
+python -m pyright .
 
 # 기준선 생성 (최초 1회)
 python tools/refactor_manifest.py --source "app/main_window.py" --output docs/refactor/baseline_manifest.json
@@ -307,11 +311,11 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 
 ## 🔄 2026-04-29 실행 안전장치·백테스트 UI·문서 동기화 업데이트
 
-이번 업데이트는 2026-04-29 위험 검토 계획 항목을 코드, 테스트, 문서, 패키징 기준으로 실제 동작에 맞춘 반영입니다.
+이번 업데이트는 2026-04-29 위험 검토 계획 항목을 코드, 테스트, 문서, 패키징 기준으로 실제 동작에 맞춘 반영입니다. 2026-05-17 이후 기본 인텔리전스 freshness/source guard는 신규/모의 환경을 막지 않도록 경고형으로 완화되었고, strict entry guard를 켠 경우에만 fail-closed로 동작합니다.
 
 ### 반영된 핵심 변경
 
-- 시장 인텔리전스 가드는 기본 `risk_overlays`와 `_can_enter_trade()` 양쪽에서 fail-closed로 동작합니다. `block_entry`, 고위험 DART, `idle`/`refreshing`/`stale`/`error` 상태는 신규 진입을 막습니다.
+- 시장 인텔리전스의 실제 고위험 신호(`block_entry`, 고위험 DART, `force_exit`)는 계속 신규 진입 또는 청산 정책에 반영됩니다. freshness/source 누락·지연·오류는 기본 경고 허용이며, strict guard를 켠 경우 신규 진입을 차단합니다.
 - `Config`, `api.endpoints`, `KiwoomAuth`, REST/WebSocket 클라이언트가 실전/모의 REST·WS URL과 토큰 캐시 namespace를 분리합니다.
 - `stop_trading()`은 활성 주문 취소를 먼저 시도하고, 취소 실패 또는 미확인 주문은 `sync_failed`로 남겨 pending/reserved cash를 보존합니다.
 - 유니버스 밖 수동 매수는 차단하고, 수동 매도는 계좌 스냅샷 또는 `external_positions`의 매도 가능수량을 기준으로 검증합니다.
@@ -326,7 +330,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 pyright .
 ```
 
-- 결과: **`tests/unit` 전체 134개 테스트 통과**
+- 결과: **`tests/unit` 전체 143개 테스트 통과**
 - 결과: Python 문법 컴파일 검증 통과
 - 결과: `pyright .` 0 errors
 
@@ -393,7 +397,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 
 ### 반영된 핵심 변경
 
-- canonical 설정 스키마 기준을 `settings_version = 6`으로 문서 전반에 통일
+- canonical 설정 스키마 기준을 `settings_version = 7`으로 문서 전반에 통일
 - 시장 인텔리전스 자동매매 확장에 맞춰 `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay` 하위 설정과 `action_policy`/`size_multiplier`/`exit_policy` 흐름을 문서화
 - 메인 UI의 `📼 인텔리전스 리플레이` 탭과 `data/decision_audit.jsonl` 감사 로그를 README에 반영
 - `REAL_API_PREPARATION_GUIDE.md`를 운영 문서로 추가
@@ -416,13 +420,44 @@ python -m pytest -q tests/unit
 
 ---
 
+## 🔄 2026-05-17 실행 안전장치 종합 업데이트
+
+- 기본 실행 모드는 `signal_only`이며, 이 모드에서는 자동/수동/분할 주문이 브로커 주문 API를 호출하지 않고 `data/order_lifecycle_events.jsonl`에 감사 로그만 남깁니다.
+- 실제 주문은 상세 설정의 실행 모드를 `live`로 바꾸고 기존 실거래 보호 확인을 통과해야 합니다.
+- 시장 인텔리전스 fresh/source guard는 기본적으로 경고형이며, 실거래 fail-closed가 필요하면 `market_intelligence.source_policy.strict_entry_guard`를 켭니다.
+- 거래 시작 전 preflight 로그에 실행 모드, API 모드, 계좌, WebSocket 상태, strict 인텔리전스 여부, 미체결 조회 지원 여부가 기록됩니다.
+- 미체결 주문 조회는 내부 adapter만 추가된 상태이며, 공식 Kiwoom REST 엔드포인트가 확인되기 전까지 preflight에서 `unsupported`로 표시됩니다.
+- Keyring 저장 실패 시 실거래 평문 secret fallback은 기본 차단되며, 도구 메뉴에서 민감정보/토큰 삭제를 실행할 수 있습니다.
+- WebSocket 콜백은 Qt 메인 스레드 signal dispatcher를 통해 전달되며, 백그라운드 스레드에서 UI 객체를 직접 건드리지 않습니다.
+- 주문 취소는 정상 생명주기 이벤트로 감사 로그에 남기고, 주문 건강도 degrade는 거부/실패 이벤트에만 적용합니다.
+- 거래 내역 저장은 atomic write로 수행하며, 저장 실패는 Worker error로 노출됩니다.
+- REST 응답 숫자 파싱은 빈 값, 콤마, 부호, 누락 필드를 안전하게 처리합니다.
+- `requirements.txt`는 런타임 의존성만 담고, 개발/검증 도구는 `requirements-dev.txt`로 분리했습니다.
+- `KiwoomTrader.spec`는 `icon.png`를 실제 앱 아이콘으로 연결하고, 런타임 생성 JSON/JSONL 산출물은 번들에 포함하지 않습니다.
+
+### 최신 검증 결과
+
+```bash
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py "키움증권 자동매매.py"
+python -m pytest tests\unit --override-ini addopts= --tb=short
+python -m pyright .
+python tools\refactor_verify.py
+```
+
+- 결과: `tests/unit` 전체 143개 테스트 통과
+- 결과: Python 문법 컴파일 검증 통과
+- 결과: `pyright .` 0 errors
+- 결과: refactor verification 통과
+
+---
+
 ## 🔄 2026-03-24 시장 인텔리전스 업데이트
 
 이번 업데이트는 기존 `external_data` 경로를 `market intelligence` 계층으로 확장한 구현 동기화입니다.
 
 ### 반영된 핵심 변경
 
-- 설정 스키마를 `market_intelligence` 포함 구조로 확장했고, 현재 canonical 스키마는 `settings_version = 6`
+- 설정 스키마를 `market_intelligence` 포함 구조로 확장했고, 현재 canonical 스키마는 `settings_version = 7`
 - `app/mixins/market_intelligence.py`를 추가해 뉴스/공시/검색트렌드/매크로 수집 루프, 브리핑, 경보, JSONL 이벤트 로그를 분리
 - 메인 탭에 `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`를 분리하고, `🔐 API/알림` 탭은 인증/알림 전용으로 재정리
 - 신규 provider 추가:
@@ -443,7 +478,7 @@ python -m pytest -q tests/unit
 ### 운영 원칙
 
 - `feature_flags["enable_external_data"]`가 상위 게이트이고, 그 아래 `market_intelligence.enabled`가 세부 스위치입니다.
-- 데이터가 없거나 stale/error이면 신규 진입만 보수적으로 차단하고 청산은 허용하는 fail-closed 원칙을 유지합니다.
+- 데이터가 없거나 stale/error이면 기본적으로 경고만 남기고 진입을 허용합니다. 실거래 fail-closed가 필요하면 strict entry guard를 켭니다.
 - AI 요약은 기본 `OFF`이며, 규칙 기반 점수화와 결정론적 포지션 방어가 우선입니다.
 
 ### 최신 검증 결과
@@ -459,7 +494,7 @@ python -m pytest -q tests/unit
 
 ### 반영된 핵심 변경
 
-- `pyrightconfig.json`을 루트에 추적하여 정적 분석 기준(Python 3.14, cache 디렉터리만 제외)을 고정
+- `pyrightconfig.json`을 루트에 추적하여 정적 분석 기준(Python 3.10, cache 디렉터리만 제외)을 고정
 - `app/mixins/_typing.py`를 추가해 동적 Qt mixin 구조의 type-check 전용 공통 베이스(`TraderMixinBase`)를 도입
 - `KiwoomTrader.spec` hiddenimports에 `app.mixins._typing`을 명시해 빌드 메타데이터와 코드 구조를 일치
 - `.gitignore`에 `pyrightconfig.json` 예외를 유지해 정적 분석 설정이 누락되지 않도록 정리
@@ -754,8 +789,10 @@ python -m pytest -q tests/unit
 ### kiwoom_settings.json
 ```json
 {
-  "settings_version": 6,
+  "settings_version": 7,
   "codes": "005930,000660",
+  "execution_mode": "signal_only",
+  "execution_policy": "market",
   "k_value": 0.5,
   "betting_ratio": 10.0,
   "betting": 10.0,
@@ -777,6 +814,9 @@ python -m pytest -q tests/unit
       "macro": 300
     },
     "briefing_time": "08:50",
+    "source_policy": {
+      "strict_entry_guard": false
+    },
     "soft_scale": {
       "enabled": true
     },
@@ -796,11 +836,11 @@ python -m pytest -q tests/unit
   ...
 }
 ```
-설정 스키마(v6) 정책:
-- canonical 스키마는 `settings_version = 6`
+설정 스키마(v7) 정책:
+- canonical 스키마는 `settings_version = 7`
 - 저장은 `betting_ratio`를 기준으로 사용
 - `betting`은 legacy 파일 호환을 위해 병행 저장/로드
-- `settings_version < 6` 파일은 로드 시 v4 가드와 `market_intelligence` 신규 하위 블록이 자동 보강됩니다.
+- `settings_version < 7` 파일은 로드 시 v4 가드, 실행 모드, 보안 fallback, `market_intelligence` 신규 하위 블록이 자동 보강됩니다.
 
 ### v4 Guard 옵션
 - Shock guard: `shock_1m_pct`, `shock_5m_pct`, `shock_cooldown_min`
@@ -819,10 +859,11 @@ python -m pytest -q tests/unit
 - `order_health_degraded_count`
 - `avg_slippage_bps`
 
-### Market Intelligence 산출물(v6)
+### Market Intelligence 산출물(v7)
 - 전용 상태 키: `universe[code]["market_intel"]`
 - 로그 파일: `data/market_intelligence_events.jsonl`
 - 감사 로그: `data/decision_audit.jsonl`
+- 주문 생명주기/신호 전용 감사 로그: `data/order_lifecycle_events.jsonl`
 - DART corp code 캐시: `data/dart_corp_codes.json`
 - UI: `🎯 핵심 설정` + `🛠 상세 설정` + `🧠 인텔리전스 설정` + `🧠 인텔리전스 현황` + `📼 인텔리전스 리플레이` + `🔐 API/알림`
 
@@ -881,7 +922,7 @@ MIT License
 
 - **작성자**: Kiwoom Pro Algo-Trader
 - **버전**: 4.5
-- **최종 업데이트**: 2026-03-25
+- **최종 업데이트**: 2026-05-17
 
 ---
 

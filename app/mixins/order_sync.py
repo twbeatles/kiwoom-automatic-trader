@@ -496,14 +496,28 @@ class OrderSyncMixin(TraderMixinBase):
             if code and (exec_qty > 0 or fill_like):
                 self._sync_position_from_account(code)
 
-            cancel_like = any(token in order_status for token in ["취소", "거부", "실패"]) or any(
-                token in status_lower for token in ["cancel", "reject", "fail"]
+            cancelled = ("취소" in order_status) or ("cancel" in status_lower)
+            rejected_or_failed = any(token in order_status for token in ["거부", "실패"]) or any(
+                token in status_lower for token in ["reject", "fail"]
             )
+            cancel_like = cancelled or rejected_or_failed
             if code and cancel_like:
-                self._record_order_failure("ORDER_CANCEL_REJECT", code=code)
+                recorder = getattr(self, "_record_order_lifecycle_event", None)
+                if callable(recorder):
+                    recorder(
+                        {
+                            "event": "order_terminal_status",
+                            "code": code,
+                            "order_no": order_no,
+                            "status": order_status,
+                            "is_cancel": cancelled,
+                            "is_reject_or_fail": rejected_or_failed,
+                        }
+                    )
+                if rejected_or_failed:
+                    self._record_order_failure("ORDER_REJECT_OR_FAIL", code=code)
                 pending = self._pending_order_state.get(code, {})
                 pending_side = str(pending.get("side", ""))
-                cancelled = ("취소" in order_status) or ("cancel" in status_lower)
                 final_state = "cancelled" if cancelled else "rejected"
                 children = self._pending_children(pending)
                 if pending_side == "buy" and children:

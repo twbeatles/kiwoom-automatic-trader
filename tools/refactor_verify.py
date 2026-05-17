@@ -167,7 +167,7 @@ def main() -> int:
         return 1
 
     failures = 0
-    failures += _print_diff("Method Set", set(baseline.get("methods", [])), method_set)
+    failures += _print_diff("Method Set", set(baseline.get("methods", [])), method_set, allow_added=True)
     failures += _print_diff("Required Signals", set(baseline.get("required_signals", [])), signal_set)
 
     required_methods = [

@@ -7,6 +7,7 @@ from api.models import Position
 from app.mixins.dialogs_profiles import DialogsProfilesMixin
 from app.mixins.execution_engine import ExecutionEngineMixin
 from app.mixins.order_sync import OrderSyncMixin
+from config import TradingConfig
 
 
 class _DummyResult:
@@ -66,6 +67,7 @@ class _Harness(DialogsProfilesMixin, OrderSyncMixin, ExecutionEngineMixin):
         self.sig_update_table = _DummySignal()
         self.logs = []
         self.guard_calls = 0
+        self.config = TradingConfig(execution_mode="live")
 
     def log(self, msg):
         self.logs.append(str(msg))

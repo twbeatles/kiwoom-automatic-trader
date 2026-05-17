@@ -116,7 +116,12 @@ class StrategyManagerMarketIntelMixin(StrategyManagerMixinBase):
         snapshot = self.get_market_intel_snapshot(code, now_ts=now_ts)
         if not snapshot["enabled"]:
             return True, float(snapshot["age_sec"])
+        cfg = snapshot.get("config", {})
+        source_policy = cfg.get("source_policy", {}) if isinstance(cfg, dict) and isinstance(cfg.get("source_policy"), dict) else {}
+        strict_entry_guard = bool(source_policy.get("strict_entry_guard", False))
         request_refresh = getattr(self.trader, "_request_market_intelligence_refresh_batch", None)
         if not snapshot["fresh"] and callable(request_refresh):
             request_refresh([code], reason="intel_fresh_guard", force=False)
+        if not strict_entry_guard:
+            return True, float(snapshot["age_sec"])
         return bool(snapshot["fresh"]), float(snapshot["age_sec"])

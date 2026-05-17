@@ -853,6 +853,117 @@ class TradingSessionMixin(TraderMixinBase):
             "unresolved_codes": unresolved_codes,
         }
 
+    def _cleanup_cancel_requests_worker(self, live_targets: List[Dict[str, Any]], reason: str) -> List[Dict[str, Any]]:
+        client = getattr(self, "rest_client", None)
+        account = str(getattr(self, "current_account", "") or "")
+        rows: List[Dict[str, Any]] = []
+        for raw_target in live_targets:
+            target = dict(raw_target)
+            order_no = str(target.get("order_no", "") or "").strip()
+            quantity = max(0, int(target.get("quantity", 0) or 0))
+            success = False
+            message = ""
+            if client is not None and account and order_no and quantity > 0:
+                try:
+                    result = client.cancel_order(account, order_no, target["code"], quantity)
+                    success = bool(getattr(result, "success", False))
+                    message = str(getattr(result, "message", "") or "")
+                except Exception as exc:
+                    message = str(exc)
+            else:
+                message = "API/account not ready"
+            target["cancel_success"] = success
+            target["cancel_message"] = message
+            target["cleanup_reason"] = reason
+            rows.append(target)
+        return rows
+
+    def _finalize_order_cleanup_requests(
+        self,
+        reason: str,
+        live_targets: List[Dict[str, Any]],
+        placeholders: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        for target in placeholders:
+            self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+
+        for target in live_targets:
+            if bool(target.get("cancel_success")):
+                self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+            else:
+                if hasattr(self, "log"):
+                    self.log(
+                        f"[order-cleanup] cancel request failed ({reason}) "
+                        f"{target.get('code')} {target.get('order_no')}: {target.get('cancel_message', '')}"
+                    )
+                self._mark_cleanup_target_failed(target, reason=reason)
+
+        self._force_account_position_sync(reason=f"{reason}_async_finalize")
+        recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+        if callable(recompute_count):
+            recompute_count()
+        if not hasattr(self, "_ui_flush_timer"):
+            signal = getattr(self, "sig_update_table", None)
+            emit = getattr(signal, "emit", None)
+            if callable(emit):
+                emit()
+        unresolved_codes = sorted(
+            {
+                str(target.get("code", "") or "")
+                for target in live_targets
+                if target.get("code") and not bool(target.get("cancel_success"))
+            }
+        )
+        return {
+            "live_targets": live_targets,
+            "placeholders": placeholders,
+            "unresolved_codes": unresolved_codes,
+        }
+
+    def _cleanup_active_orders_async(self, reason: str, on_done=None) -> bool:
+        threadpool = getattr(self, "threadpool", None)
+        starter = getattr(threadpool, "start", None)
+        if not callable(starter):
+            return False
+
+        live_targets, placeholders = self._collect_active_order_cleanup_targets()
+        if not live_targets and not placeholders:
+            self._force_account_position_sync(reason=f"{reason}_noop")
+            if callable(on_done):
+                on_done({"live_targets": [], "placeholders": [], "unresolved_codes": []})
+            return False
+
+        if hasattr(self, "log"):
+            self.log(f"[order-cleanup] {reason} async: live={len(live_targets)} placeholder={len(placeholders)}")
+        self._order_cleanup_inflight = True
+        if hasattr(self, "btn_start"):
+            self.btn_start.setEnabled(False)
+
+        worker = Worker(self._cleanup_cancel_requests_worker, [dict(row) for row in live_targets], reason)
+
+        def finish(rows):
+            self._order_cleanup_inflight = False
+            result = self._finalize_order_cleanup_requests(reason, list(rows or []), placeholders)
+            if not getattr(self, "is_running", False) and hasattr(self, "btn_start"):
+                self.btn_start.setEnabled(True)
+            if callable(on_done):
+                on_done(result)
+
+        def fail(exc):
+            self._order_cleanup_inflight = False
+            if hasattr(self, "log"):
+                self.log(f"[order-cleanup] async failed ({reason}): {exc}")
+            result = self._cleanup_active_orders(reason, timeout_sec=0.1)
+            if not getattr(self, "is_running", False) and hasattr(self, "btn_start"):
+                self.btn_start.setEnabled(True)
+            if callable(on_done):
+                on_done(result)
+
+        worker.signals.result.connect(finish)
+        worker.signals.error.connect(fail)
+        starter(worker)
+        return True
+
     def _cancel_pending_orders_before_stop(self) -> Dict[str, Any]:
         return self._cleanup_active_orders("stop_trading", timeout_sec=0.1)
 
@@ -1333,6 +1444,29 @@ class TradingSessionMixin(TraderMixinBase):
         )
         return True, ""
 
+    def _log_trading_preflight(self, codes: List[str]) -> None:
+        cfg = getattr(self, "config", None)
+        execution_mode = str(getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")))
+        is_mock = bool(hasattr(self, "chk_mock") and self.chk_mock.isChecked())
+        intel_cfg = getattr(cfg, "market_intelligence", {}) if cfg is not None else {}
+        source_policy = intel_cfg.get("source_policy", {}) if isinstance(intel_cfg, dict) and isinstance(intel_cfg.get("source_policy"), dict) else {}
+        strict_intel = bool(source_policy.get("strict_entry_guard", False))
+        rest_client = getattr(self, "rest_client", None)
+        open_order_support = bool(getattr(rest_client, "supports_open_orders", False))
+        account = str(getattr(self, "current_account", "") or "")
+        ws_client = getattr(self, "ws_client", None)
+        ws_ready = "ready" if ws_client is not None else "not_configured"
+        self.log(
+            "[preflight] "
+            f"mode={execution_mode} api={'mock' if is_mock else 'live'} account={account or '-'} "
+            f"codes={len(codes)} ws={ws_ready} intel_strict={strict_intel} "
+            f"open_orders={'supported' if open_order_support else 'unsupported'}"
+        )
+        if execution_mode == "signal_only":
+            self.log("[preflight] signal-only mode: broker order APIs will not be called.")
+        if not open_order_support:
+            self.log("[preflight] open-order recovery is unavailable until a verified Kiwoom REST endpoint is configured.")
+
     def start_trading(self, from_schedule: bool = False) -> bool:
         if self.is_running:
             self.log("자동매매가 이미 실행 중입니다.")
@@ -1399,6 +1533,8 @@ class TradingSessionMixin(TraderMixinBase):
 
         if not self._confirm_live_trading_guard():
             return False
+
+        self._log_trading_preflight(valid_codes)
 
         # Keep live routing constrained to KR stock long path in phase-1.
         is_mock = bool(hasattr(self, "chk_mock") and self.chk_mock.isChecked())
@@ -1559,15 +1695,25 @@ class TradingSessionMixin(TraderMixinBase):
     def stop_trading(self):
         was_running = self.is_running
         self._set_trading_stopped_state()
-        cleanup_result = self._cancel_pending_orders_before_stop()
+
+        def finalize_cleanup(cleanup_result):
+            unresolved_codes = set(cleanup_result.get("unresolved_codes", [])) if isinstance(cleanup_result, dict) else set()
+            release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
+            if callable(release_all_reserved) and not unresolved_codes:
+                released = release_all_reserved(reason="STOP_TRADING")
+                released_total = int(released) if isinstance(released, (int, float, str)) else 0
+                if released_total > 0 and hasattr(self, "log"):
+                    self.log(f"Reserved cash reconciled on stop: +{released_total:,}")
+
+        async_started = False
+        if not bool(getattr(self, "_shutdown_in_progress", False)):
+            async_cleanup = getattr(self, "_cleanup_active_orders_async", None)
+            if callable(async_cleanup):
+                async_started = bool(async_cleanup("stop_trading", on_done=finalize_cleanup))
+        if not async_started:
+            cleanup_result = self._cancel_pending_orders_before_stop()
+            finalize_cleanup(cleanup_result)
         self._last_exec_event.clear()
-        unresolved_codes = set(cleanup_result.get("unresolved_codes", [])) if isinstance(cleanup_result, dict) else set()
-        release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
-        if callable(release_all_reserved) and not unresolved_codes:
-            released = release_all_reserved(reason="STOP_TRADING")
-            released_total = int(released) if isinstance(released, (int, float, str)) else 0
-            if released_total > 0 and hasattr(self, "log"):
-                self.log(f"Reserved cash reconciled on stop: +{released_total:,}")
         self._disconnect_realtime_clients()
 
         if was_running:

@@ -43,6 +43,11 @@ EXECUTION_POLICY_CHOICES: Sequence[ChoiceItem] = (
     ("지정가 우선", "limit"),
 )
 
+EXECUTION_MODE_CHOICES: Sequence[ChoiceItem] = (
+    ("신호 전용", "signal_only"),
+    ("실주문", "live"),
+)
+
 BACKTEST_TIMEFRAME_CHOICES: Sequence[ChoiceItem] = (
     ("일봉", "1d"),
     ("1분봉", "1m"),

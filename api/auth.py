@@ -201,9 +201,19 @@ class KiwoomAuth:
                 "app_key_hash": self._app_key_hash(),  # 키 변경 감지용
                 "mode": self.endpoints.mode,
             }
-            
-            with open(self.cache_path, 'w', encoding='utf-8') as f:
+
+            tmp_path = self.cache_path.with_name(f"{self.cache_path.name}.tmp")
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f)
+            try:
+                os.chmod(tmp_path, 0o600)
+            except OSError:
+                pass
+            os.replace(tmp_path, self.cache_path)
+            try:
+                os.chmod(self.cache_path, 0o600)
+            except OSError:
+                pass
                 
         except Exception as e:
             self.logger.warning(f"토큰 캐시 저장 실패: {e}")

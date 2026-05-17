@@ -61,6 +61,7 @@ class _Harness(ExecutionEngineMixin, OrderSyncMixin):
         self.threadpool = _DummyThreadPool()
         self.sig_update_table = _DummySignal()
         self.config = TradingConfig()
+        self.config.execution_mode = "live"
         self.config.use_split = True
         self.config.execution_policy = "limit"
         self.strategy = _SplitStrategyStub()

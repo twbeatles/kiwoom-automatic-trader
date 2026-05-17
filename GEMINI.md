@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-04-29
+> **최종 업데이트**: 2026-05-17
 
 ---
 
@@ -23,6 +23,8 @@
 - 백테스트 UI 실행 adapter: `app/support/backtest_runner.py`
 - API 모드 라우팅: `api/endpoints.py`
 - UI 텍스트/콤보 표시값 헬퍼: `app/support/ui_text.py`
+- 실행 모드: 기본 `signal_only`, 실주문은 `live`
+- 주문/신호 감사 로그: `data/order_lifecycle_events.jsonl`
 
 ---
 
@@ -90,6 +92,8 @@ ui_dialogs.py
 1. 실거래 안전장치
 - `start_trading()`에서 실전 모드 시 확인 문구/타임아웃 가드 적용
 - 관련 상수: `Config.LIVE_GUARD_*`
+- 거래 시작 전 preflight 로그로 실행 모드, API 모드, 계좌, WebSocket, 인텔리전스 strict, 미체결 조회 지원 여부를 확인
+- `execution_mode="signal_only"`에서는 자동/수동/분할 주문이 브로커 주문 API를 호출하지 않고 감사 로그만 기록
 
 2. 전략 데이터 정합성
 - `universe`에 `prev_high`, `prev_low`, `daily_prices`, `minute_prices` 유지
@@ -100,7 +104,8 @@ ui_dialogs.py
 
 4. 주문 안전성
 - 실행 이벤트는 `is_running` 상태 가드 하에서만 신규 주문 검토
-- `stop_trading()`은 활성 주문 취소를 먼저 시도하고, 실패/미확인 주문은 `sync_failed`로 남겨 예약 현금을 보존
+- `stop_trading()`은 bounded cleanup worker로 활성 주문 취소 요청을 먼저 보내고, 실패/미확인 주문은 `sync_failed`로 남겨 예약 현금을 보존
+- 정상 취소는 주문 건강도 degrade로 기록하지 않고, 거부/실패만 health failure로 기록
 - 유니버스 밖 수동 매수는 기본 차단, 유니버스 밖 수동 매도는 `external_positions` 가능수량 검증 후 허용
 
 ---
@@ -157,7 +162,46 @@ pyinstaller --clean KiwoomTrader.spec
 | `data/*.json` | 프로필 데이터 |
 | `data/market_intelligence_events.jsonl` | 시장 인텔리전스 이벤트 로그 |
 | `data/decision_audit.jsonl` | 시장 인텔리전스 결정 감사 로그 |
+| `data/order_lifecycle_events.jsonl` | 주문 생명주기 및 신호 전용 주문 감사 로그 |
 | `data/dart_corp_codes.json` | OpenDART 종목코드 캐시 |
+
+---
+
+## 2026-05-17 실행 안전장치/패키징/문서 동기화
+
+1. 실행 모드
+- 기본값은 `signal_only`입니다.
+- 자동매매, 수동 주문, 분할 주문 모두 이 모드에서는 REST 주문 API를 호출하지 않습니다.
+- 주문 payload, 전략명, 종목, 수량, 가격, 사유는 `data/order_lifecycle_events.jsonl`에 기록됩니다.
+- 실제 주문은 상세 설정에서 `live`로 전환하고 기존 실거래 보호 확인을 통과해야 합니다.
+
+2. 시장 인텔리전스
+- freshness/source 누락, stale, refreshing, error는 기본 경고 허용입니다.
+- `market_intelligence.source_policy.strict_entry_guard=true`이면 해당 상태를 신규 진입 차단으로 처리합니다.
+- `block_entry`, 고위험 DART, `force_exit` 정책은 strict 여부와 무관하게 유지됩니다.
+
+3. WebSocket/REST/저장
+- WebSocket callback은 Qt main-thread dispatcher signal을 경유합니다.
+- REST 숫자 파싱은 빈 문자열, 콤마 숫자, 부호, 누락 필드를 안전하게 처리합니다.
+- 거래 내역 저장은 atomic write이며 실패 시 Worker error로 전파됩니다.
+- 미체결 주문 조회는 adapter만 있고 공식 REST 엔드포인트 확인 전까지 unsupported입니다.
+
+4. 보안/의존성/패키징
+- keyring 실패 시 실거래 평문 secret fallback은 opt-in입니다.
+- `requirements.txt`는 런타임, `requirements-dev.txt`는 개발/검증 의존성입니다.
+- `KiwoomTrader.spec`는 `icon.png`를 앱 아이콘으로 연결하고, 런타임 JSON/JSONL 산출물은 번들하지 않습니다.
+
+5. 최신 검증 기준
+```bash
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py "키움증권 자동매매.py"
+python -m pytest tests\unit --override-ini addopts= --tb=short
+python -m pyright .
+python tools\refactor_verify.py
+```
+- 현재 기준 `tests/unit` 전체 143개 테스트 통과
+- 문법 컴파일 검증 통과
+- `pyright .` 0 errors
+- refactor verification 통과
 
 ---
 
@@ -165,7 +209,7 @@ pyinstaller --clean KiwoomTrader.spec
 
 1. 시장 인텔리전스 가드
 - 기본 `risk_overlays`에 뉴스/공시/매크로/신선도 가드가 포함됩니다.
-- `_can_enter_trade()`는 `block_entry`, 고위험 DART, `idle`/`refreshing`/`stale`/`error` 상태를 신규 진입 차단으로 처리합니다.
+- 현재 기본 정책은 상단 2026-05-17 섹션처럼 freshness/source 이슈를 경고 허용으로 완화하고, strict entry guard에서만 fail-closed를 사용합니다.
 
 2. API/토큰 모드 분리
 - `api/endpoints.py`가 live/mock REST/WebSocket URL과 token cache suffix를 단일 기준으로 제공합니다.
@@ -186,7 +230,7 @@ python -m pytest -q tests/unit
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 pyright .
 ```
-- 현재 기준 `tests/unit` 전체 134개 테스트 통과
+- 현재 기준 `tests/unit` 전체 143개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 
@@ -212,7 +256,7 @@ pyright .
 
 ## 2026-03-25 문서/리플레이/운영 가이드 동기화
 
-1. 현재 canonical 설정 스키마는 `settings_version = 6` 입니다.
+1. 현재 canonical 설정 스키마는 `settings_version = 7` 입니다.
 2. `TradingConfig.market_intelligence`는 `source_policy`, `soft_scale`, `position_defense`, `portfolio_budget`, `candidate_universe`, `replay`를 포함합니다.
 3. 메인 UI는 `🎯 핵심 설정`, `🛠 상세 설정`, `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`, `🔐 API/알림` 구조이며, 감사 로그는 `data/decision_audit.jsonl`에 기록됩니다.
 4. 운영 문서:
@@ -243,7 +287,7 @@ pyright .
 
 ## 2026-03-24 시장 인텔리전스 동기화
 
-1. 현재 canonical 설정 스키마는 `settings_version = 6` 입니다.
+1. 현재 canonical 설정 스키마는 `settings_version = 7` 입니다.
 2. `TradingConfig.market_intelligence`와 `universe[code]["market_intel"]`가 현재 시장 인텔리전스 상태의 기준 필드입니다.
 3. 신규 provider:
    - `data/providers/news_provider.py`
@@ -274,7 +318,7 @@ pyright .
 ## 2026-03-09 정적 분석/문서 동기화
 
 1. 정적 분석 기준
-- 루트 `pyrightconfig.json`을 추적하며 `pythonVersion = 3.14` 기준으로 repo 전체를 검사합니다.
+- 루트 `pyrightconfig.json`을 추적하며 `pythonVersion = 3.10` 기준으로 repo 전체를 검사합니다.
 - cache 디렉터리만 제외하고 테스트/도구 폴더도 포함합니다.
 
 2. 동적 믹스인 타입 안정화
@@ -308,8 +352,8 @@ python -m pytest -q tests/unit
 - `tools/perf_smoke.py`로 전략 평가 성능 스모크 테스트를 수행할 수 있습니다.
 
 ### 2) 설정 스키마 기준
-- 현재 canonical 스키마는 `settings_version = 6` 입니다.
-- `settings_version < 6` 파일은 로드 시 v4 가드 키와 `market_intelligence` 블록이 자동 보강됩니다.
+- 현재 canonical 스키마는 `settings_version = 7` 입니다.
+- `settings_version < 7` 파일은 로드 시 v4 가드 키, 실행 모드, 보안 fallback, `market_intelligence` 블록이 자동 보강됩니다.
 
 ### 3) 테스트 기준
 ```bash

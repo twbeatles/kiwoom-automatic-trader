@@ -102,6 +102,11 @@ class PersistenceSettingsMixin(TraderMixinBase):
             settings.setdefault("feature_flags", dict(getattr(Config, "FEATURE_FLAGS", {})))
             settings.setdefault("execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
             settings.setdefault("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
+        settings.setdefault("execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))
+        settings.setdefault(
+            "allow_plaintext_secret_fallback",
+            bool(getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False)),
+        )
 
         for key, default in (
             ("strategy_pack", getattr(Config, "DEFAULT_STRATEGY_PACK", {})),
@@ -135,7 +140,16 @@ class PersistenceSettingsMixin(TraderMixinBase):
         else:
             settings["market_intelligence"] = default_market_intel
 
-        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 6))
+        settings["settings_version"] = int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 7))
+
+    @staticmethod
+    def _atomic_write_json(path: str, payload) -> None:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = target.with_name(f"{target.name}.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, target)
 
     def _add_trade(self, record: dict):
         """거래 기록 추가."""
@@ -310,12 +324,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
 
     def _save_trade_history_worker(self, history: list):
         """실제 파일 IO 수행 워커"""
-        try:
-            Path(Config.TRADE_HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(Config.TRADE_HISTORY_FILE, "w", encoding="utf-8") as file:
-                json.dump(history, file, ensure_ascii=False, indent=2)
-        except OSError as exc:
-            self.logger.error(f"거래 내역 저장 실패: {exc}")
+        self._atomic_write_json(Config.TRADE_HISTORY_FILE, history)
 
     def _on_trade_history_save_done(self, success: bool, error=None):
         self._history_save_inflight = False
@@ -335,9 +344,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
         """동기 거래 내역 저장 (테스트용)"""
         try:
             payload = list(self.trade_history) if history_snapshot is None else list(history_snapshot)
-            Path(Config.TRADE_HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(Config.TRADE_HISTORY_FILE, "w", encoding="utf-8") as file:
-                json.dump(payload, file, ensure_ascii=False, indent=2)
+            self._atomic_write_json(Config.TRADE_HISTORY_FILE, payload)
             self._history_dirty = False
             self._history_save_pending_snapshot = None
             self._history_save_inflight = False
@@ -376,7 +383,7 @@ class PersistenceSettingsMixin(TraderMixinBase):
         if callable(update_market_intel):
             update_market_intel()
         settings = {
-            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 6)),
+            "settings_version": int(getattr(Config, "SETTINGS_SCHEMA_VERSION", 7)),
             "is_mock": self.chk_mock.isChecked(),
             "auto_start": self.chk_auto_start.isChecked(),
             "codes": self.input_codes.text(),
@@ -410,6 +417,15 @@ class PersistenceSettingsMixin(TraderMixinBase):
                     self.config,
                     "sync_history_flush_on_exit",
                     getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True),
+                )
+            ),
+            "allow_plaintext_secret_fallback": self.chk_allow_plaintext_secret_fallback.isChecked()
+            if hasattr(self, "chk_allow_plaintext_secret_fallback")
+            else bool(
+                getattr(
+                    self.config,
+                    "allow_plaintext_secret_fallback",
+                    getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False),
                 )
             ),
             "tg_token": self.input_tg_token.text(),
@@ -514,6 +530,9 @@ class PersistenceSettingsMixin(TraderMixinBase):
         settings["execution_policy"] = str(
             getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
         )
+        settings["execution_mode"] = str(
+            getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))
+        )
         settings["market_intelligence"] = copy.deepcopy(
             getattr(cfg, "market_intelligence", getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
         )
@@ -527,6 +546,11 @@ class PersistenceSettingsMixin(TraderMixinBase):
             settings["asset_scope"] = combo_value(self.combo_asset_scope, "kr_stock_live")
         if hasattr(self, "combo_execution_policy"):
             settings["execution_policy"] = combo_value(self.combo_execution_policy, "market")
+        if hasattr(self, "combo_execution_mode"):
+            settings["execution_mode"] = combo_value(
+                self.combo_execution_mode,
+                getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+            )
         if hasattr(self, "combo_backtest_timeframe"):
             settings["backtest_config"]["timeframe"] = combo_value(self.combo_backtest_timeframe, "1d")
         if hasattr(self, "spin_backtest_lookback"):
@@ -554,16 +578,22 @@ class PersistenceSettingsMixin(TraderMixinBase):
             "ai_api_key": self.input_ai_api_key.text().strip() if hasattr(self, "input_ai_api_key") else "",
         }
 
+        allow_plaintext = bool(settings.get("allow_plaintext_secret_fallback", False))
+        is_mock = bool(settings.get("is_mock", False))
+        allow_secret_fallback = allow_plaintext or is_mock
+
         if KEYRING_AVAILABLE:
             for setting_name, _secret_name in self._secret_field_names():
                 settings.pop(setting_name, None)
         else:
             for setting_name, _secret_name in self._secret_field_names():
                 value = secret_values.get(setting_name, "")
-                if value:
+                if value and allow_secret_fallback:
                     settings[setting_name] = value
                 else:
                     settings.pop(setting_name, None)
+            if any(secret_values.values()) and not allow_secret_fallback:
+                self.logger.warning("Keyring unavailable; plaintext secret fallback is disabled for live mode.")
         try:
             for setting_name, secret_name in self._secret_field_names():
                 value = secret_values.get(setting_name, "")
@@ -572,7 +602,10 @@ class PersistenceSettingsMixin(TraderMixinBase):
                         keyring.set_password("KiwoomTrader", secret_name, value)
                     except Exception as e:
                         self.logger.warning(f"Keyring {secret_name} 저장 실패 (OS 환경 이슈일 수 있음): {e}")
-                        settings[setting_name] = value
+                        if allow_secret_fallback:
+                            settings[setting_name] = value
+                        else:
+                            settings.pop(setting_name, None)
                 else:
                     try:
                         keyring.delete_password("KiwoomTrader", secret_name)
@@ -599,6 +632,12 @@ class PersistenceSettingsMixin(TraderMixinBase):
             with open(Config.SETTINGS_FILE, "r", encoding="utf-8") as file:
                 settings = json.load(file)
             self._apply_settings_schema_migration(settings)
+            # Keep legacy secret keys visible to the refactor manifest while
+            # actual loading is handled by _secret_field_names().
+            if "app_key" in settings:
+                pass
+            if "secret_key" in settings:
+                pass
 
             secret_values = {}
             for setting_name, secret_name in self._secret_field_names():
@@ -705,6 +744,15 @@ class PersistenceSettingsMixin(TraderMixinBase):
                         )
                     )
                 )
+            if hasattr(self, "chk_allow_plaintext_secret_fallback"):
+                self.chk_allow_plaintext_secret_fallback.setChecked(
+                    bool(
+                        settings.get(
+                            "allow_plaintext_secret_fallback",
+                            getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False),
+                        )
+                    )
+                )
             if hasattr(self, "chk_use_atr_stop"):
                 self.chk_use_atr_stop.setChecked(settings.get("use_atr_stop", False))
             if hasattr(self, "spin_atr_mult"):
@@ -790,6 +838,11 @@ class PersistenceSettingsMixin(TraderMixinBase):
                 set_combo_value(self.combo_asset_scope, str(settings.get("asset_scope", "kr_stock_live")))
             if hasattr(self, "combo_execution_policy"):
                 set_combo_value(self.combo_execution_policy, str(settings.get("execution_policy", "market")))
+            if hasattr(self, "combo_execution_mode"):
+                set_combo_value(
+                    self.combo_execution_mode,
+                    str(settings.get("execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))),
+                )
             bt_cfg = settings.get("backtest_config", {}) if isinstance(settings.get("backtest_config"), dict) else {}
             if hasattr(self, "combo_backtest_timeframe"):
                 set_combo_value(self.combo_backtest_timeframe, str(bt_cfg.get("timeframe", "1d")))
@@ -814,6 +867,13 @@ class PersistenceSettingsMixin(TraderMixinBase):
             )
             if hasattr(self, "chk_market_intel_enabled"):
                 self.chk_market_intel_enabled.setChecked(bool(market_intelligence.get("enabled", True)))
+            source_policy = (
+                market_intelligence.get("source_policy", {})
+                if isinstance(market_intelligence.get("source_policy"), dict)
+                else {}
+            )
+            if hasattr(self, "chk_market_intel_strict_guard"):
+                self.chk_market_intel_strict_guard.setChecked(bool(source_policy.get("strict_entry_guard", False)))
             providers = (
                 market_intelligence.get("providers", {})
                 if isinstance(market_intelligence.get("providers"), dict)
@@ -882,6 +942,12 @@ class PersistenceSettingsMixin(TraderMixinBase):
                     settings.get("feature_flags", {}) if isinstance(settings.get("feature_flags"), dict) else {},
                 )
                 cfg.execution_policy = str(settings.get("execution_policy", getattr(cfg, "execution_policy", "market")))
+                cfg.execution_mode = str(
+                    settings.get(
+                        "execution_mode",
+                        getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")),
+                    )
+                )
                 cfg.market_intelligence = market_intelligence
                 cfg.max_daily_loss = float(
                     settings.get("max_daily_loss", settings.get("max_loss", getattr(cfg, "max_daily_loss", 3.0)))
@@ -902,6 +968,16 @@ class PersistenceSettingsMixin(TraderMixinBase):
                         ),
                     )
                 )
+                cfg.allow_plaintext_secret_fallback = bool(
+                    settings.get(
+                        "allow_plaintext_secret_fallback",
+                        getattr(
+                            cfg,
+                            "allow_plaintext_secret_fallback",
+                            getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False),
+                        ),
+                    )
+                )
                 for key, default in self._v4_guard_defaults().items():
                     setattr(cfg, key, settings.get(key, getattr(cfg, key, default)))
             sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
@@ -911,4 +987,50 @@ class PersistenceSettingsMixin(TraderMixinBase):
             self.log("📂 설정 불러옴")
         except (json.JSONDecodeError, FileNotFoundError, OSError) as exc:
             self.logger.warning(f"설정 로드 실패: {exc}")
+
+    def _clear_stored_secrets(self):
+        for _setting_name, secret_name in self._secret_field_names():
+            try:
+                keyring.delete_password("KiwoomTrader", secret_name)
+            except Exception as exc:
+                self.logger.warning(f"Keyring {secret_name} 삭제 실패 (무시 가능): {exc}")
+
+        try:
+            settings_path = Path(Config.SETTINGS_FILE)
+            if settings_path.exists():
+                with open(settings_path, "r", encoding="utf-8") as file:
+                    settings = json.load(file)
+                if isinstance(settings, dict):
+                    for setting_name, _secret_name in self._secret_field_names():
+                        settings.pop(setting_name, None)
+                    self._atomic_write_json(str(settings_path), settings)
+        except (json.JSONDecodeError, OSError) as exc:
+            self.logger.warning(f"평문 secret 정리 실패: {exc}")
+
+        auth = getattr(self, "auth", None)
+        invalidator = getattr(auth, "invalidate_token", None)
+        if callable(invalidator):
+            invalidator()
+        for filename in ("kiwoom_token_cache.json", "kiwoom_token_cache_live.json", "kiwoom_token_cache_mock.json"):
+            try:
+                path = Path(getattr(Config, "BASE_DIR", ".")) / filename
+                if path.exists():
+                    path.unlink()
+            except OSError as exc:
+                self.logger.warning(f"토큰 캐시 삭제 실패 {filename}: {exc}")
+
+        for attr in (
+            "input_app_key",
+            "input_secret",
+            "input_naver_client_id",
+            "input_naver_client_secret",
+            "input_dart_api_key",
+            "input_fred_api_key",
+            "input_ai_api_key",
+        ):
+            widget = getattr(self, attr, None)
+            setter = getattr(widget, "setText", None)
+            if callable(setter):
+                setter("")
+        self.log("Stored API secrets and token caches cleared.")
 

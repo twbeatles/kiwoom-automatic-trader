@@ -2,6 +2,7 @@
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin
+from config import TradingConfig
 
 
 class _DummySignal:
@@ -49,6 +50,7 @@ class _Harness(ExecutionEngineMixin):
         self.virtual_deposit = self.deposit
         self.threadpool = _DummyThreadPool()
         self.sig_update_table = _DummySignal()
+        self.config = TradingConfig(execution_mode="live")
         self.logs = []
 
     def log(self, msg):

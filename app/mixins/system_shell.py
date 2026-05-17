@@ -89,6 +89,7 @@ class SystemShellMixin(TraderMixinBase):
         tools_menu.addAction("예약 매매", self._open_schedule)
         tools_menu.addSeparator()
         tools_menu.addAction("계좌 새로고침", lambda: self._on_account_changed(self.current_account))
+        tools_menu.addAction("민감정보/토큰 삭제", self._clear_stored_secrets)
 
         view_menu = menubar.addMenu("보기")
         assert view_menu is not None

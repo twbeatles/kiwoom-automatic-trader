@@ -10,7 +10,7 @@ import asyncio
 import threading
 from typing import Any, Optional, Callable, Dict, List, Set, cast
 from dataclasses import dataclass
-from functools import partial as _partial
+from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal
 
 ws_connect: Optional[Callable[..., Any]] = None
 try:
@@ -39,6 +39,32 @@ class SubscriptionInfo:
     code: str
     data_type: str  # "execution", "hoga", "orderbook"
     callback: Callable
+
+
+class _MainThreadDispatcher(QObject):
+    invoke = pyqtSignal(object, tuple)
+
+    def __init__(self):
+        super().__init__()
+        self.invoke.connect(self._invoke)
+
+    def _invoke(self, callback: Callable, args: tuple):
+        callback(*args)
+
+
+def _main_thread_dispatcher() -> Optional[_MainThreadDispatcher]:
+    app = QCoreApplication.instance()
+    if app is None:
+        return None
+    existing = getattr(app, "_kiwoom_ws_dispatcher", None)
+    if isinstance(existing, _MainThreadDispatcher):
+        return existing
+    if QThread.currentThread() != app.thread():
+        return None
+    dispatcher = _MainThreadDispatcher()
+    dispatcher.moveToThread(app.thread())
+    setattr(app, "_kiwoom_ws_dispatcher", dispatcher)
+    return dispatcher
 
 
 class KiwoomWebSocketClient:
@@ -85,6 +111,7 @@ class KiwoomWebSocketClient:
         self._on_connect: Optional[Callable[[], None]] = None
         self._on_disconnect: Optional[Callable[[], None]] = None
         self._on_error: Optional[Callable[[Exception], None]] = None
+        self._qt_dispatcher: Optional[_MainThreadDispatcher] = None
         
         # 이벤트 루프 및 스레드
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -230,6 +257,7 @@ class KiwoomWebSocketClient:
             codes: 종목코드 리스트
             callback: 데이터 수신 시 호출될 콜백 함수
         """
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_execution = callback
         
         for code in codes:
@@ -255,6 +283,7 @@ class KiwoomWebSocketClient:
             codes: 종목코드 리스트
             callback: 데이터 수신 시 호출될 콜백 함수 (code, data)
         """
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_hoga = callback
         
         for code in codes:
@@ -274,6 +303,7 @@ class KiwoomWebSocketClient:
 
     def subscribe_index(self, codes: List[str], callback: Callable[[IndexTick], None]):
         """실시간 지수 데이터 구독"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_index = callback
 
         for code in codes:
@@ -298,6 +328,7 @@ class KiwoomWebSocketClient:
         Args:
             callback: 체결 데이터 수신 시 호출될 콜백 함수
         """
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_order_exec = callback
         
         if self._connected and self._loop:
@@ -480,20 +511,20 @@ class KiwoomWebSocketClient:
             self.logger.error(f"메시지 처리 오류: {e}")
     
     def _invoke_on_main_thread(self, callback: Callable, *args):
-        """콜백을 메인 스레드에서 안전하게 실행한다.
-
-        PyQt의 QMetaObject.invokeMethod(Qt.QueuedConnection)를 사용하여
-        asyncio 스레드에서 호출된 콜백이 메인(GUI) 스레드에서 실행되도록 보장한다.
-        QMetaObject를 사용할 수 없는 환경(테스트 등)에서는 직접 호출한다.
-        """
+        """Run realtime callbacks on the Qt application thread when available."""
         try:
-            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
-            # QTimer.singleShot(0, fn)은 메인 이벤트 루프에 큐잉되므로 thread-safe
-            from PyQt6.QtCore import QTimer
-            QTimer.singleShot(0, _partial(callback, *args))
+            app = QCoreApplication.instance()
+            if app is not None and QThread.currentThread() == app.thread():
+                callback(*args)
+                return
+            dispatcher = getattr(self, "_qt_dispatcher", None) or _main_thread_dispatcher()
+            if dispatcher is not None:
+                self._qt_dispatcher = dispatcher
+                dispatcher.invoke.emit(callback, tuple(args))
+                return
         except Exception:
-            # PyQt 불가 시 (테스트 등) 직접 호출
-            callback(*args)
+            self.logger.exception("main-thread dispatch failed; falling back to direct callback")
+        callback(*args)
 
     async def _handle_execution(self, body: dict):
         """체결 데이터 처리"""
@@ -586,16 +617,20 @@ class KiwoomWebSocketClient:
     
     def set_on_connect(self, callback: Callable[[], None]):
         """연결 성공 콜백 설정"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_connect = callback
     
     def set_on_disconnect(self, callback: Callable[[], None]):
         """연결 끊김 콜백 설정"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_disconnect = callback
     
     def set_on_error(self, callback: Callable[[Exception], None]):
         """오류 발생 콜백 설정"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_error = callback
 
     def set_on_index(self, callback: Callable[[IndexTick], None]):
         """지수 데이터 콜백 설정"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_index = callback

@@ -11,7 +11,10 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-04-08: dialogs 패키지 분리, strategy_manager orchestrator + strategies.manager_mixins 구조 반영
 2026-04-12: live/mock API endpoint router(api.endpoints)와 외부 보유/주문 정리 런타임 보강 반영, 패키징 메타데이터 동기화
 2026-04-29: 백테스트 UI runner(app.support.backtest_runner), 전략 mixin typing, API 계약 테스트 기준 동기화
+2026-05-17: signal_only/live 실행 모드, WebSocket dispatcher, 미체결 adapter, 보안 fallback UI는 기존 app/api 수집 규칙으로 포함됨
 """
+
+from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -20,7 +23,8 @@ block_cipher = None
 # ============================================================================
 # 데이터 파일 수집
 # ============================================================================
-datas = [('icon.png', '.')] # 아이콘 파일 포함 (만약 있다면)
+icon_file = Path('icon.png')
+datas = [(str(icon_file), '.')] if icon_file.exists() else []
 # 시장 인텔리전스 JSON/JSONL 캐시·이벤트·감사 로그는 런타임 생성 산출물이므로 번들에 포함하지 않는다.
 
 # ============================================================================
@@ -205,6 +209,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=str(icon_file) if icon_file.exists() else None,
 )
 

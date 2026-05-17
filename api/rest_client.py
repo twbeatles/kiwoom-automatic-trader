@@ -18,8 +18,33 @@ from .auth import KiwoomAuth
 from .endpoints import LIVE_REST_BASE_URL
 from .models import (
     StockQuote, OrderBook, AccountInfo, Position, 
-    OrderResult, DailyOHLC, OrderType, PriceType
+    OrderResult, DailyOHLC, OpenOrder, OrderType, PriceType
 )
+
+
+def _safe_int(value: Any, default: int = 0, *, absolute: bool = False) -> int:
+    try:
+        if value is None:
+            return default
+        text = str(value).strip().replace(",", "")
+        if text in {"", "-", "+", "--"}:
+            return default
+        result = int(float(text))
+        return abs(result) if absolute else result
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        text = str(value).strip().replace(",", "").replace("%", "")
+        if text in {"", "-", "+", "--"}:
+            return default
+        return float(text)
+    except (TypeError, ValueError):
+        return default
 
 
 class KiwoomRESTClient:
@@ -182,16 +207,16 @@ class KiwoomRESTClient:
             return StockQuote(
                 code=code,
                 name=output.get("stk_nm", ""),
-                current_price=abs(int(output.get("cur_prc", 0))),
-                change=int(output.get("chg_amt", 0)),
-                change_rate=float(output.get("chg_rt", 0)),
-                open_price=abs(int(output.get("open_prc", 0))),
-                high_price=abs(int(output.get("high_prc", 0))),
-                low_price=abs(int(output.get("low_prc", 0))),
-                volume=int(output.get("acc_vol", 0)),
-                prev_close=abs(int(output.get("yes_prc", 0))),
-                ask_price=abs(int(output.get("ask_prc", 0))),
-                bid_price=abs(int(output.get("bid_prc", 0))),
+                current_price=_safe_int(output.get("cur_prc", 0), absolute=True),
+                change=_safe_int(output.get("chg_amt", 0)),
+                change_rate=_safe_float(output.get("chg_rt", 0)),
+                open_price=_safe_int(output.get("open_prc", 0), absolute=True),
+                high_price=_safe_int(output.get("high_prc", 0), absolute=True),
+                low_price=_safe_int(output.get("low_prc", 0), absolute=True),
+                volume=_safe_int(output.get("acc_vol", 0)),
+                prev_close=_safe_int(output.get("yes_prc", 0), absolute=True),
+                ask_price=_safe_int(output.get("ask_prc", 0), absolute=True),
+                bid_price=_safe_int(output.get("bid_prc", 0), absolute=True),
                 timestamp=output.get("stk_tm", ""),
                 market_type=self._parse_market_type(output),
                 sector=output.get("sect_nm", "기타")  # sect_nm이 없으면 '기타'
@@ -225,10 +250,10 @@ class KiwoomRESTClient:
             bid_volumes = []
             
             for i in range(1, 11):
-                ask_prices.append(abs(int(output.get(f"ask_prc{i}", 0))))
-                ask_volumes.append(int(output.get(f"ask_vol{i}", 0)))
-                bid_prices.append(abs(int(output.get(f"bid_prc{i}", 0))))
-                bid_volumes.append(int(output.get(f"bid_vol{i}", 0)))
+                ask_prices.append(_safe_int(output.get(f"ask_prc{i}", 0), absolute=True))
+                ask_volumes.append(_safe_int(output.get(f"ask_vol{i}", 0)))
+                bid_prices.append(_safe_int(output.get(f"bid_prc{i}", 0), absolute=True))
+                bid_volumes.append(_safe_int(output.get(f"bid_vol{i}", 0)))
             
             return OrderBook(
                 code=code,
@@ -236,8 +261,8 @@ class KiwoomRESTClient:
                 ask_volumes=ask_volumes,
                 bid_prices=bid_prices,
                 bid_volumes=bid_volumes,
-                total_ask_volume=int(output.get("tot_ask_vol", 0)),
-                total_bid_volume=int(output.get("tot_bid_vol", 0)),
+                total_ask_volume=_safe_int(output.get("tot_ask_vol", 0)),
+                total_bid_volume=_safe_int(output.get("tot_bid_vol", 0)),
                 timestamp=output.get("stk_tm", "")
             )
         
@@ -269,11 +294,11 @@ class KiwoomRESTClient:
             for item in output_list:
                 candles.append(DailyOHLC(
                     date=item.get("date", ""),
-                    open_price=abs(int(item.get("open_prc", 0))),
-                    high_price=abs(int(item.get("high_prc", 0))),
-                    low_price=abs(int(item.get("low_prc", 0))),
-                    close_price=abs(int(item.get("close_prc", 0))),
-                    volume=int(item.get("vol", 0))
+                    open_price=_safe_int(item.get("open_prc", 0), absolute=True),
+                    high_price=_safe_int(item.get("high_prc", 0), absolute=True),
+                    low_price=_safe_int(item.get("low_prc", 0), absolute=True),
+                    close_price=_safe_int(item.get("close_prc", 0), absolute=True),
+                    volume=_safe_int(item.get("vol", 0))
                 ))
         
         return candles
@@ -304,12 +329,12 @@ class KiwoomRESTClient:
             
             return AccountInfo(
                 account_no=account_no,
-                deposit=int(output.get("deposit", 0)),
-                available_amount=int(output.get("ord_psbl_amt", 0)),
-                total_buy_amount=int(output.get("tot_buy_amt", 0)),
-                total_eval_amount=int(output.get("tot_eval_amt", 0)),
-                total_profit=int(output.get("tot_eval_pl", 0)),
-                total_profit_rate=float(output.get("tot_eval_pl_rt", 0))
+                deposit=_safe_int(output.get("deposit", 0)),
+                available_amount=_safe_int(output.get("ord_psbl_amt", 0)),
+                total_buy_amount=_safe_int(output.get("tot_buy_amt", 0)),
+                total_eval_amount=_safe_int(output.get("tot_eval_amt", 0)),
+                total_profit=_safe_int(output.get("tot_eval_pl", 0)),
+                total_profit_rate=_safe_float(output.get("tot_eval_pl_rt", 0))
             )
         
         return None
@@ -343,17 +368,29 @@ class KiwoomRESTClient:
             positions.append(Position(
                 code=item.get("stk_cd", ""),
                 name=item.get("stk_nm", ""),
-                quantity=int(item.get("hold_qty", 0)),
-                available_qty=int(item.get("sell_psbl_qty", 0)),
-                buy_price=int(item.get("buy_prc", 0)),
-                current_price=abs(int(item.get("cur_prc", 0))),
-                buy_amount=int(item.get("buy_amt", 0)),
-                eval_amount=int(item.get("eval_amt", 0)),
-                profit=int(item.get("eval_pl", 0)),
-                profit_rate=float(item.get("eval_pl_rt", 0))
+                quantity=_safe_int(item.get("hold_qty", 0)),
+                available_qty=_safe_int(item.get("sell_psbl_qty", 0)),
+                buy_price=_safe_int(item.get("buy_prc", 0)),
+                current_price=_safe_int(item.get("cur_prc", 0), absolute=True),
+                buy_amount=_safe_int(item.get("buy_amt", 0)),
+                eval_amount=_safe_int(item.get("eval_amt", 0)),
+                profit=_safe_int(item.get("eval_pl", 0)),
+                profit_rate=_safe_float(item.get("eval_pl_rt", 0))
             ))
 
         return positions
+
+    @property
+    def supports_open_orders(self) -> bool:
+        return False
+
+    def get_open_orders(self, account_no: str) -> List[OpenOrder]:
+        """Return currently open orders when an official endpoint is configured.
+
+        The project does not include a verified Kiwoom REST TR for this yet, so
+        callers can probe support without guessing a live endpoint.
+        """
+        raise NotImplementedError("Kiwoom open-order REST endpoint is not configured")
     
     # =========================================================================
     # 주문 API
@@ -550,11 +587,11 @@ class KiwoomRESTClient:
             for item in output_list:
                 candles.append(DailyOHLC(
                     date=item.get("datetime", ""),
-                    open_price=abs(int(item.get("open_prc", 0))),
-                    high_price=abs(int(item.get("high_prc", 0))),
-                    low_price=abs(int(item.get("low_prc", 0))),
-                    close_price=abs(int(item.get("close_prc", 0))),
-                    volume=int(item.get("vol", 0))
+                    open_price=_safe_int(item.get("open_prc", 0), absolute=True),
+                    high_price=_safe_int(item.get("high_prc", 0), absolute=True),
+                    low_price=_safe_int(item.get("low_prc", 0), absolute=True),
+                    close_price=_safe_int(item.get("close_prc", 0), absolute=True),
+                    volume=_safe_int(item.get("vol", 0))
                 ))
         
         return candles
@@ -576,11 +613,11 @@ class KiwoomRESTClient:
             for item in output_list:
                 candles.append(DailyOHLC(
                     date=item.get("date", ""),
-                    open_price=abs(int(item.get("open_prc", 0))),
-                    high_price=abs(int(item.get("high_prc", 0))),
-                    low_price=abs(int(item.get("low_prc", 0))),
-                    close_price=abs(int(item.get("close_prc", 0))),
-                    volume=int(item.get("vol", 0))
+                    open_price=_safe_int(item.get("open_prc", 0), absolute=True),
+                    high_price=_safe_int(item.get("high_prc", 0), absolute=True),
+                    low_price=_safe_int(item.get("low_prc", 0), absolute=True),
+                    close_price=_safe_int(item.get("close_prc", 0), absolute=True),
+                    volume=_safe_int(item.get("vol", 0))
                 ))
         
         return candles
@@ -603,7 +640,7 @@ class KiwoomRESTClient:
             output_list = result.get("output", [])
             for item in output_list:
                 conditions.append({
-                    "index": int(item.get("cond_idx", 0)),
+                    "index": _safe_int(item.get("cond_idx", 0)),
                     "name": item.get("cond_nm", "")
                 })
         
@@ -634,9 +671,9 @@ class KiwoomRESTClient:
                 stocks.append({
                     "code": item.get("stk_cd", ""),
                     "name": item.get("stk_nm", ""),
-                    "current_price": abs(int(item.get("cur_prc", 0))),
-                    "change_rate": float(item.get("chg_rt", 0)),
-                    "volume": int(item.get("vol", 0))
+                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
+                    "change_rate": _safe_float(item.get("chg_rt", 0)),
+                    "volume": _safe_int(item.get("vol", 0))
                 })
         
         return stocks
@@ -672,10 +709,10 @@ class KiwoomRESTClient:
                     "rank": i + 1,
                     "code": item.get("stk_cd", ""),
                     "name": item.get("stk_nm", ""),
-                    "current_price": abs(int(item.get("cur_prc", 0))),
-                    "change_rate": float(item.get("chg_rt", 0)),
-                    "volume": int(item.get("vol", 0)),
-                    "volume_rate": float(item.get("vol_rt", 0))
+                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
+                    "change_rate": _safe_float(item.get("chg_rt", 0)),
+                    "volume": _safe_int(item.get("vol", 0)),
+                    "volume_rate": _safe_float(item.get("vol_rt", 0))
                 })
         
         return rankings
@@ -709,10 +746,10 @@ class KiwoomRESTClient:
                     "rank": i + 1,
                     "code": item.get("stk_cd", ""),
                     "name": item.get("stk_nm", ""),
-                    "current_price": abs(int(item.get("cur_prc", 0))),
-                    "change": int(item.get("chg_amt", 0)),
-                    "change_rate": float(item.get("chg_rt", 0)),
-                    "volume": int(item.get("vol", 0))
+                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
+                    "change": _safe_int(item.get("chg_amt", 0)),
+                    "change_rate": _safe_float(item.get("chg_rt", 0)),
+                    "volume": _safe_int(item.get("vol", 0))
                 })
         
         return rankings
@@ -738,15 +775,15 @@ class KiwoomRESTClient:
             output = result.get("output", {})
             return {
                 "code": code,
-                "individual_buy": int(output.get("indv_buy", 0)),
-                "individual_sell": int(output.get("indv_sell", 0)),
-                "foreign_buy": int(output.get("frgn_buy", 0)),
-                "foreign_sell": int(output.get("frgn_sell", 0)),
-                "institution_buy": int(output.get("inst_buy", 0)),
-                "institution_sell": int(output.get("inst_sell", 0)),
-                "individual_net": int(output.get("indv_net", 0)),
-                "foreign_net": int(output.get("frgn_net", 0)),
-                "institution_net": int(output.get("inst_net", 0))
+                "individual_buy": _safe_int(output.get("indv_buy", 0)),
+                "individual_sell": _safe_int(output.get("indv_sell", 0)),
+                "foreign_buy": _safe_int(output.get("frgn_buy", 0)),
+                "foreign_sell": _safe_int(output.get("frgn_sell", 0)),
+                "institution_buy": _safe_int(output.get("inst_buy", 0)),
+                "institution_sell": _safe_int(output.get("inst_sell", 0)),
+                "individual_net": _safe_int(output.get("indv_net", 0)),
+                "foreign_net": _safe_int(output.get("frgn_net", 0)),
+                "institution_net": _safe_int(output.get("inst_net", 0))
             }
         
         return {}
@@ -772,13 +809,13 @@ class KiwoomRESTClient:
             output = result.get("output", {})
             return {
                 "code": code,
-                "arb_buy": int(output.get("arb_buy", 0)),
-                "arb_sell": int(output.get("arb_sell", 0)),
-                "nonarb_buy": int(output.get("nonarb_buy", 0)),
-                "nonarb_sell": int(output.get("nonarb_sell", 0)),
-                "total_buy": int(output.get("tot_buy", 0)),
-                "total_sell": int(output.get("tot_sell", 0)),
-                "net": int(output.get("net", 0))
+                "arb_buy": _safe_int(output.get("arb_buy", 0)),
+                "arb_sell": _safe_int(output.get("arb_sell", 0)),
+                "nonarb_buy": _safe_int(output.get("nonarb_buy", 0)),
+                "nonarb_sell": _safe_int(output.get("nonarb_sell", 0)),
+                "total_buy": _safe_int(output.get("tot_buy", 0)),
+                "total_sell": _safe_int(output.get("tot_sell", 0)),
+                "net": _safe_int(output.get("net", 0))
             }
         
         return {}

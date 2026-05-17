@@ -376,6 +376,7 @@ class MarketIntelligenceMixin(TraderMixinBase):
             "chk_market_dart",
             "chk_market_datalab",
             "chk_market_macro",
+            "chk_market_intel_strict_guard",
             "chk_market_ai_enabled",
             "spin_market_news_refresh",
             "spin_market_macro_refresh",
@@ -403,6 +404,14 @@ class MarketIntelligenceMixin(TraderMixinBase):
         cfg["providers"]["dart"] = bool(getattr(self, "chk_market_dart", None) and self.chk_market_dart.isChecked())
         cfg["providers"]["datalab"] = bool(getattr(self, "chk_market_datalab", None) and self.chk_market_datalab.isChecked())
         cfg["providers"]["macro"] = bool(getattr(self, "chk_market_macro", None) and self.chk_market_macro.isChecked())
+        policy = cfg.get("source_policy", {})
+        if not isinstance(policy, dict):
+            policy = {}
+            cfg["source_policy"] = policy
+        policy["strict_entry_guard"] = bool(
+            getattr(self, "chk_market_intel_strict_guard", None)
+            and self.chk_market_intel_strict_guard.isChecked()
+        )
         if hasattr(self, "spin_market_news_refresh"):
             refresh = int(self.spin_market_news_refresh.value())
             cfg["refresh_sec"]["news"] = refresh
@@ -2315,6 +2324,11 @@ class MarketIntelligenceMixin(TraderMixinBase):
         self.chk_market_intel_enabled = QCheckBox("시장 인텔리전스 사용")
         self.chk_market_intel_enabled.setChecked(bool(cfg.get("enabled", True)))
         basic_form.addRow("", self.chk_market_intel_enabled)
+        source_policy = cfg.get("source_policy", {}) if isinstance(cfg.get("source_policy"), dict) else {}
+        self.chk_market_intel_strict_guard = QCheckBox("인텔리전스 준비 전 신규 진입 차단")
+        self.chk_market_intel_strict_guard.setToolTip("실거래에서 fail-closed 정책이 필요할 때 켭니다.")
+        self.chk_market_intel_strict_guard.setChecked(bool(source_policy.get("strict_entry_guard", False)))
+        basic_form.addRow("", self.chk_market_intel_strict_guard)
         body.addWidget(basic_group)
 
         source_group = QGroupBox("데이터 소스")

@@ -56,6 +56,7 @@ kiwoom_trade_history.json
 kiwoom_presets.json
 data/market_intelligence_events.jsonl
 data/decision_audit.jsonl
+data/order_lifecycle_events.jsonl
 data/dart_corp_codes.json
 data/favorites.json
 backtest_result.json
@@ -71,6 +72,7 @@ data/backtest_results/
 *.sqlite3
 *.db-journal
 !requirements.txt
+!requirements-dev.txt
 # Keep the repo-wide static-analysis baseline tracked.
 !pyrightconfig.json
 !docs/refactor/baseline_manifest.json

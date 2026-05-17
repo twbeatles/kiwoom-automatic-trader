@@ -35,6 +35,7 @@ def _default_market_intelligence_config() -> Dict[str, Any]:
             "core_sources": ["news", "dart"],
             "fail_on_core_error": True,
             "allow_partial_for_entry": False,
+            "strict_entry_guard": False,
         },
         "scoring": {
             "news_block_threshold": -60,
@@ -246,7 +247,9 @@ class TradingConfig:
     market_intelligence: Dict[str, Any] = field(default_factory=_default_market_intelligence_config)
 
     # 실행 정책/추가 리스크 옵션 (기존 UI/설정과 정합)
+    execution_mode: str = "signal_only"
     execution_policy: str = "market"
+    allow_plaintext_secret_fallback: bool = False
     use_atr_sizing: bool = False
     risk_percent: float = 1.0
     use_breakout_confirm: bool = False
@@ -304,6 +307,7 @@ class Config:
     DEFAULT_APP_KEY = ""
     DEFAULT_SECRET_KEY = ""
     TOKEN_CACHE_FILE = "kiwoom_token_cache.json"
+    DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK = False
     
     # API 요청 제한
     API_RATE_LIMIT = 5
@@ -655,6 +659,7 @@ class Config:
     MARKET_INTEL_BRIEFING_TIME = "08:50"
     MARKET_INTELLIGENCE_EVENTS_FILE = str(_BASE_PATH / "data" / "market_intelligence_events.jsonl")
     MARKET_INTELLIGENCE_DECISION_AUDIT_FILE = str(_BASE_PATH / "data" / "decision_audit.jsonl")
+    ORDER_LIFECYCLE_EVENTS_FILE = str(_BASE_PATH / "data" / "order_lifecycle_events.jsonl")
     
     # =========================================================================
     # 기본 프리셋 정의
@@ -799,7 +804,7 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         """
     }
 
-    SETTINGS_SCHEMA_VERSION = 6
+    SETTINGS_SCHEMA_VERSION = 7
     # =========================================================================
     # 전략팩/백테스트/실행 정책 (v5.0)
     # =========================================================================
@@ -877,6 +882,8 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
         "correction": {"정정", "정정공시", "실적정정"},
     }
     DEFAULT_EXECUTION_POLICY = "market"
+    DEFAULT_EXECUTION_MODE = "signal_only"
+    EXECUTION_MODES = {"signal_only", "live"}
     STRATEGY_CAPABILITIES: Dict[str, Dict[str, bool]] = {
         "volatility_breakout": {"live_supported": True, "requires_external_data": False},
         "time_series_momentum": {"live_supported": True, "requires_external_data": False},

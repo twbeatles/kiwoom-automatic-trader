@@ -97,6 +97,19 @@ class Position:
 
 
 @dataclass
+class OpenOrder:
+    """Open/unfilled order snapshot."""
+    order_no: str
+    code: str
+    side: str = ""
+    quantity: int = 0
+    remaining_qty: int = 0
+    price: int = 0
+    status: str = ""
+    source: str = "kiwoom_rest"
+
+
+@dataclass
 class OrderResult:
     """주문 결과"""
     success: bool

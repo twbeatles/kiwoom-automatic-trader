@@ -325,6 +325,14 @@ class KiwoomProTrader(
             self.combo_execution_policy.currentTextChanged.connect(
                 lambda _v: setattr(self.config, 'execution_policy', combo_value(self.combo_execution_policy, "market"))
             )
+        if hasattr(self, "combo_execution_mode"):
+            self.combo_execution_mode.currentTextChanged.connect(
+                lambda _v: setattr(
+                    self.config,
+                    "execution_mode",
+                    combo_value(self.combo_execution_mode, getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")),
+                )
+            )
         if hasattr(self, "combo_backtest_timeframe"):
             self.combo_backtest_timeframe.currentTextChanged.connect(
                 lambda _v: self.config.backtest_config.update({"timeframe": combo_value(self.combo_backtest_timeframe, "1d")})
@@ -356,6 +364,10 @@ class KiwoomProTrader(
         if hasattr(self, "chk_sync_history_flush_on_exit"):
             self.chk_sync_history_flush_on_exit.toggled.connect(
                 lambda v: setattr(self.config, "sync_history_flush_on_exit", bool(v))
+            )
+        if hasattr(self, "chk_allow_plaintext_secret_fallback"):
+            self.chk_allow_plaintext_secret_fallback.toggled.connect(
+                lambda v: setattr(self.config, "allow_plaintext_secret_fallback", bool(v))
             )
         if hasattr(self, "chk_use_shock_guard"):
             self.chk_use_shock_guard.toggled.connect(lambda v: setattr(self.config, "use_shock_guard", bool(v)))
@@ -460,6 +472,11 @@ class KiwoomProTrader(
             self.config.asset_scope = combo_value(self.combo_asset_scope, "kr_stock_live")
         if hasattr(self, "combo_execution_policy"):
             self.config.execution_policy = combo_value(self.combo_execution_policy, "market")
+        if hasattr(self, "combo_execution_mode"):
+            self.config.execution_mode = combo_value(
+                self.combo_execution_mode,
+                getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+            )
         if hasattr(self, "combo_backtest_timeframe"):
             self.config.backtest_config["timeframe"] = combo_value(self.combo_backtest_timeframe, "1d")
         if hasattr(self, "spin_backtest_lookback"):
@@ -476,6 +493,8 @@ class KiwoomProTrader(
             self.config.feature_flags["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
         if hasattr(self, "chk_sync_history_flush_on_exit"):
             self.config.sync_history_flush_on_exit = bool(self.chk_sync_history_flush_on_exit.isChecked())
+        if hasattr(self, "chk_allow_plaintext_secret_fallback"):
+            self.config.allow_plaintext_secret_fallback = bool(self.chk_allow_plaintext_secret_fallback.isChecked())
         if hasattr(self, "chk_use_shock_guard"):
             self.config.use_shock_guard = bool(self.chk_use_shock_guard.isChecked())
         if hasattr(self, "spin_shock_1m"):

@@ -11,6 +11,7 @@ from app.support.ui_text import (
     ASSET_SCOPE_CHOICES,
     BACKTEST_TIMEFRAME_CHOICES,
     DAILY_LOSS_BASIS_CHOICES,
+    EXECUTION_MODE_CHOICES,
     EXECUTION_POLICY_CHOICES,
     PORTFOLIO_MODE_CHOICES,
     STRATEGY_CHOICES,
@@ -721,6 +722,16 @@ class UIBuildMixin(TraderMixinBase):
         self.spin_spread_max.setSuffix(" %")
         g4.addWidget(self.spin_spread_max, 2, 5)
 
+        g4.addWidget(QLabel("실행 모드:"), 3, 0)
+        self.combo_execution_mode = NoScrollComboBox()
+        populate_combo(
+            self.combo_execution_mode,
+            EXECUTION_MODE_CHOICES,
+            getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+        )
+        self.combo_execution_mode.setToolTip("신호 전용은 주문 API를 호출하지 않고 감사 로그만 남깁니다.")
+        g4.addWidget(self.combo_execution_mode, 3, 1, 1, 2)
+
         grp_order.setLayout(g4)
         order_layout.addWidget(grp_order)
 
@@ -943,6 +954,13 @@ class UIBuildMixin(TraderMixinBase):
             bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True))
         )
         g6.addWidget(self.chk_sync_history_flush_on_exit, 1, 2, 1, 3)
+
+        self.chk_allow_plaintext_secret_fallback = QCheckBox("Keyring 실패 시 평문 secret 저장 허용")
+        self.chk_allow_plaintext_secret_fallback.setToolTip("실거래에서는 꺼두는 것이 안전합니다.")
+        self.chk_allow_plaintext_secret_fallback.setChecked(
+            bool(getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False))
+        )
+        g6.addWidget(self.chk_allow_plaintext_secret_fallback, 2, 0, 1, 4)
 
         grp_sys.setLayout(g6)
         system_layout.addWidget(grp_sys)

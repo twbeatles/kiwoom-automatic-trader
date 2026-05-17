@@ -1,469 +1,136 @@
 # 실제 API 준비 가이드
 
-기준일: 2026-04-29
-기준: 현재 저장소 코드 + 공식 문서 확인
+기준일: 2026-05-17  
+기준: 현재 저장소 코드, `README.md`, `CLAUDE.md`, `GEMINI.md`, `KiwoomTrader.spec`
 
-이 문서는 이 프로젝트를 실제 API와 연결해 운영하기 전에 무엇을 준비해야 하는지 정리한 실무용 체크리스트다.  
-포털 UI, 신청 절차, 권한명은 공급자 정책에 따라 바뀔 수 있으므로 실제 신청 화면은 반드시 공식 문서를 다시 확인해야 한다.
+이 문서는 Kiwoom Pro Algo-Trader를 실제 API와 연결하기 전에 준비해야 할 항목과 운영 순서를 정리한다. 현재 기본 정책은 실거래 사고 방지를 우선하며, 신규/모의 환경에서는 `signal_only`와 완화형 인텔리전스 guard로 먼저 검증하도록 설계되어 있다.
 
-## 1. 한눈에 보는 준비물
+## 1. 준비물
 
-| 구분 | 필수 여부 | 준비 항목 | 이 프로젝트에서 쓰는 값 |
+| 구분 | 필수 여부 | 준비 항목 | 프로젝트 연결 지점 |
 | --- | --- | --- | --- |
-| 키움증권 REST | 필수 | App Key, Secret Key, API 사용 가능한 계좌, 실시간 수신 가능 환경 | `App Key`, `Secret Key`, 계좌 선택 |
-| 키움증권 WebSocket | 실전 운영 권장 | `websockets` 라이브러리, WSS 접속 가능 네트워크 | 실시간 체결/주문/지수 수신 |
-| NAVER Open API | 시장 인텔리전스 권장 | Client ID, Client Secret | `NAVER Client ID`, `NAVER Client Secret` |
-| OpenDART | 시장 인텔리전스 권장 | API 인증키 | `DART API Key` |
-| FRED | 선택 | API Key | `FRED API Key` |
-| AI Provider | 선택 | OpenAI 또는 Gemini API Key | `AI API Key`, `AI Provider`, `AI Model` |
-| Telegram | 선택 | Bot Token, Chat ID | `봇 토큰`, `챗 ID` |
-| 로컬 보안 | 필수 | Keyring 사용 가능 OS 환경, 설정 파일/로그 파일 관리 | Windows Credential Manager 권장 |
+| 키움증권 REST | 필수 | App Key, Secret Key, API 사용 가능 계좌 | `api/auth.py`, `api/rest_client.py` |
+| 키움증권 WebSocket | 권장 | 실시간 수신 가능한 네트워크 | `api/websocket_client.py` |
+| NAVER Open API | 권장 | Client ID, Client Secret | 뉴스/검색트렌드 provider |
+| OpenDART | 권장 | API Key | 공시 provider |
+| FRED | 선택 | API Key | 매크로 provider |
+| AI Provider | 선택 | OpenAI 또는 Gemini API Key | AI 요약 provider |
+| Telegram | 선택 | Bot Token, Chat ID | 운영 알림 |
+| 로컬 보안 | 필수 | Windows Credential Manager/keyring 사용 가능 환경 | secret 저장 |
 
-## 2. 현재 코드가 실제로 요구하는 것
+## 2. 실행 모드
 
-현재 코드 기준으로 실거래/실시간 운영에 직접 연결되는 핵심 모듈은 아래와 같다.
+현재 설정 스키마는 `settings_version = 7`이다.
 
-- 키움 인증: `api/auth.py`
-- live/mock 엔드포인트 라우팅: `api/endpoints.py`
-- 키움 REST 호출: `api/rest_client.py`
-- 키움 WebSocket: `api/websocket_client.py`
-- API 연결 UI: `app/mixins/api_account.py`
-- 시장 인텔리전스 API 입력 UI: `app/mixins/market_intelligence.py`
-- 설정/비밀값 저장: `app/mixins/persistence_settings.py`
-- 실거래 가드/계좌 스냅샷/종료 정리: `app/mixins/trading_session.py`
+- 기본 실행 모드: `execution_mode = "signal_only"`
+- 실주문 모드: `execution_mode = "live"`
 
-실거래 가드도 이미 들어가 있다.
+`signal_only`에서는 자동매매, 수동 주문, 분할 주문 모두 브로커 REST 주문 API를 호출하지 않는다. 주문 payload, 전략명, 종목, 수량, 가격, 사유만 `data/order_lifecycle_events.jsonl`에 감사 로그로 남긴다.
 
-- 실주문은 현재 `asset_scope = kr_stock_live` 일 때만 허용된다.
-- `short_enabled = True` 이면 실주문이 차단된다.
-- `Config.STRATEGY_CAPABILITIES` 에서 `live_supported = True` 인 전략만 실거래 가능하다.
+실제 주문을 내기 전에는 다음 조건을 모두 확인해야 한다.
 
-현재 코드 기준 실거래 허용 전략:
+- 상세 설정에서 실행 모드를 `live`로 변경
+- 실전 계좌라면 `_confirm_live_trading_guard()` 보호 확인 통과
+- 거래 시작 preflight 로그에서 API 모드, 계좌, WebSocket, 인텔리전스 strict, 미체결 조회 지원 여부 확인
+- 주문 가능 전략이 `asset_scope = kr_stock_live`, `short_enabled = False`, `live_supported = True` 조건을 만족
 
-- `volatility_breakout`
-- `time_series_momentum`
-- `ma_channel_trend`
-- `orb_donchian_breakout`
-- `rsi_bollinger_reversion`
-- `dmi_trend_strength`
-- `investor_program_flow`
+## 3. API 연결 체크리스트
 
-추가 정합성 메모:
+1. 키움증권 API 신청 상태와 계좌 권한을 확인한다.
+2. App Key와 Secret Key를 입력하고 API 연결을 실행한다.
+3. 계좌 목록이 정상 조회되는지 확인한다.
+4. WebSocket 연결과 체결/주문 이벤트 수신 상태를 확인한다.
+5. 모의/실전 전환 시 REST/WS endpoint와 토큰 캐시 namespace가 함께 바뀌는지 로그로 확인한다.
+6. 네트워크가 HTTPS/WSS outbound를 차단하지 않는지 확인한다.
 
-- `pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`처럼 전략팩에서 SHORT 방향을 반환할 수 있는 전략은 현재 자동매매 비지원/백테스트 전용이다.
-- `portfolio_mode`, `portfolio/allocator.py`는 확장 경로로는 존재하지만 실주문 라우팅의 직접 제어 스위치는 아니다.
-- `enable_backtest`, `backtest_config`, `app/support/backtest_runner.py`는 UI 백테스트 실행 경로에 연결되어 있지만 실제 주문 라우팅과는 분리되어 있다.
-- `분할 매수`는 현재 `use_split=True` + `execution_policy=limit` 일 때 실제 child 지정가 주문을 즉시 다건 제출한다.
-- 실계좌 `수동 주문`은 주문마다 실거래 보호 확인을 다시 요구하고, 6자리 숫자 코드/지정가 1원 이상/매도 가능수량 검증을 통과해야 한다.
-- 유니버스 밖 수동 매수는 차단된다. 유니버스 밖 수동 매도는 계좌 스냅샷으로 동기화된 `external_positions` 보유 종목에 한해 가능수량 검증 후 허용된다.
-- `external_positions` 로 유니버스 외 보유 종목을 읽기 전용 추적하며, 시간청산/긴급청산/진단 표시는 현재 이 상태를 기준으로 동작한다.
-- `stop_trading()` 와 긴급청산 경로는 활성 주문 취소를 먼저 시도하고, 성공 또는 계좌 스냅샷으로 상태 확인된 pending/manual pending/reserved cash 만 정리한다. 취소 실패/미확인 주문은 `sync_failed`로 남겨 예약 현금을 보존한다.
-- 시장 인텔리전스는 enabled 상태에서 credential/provider/freshness가 확인되지 않으면 `disabled_by_missing_credentials`, `stale`, `error`, `refreshing`, `idle` 상태를 신규 진입 차단으로 처리한다.
-- 빌드 기준 배포 패키지는 `KiwoomTrader.spec`에서 `api.endpoints`, `app.support.backtest_runner`, `dialogs`, `strategies`, `app`, `data.providers` 하위 모듈을 함께 수집하도록 동기화돼 있다.
+현재 endpoint 기준:
 
-## 3. 가장 먼저 확인할 현재 코드 제약
-
-이 부분은 운영 전에 반드시 이해해야 한다.
-
-### 3.1 `모의투자` 체크박스의 현재 의미
-
-현재 코드는 `api/endpoints.py` 를 통해 `모의투자` 여부에 따라 엔드포인트와 토큰 캐시를 함께 분기한다.
-
-- 실전: REST `https://api.kiwoom.com`, WebSocket `wss://api.kiwoom.com:10000/api/dostk/websocket`
-- 모의: REST `https://mockapi.kiwoom.com`, WebSocket `wss://mockapi.kiwoom.com:10000/api/dostk/websocket`
+- 실전 REST: `https://api.kiwoom.com`
+- 실전 WebSocket: `wss://api.kiwoom.com:10000/api/dostk/websocket`
+- 모의 REST: `https://mockapi.kiwoom.com`
+- 모의 WebSocket: `wss://mockapi.kiwoom.com:10000/api/dostk/websocket`
 - 토큰 캐시: `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`
 
-운영 의미:
+## 4. 시장 인텔리전스
 
-- `chk_mock` 는 더 이상 보호문구 완화 플래그만이 아니라 실제 연결 대상과 캐시 namespace 를 함께 바꾼다.
-- 모의/실전 전환 직후에는 이전 모드 토큰이 재사용되지 않도록 캐시 파일도 분리되어 있다.
-- 다만 실주문 보호 로직은 별도로 유지되므로, 실전 전환 시에는 여전히 `_confirm_live_trading_guard()` 를 통과해야 한다.
+인텔리전스 provider는 뉴스, 공시, 검색트렌드, 매크로, AI 요약으로 구성된다.
 
-### 3.2 비밀값 저장 방식
+기본 정책:
 
-비밀값은 기본적으로 `keyring` 으로 저장한다.  
-하지만 `keyring` 이 없거나 OS Keyring 저장이 실패하면 설정 파일 평문 fallback 이 가능하다.
+- 데이터 누락, stale, refreshing, error 상태는 경고와 감사 로그를 남기고 진입을 허용한다.
+- 실거래 fail-closed가 필요하면 `market_intelligence.source_policy.strict_entry_guard = true`로 바꾼다.
+- `block_entry`, 고위험 DART, `force_exit`처럼 신뢰 가능한 고위험 신호는 strict 여부와 무관하게 기존 차단/청산 정책을 유지한다.
 
-실제 영향:
+권장 순서:
 
-- `keyring` 정상 동작 시: OS 보안 저장소 사용
-- `keyring` 실패 시: `kiwoom_settings.json` 에 평문 저장 가능
+1. NAVER 뉴스와 Datalab을 먼저 연결한다.
+2. DART 공시 수집과 corp code 캐시 생성을 확인한다.
+3. FRED 매크로는 선택적으로 켠다.
+4. AI 요약은 마지막에 켜고 호출 한도와 일일 예산을 작게 둔다.
 
-이 프로젝트에서 민감정보로 취급해야 할 값:
+## 5. 보안과 저장 파일
 
-- 키움 `app_key`, `secret_key`
-- NAVER `client_id`, `client_secret`
-- DART `api_key`
-- FRED `api_key`
-- AI `api_key`
+secret 저장은 keyring이 우선이다. 실전 모드에서 keyring 저장 실패 시 평문 fallback은 기본 차단된다. 명시적으로 `allow_plaintext_secret_fallback = true`를 켠 경우에만 기존 설정 파일 fallback을 허용한다.
 
-## 4. 공급자별 준비 가이드
+로컬 산출물:
 
-## 4.1 키움증권 REST/WebSocket
-
-실거래를 하려면 최소 아래가 준비돼야 한다.
-
-- 키움증권 계정
-- API 사용 가능한 계좌
-- REST API App Key / Secret Key
-- 실시간 체결 수신 가능한 환경
-- 주문 제약이 없는 인증 상태
-
-실무 준비 체크리스트:
-
-1. 키움 REST API 포털에서 API 사용 신청 상태를 확인한다.
-2. App Key / Secret Key 를 발급받는다.
-3. 실거래에 사용할 계좌가 API 조회 및 주문 권한을 갖는지 확인한다.
-4. 복수 ID 또는 인증서 사용 계정이면 포털 안내에 따라 추가 인증, 공동인증서, 자동서명 정책을 확인한다.
-5. 허용 IP 또는 접속 환경 제한이 있다면 현재 운용 PC의 공인 IP/환경을 등록한다.
-6. 사내망, VDI, 원격 접속 환경이면 HTTPS/WSS outbound 제한이 없는지 먼저 확인한다.
-7. 실시간 수신이 끊기면 전략이 사실상 무력화되므로 네트워크 안정성을 별도 점검한다.
-
-현재 프로젝트 연결 흐름:
-
-- UI `🔐 API/알림` 탭에서 `앱 키`, `시크릿 키` 입력
-- `API 연결` 버튼 클릭
-- 계좌 목록 수신
-- 계좌 선택
-- 이후 REST + WebSocket 사용
-
-실제 입력 필드:
-
-- `App Key`
-- `Secret Key`
-- `모의투자`
+- 설정: `kiwoom_settings.json`
+- 토큰 캐시: `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`
+- 거래 내역: `kiwoom_trade_history.json`
+- 시장 인텔리전스 이벤트: `data/market_intelligence_events.jsonl`
+- 의사결정 감사 로그: `data/decision_audit.jsonl`
+- 주문 생명주기/신호 전용 감사 로그: `data/order_lifecycle_events.jsonl`
+- DART corp code 캐시: `data/dart_corp_codes.json`
 
 주의:
 
-- 실주문 시작 전에 계좌 목록이 정상적으로 떠야 한다.
-- 계좌 목록이 비어 있으면 이 프로젝트는 연결 실패로 처리한다.
-- 실시간 수신용 `websockets` 라이브러리가 없으면 WebSocket 클라이언트가 뜨지 않는다.
+- 위 파일은 `.gitignore`에서 로컬 산출물로 제외한다.
+- 토큰 캐시는 atomic write와 best-effort 파일 권한 보호를 사용한다.
+- 도구 메뉴의 `민감정보/토큰 삭제`로 keyring 항목, 평문 secret, 토큰 캐시를 정리할 수 있다.
 
-## 4.2 NAVER Open API
+## 6. 미체결 주문 조회
 
-현재 이 프로젝트는 NAVER 키 한 세트로 두 기능을 같이 사용한다.
+현재 저장소에는 공식 Kiwoom REST 미체결 주문 조회 endpoint가 확정되어 있지 않다.
 
-- 뉴스 검색 API
-- 데이터랩 검색어 트렌드 API
+- 내부 adapter: `KiwoomRESTClient.get_open_orders()`
+- 지원 여부 표시: `supports_open_orders = False`
+- 현재 동작: preflight에서 `unsupported`로 표시
 
-준비 항목:
+공식 endpoint가 확인되면 adapter 구현만 채워 넣고, UI와 preflight 표시는 유지한다.
 
-- NAVER Developers 애플리케이션 등록
-- `검색 API` 권한
-- `데이터랩(검색어 트렌드)` 권한
-- Client ID
-- Client Secret
+## 7. 실주문 전 운영 순서
 
-운영 포인트:
+1. `pip install -r requirements.txt`로 런타임 의존성을 설치한다.
+2. 개발/검증 환경은 `pip install -r requirements-dev.txt`를 추가로 실행한다.
+3. API 키를 입력하고 keyring 저장이 되는지 확인한다.
+4. `signal_only`로 2~3거래일 동안 연결, 수신, 감사 로그만 검증한다.
+5. 시장 인텔리전스 로그와 `data/decision_audit.jsonl`을 매일 확인한다.
+6. 소수 종목, 최소 비중, 모의투자 또는 제한된 환경에서 `live`를 검증한다.
+7. 실거래 전 preflight 로그에서 계좌/API/WebSocket/strict/open-order 상태를 확인한다.
+8. 실거래 중 stop/emergency cleanup 로그와 주문 생명주기 로그를 함께 확인한다.
 
-- 뉴스 검색은 종목 alias 기반으로 여러 질의를 보낸다.
-- 데이터랩은 종목명/alias 기반으로 여러 질의를 보내 상대 검색량을 계산한다.
-- 실제 운용 시 호출량은 종목 수, refresh 주기, alias 수에 비례해 늘어난다.
+## 8. 검증 명령
 
-현재 코드상 연결 필드:
+```bash
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py "키움증권 자동매매.py"
+python -m pytest tests\unit --override-ini addopts= --tb=short
+python -m pyright .
+python tools\refactor_verify.py
+pyinstaller --clean KiwoomTrader.spec
+```
 
-- `NAVER Client ID`
-- `NAVER Client Secret`
+2026-05-17 기준 검증 결과:
 
-권장 설정:
+- `tests/unit` 전체 143개 테스트 통과
+- Python 문법 컴파일 검증 통과
+- `pyright .` 0 errors
+- refactor verification 통과
+- PyInstaller onefile 출력: `dist/KiwoomTrader_v4.5.exe`
 
-- 초기에는 유니버스를 작게 시작한다.
-- `refresh_sec.news`, `refresh_sec.dart`, `refresh_sec.datalab` 을 너무 짧게 두지 않는다.
-- AI보다 먼저 NAVER 뉴스/Datalab 품질을 확인한다.
+## 9. 참고 링크
 
-## 4.3 OpenDART
-
-OpenDART 는 공시 리스크 판단에 직접 쓰인다.  
-현재 구현에서는 `funding`, `governance`, `earnings`, `contract`, `halt`, `correction` 계열 이벤트로 정규화하고, 고위험 키워드가 잡히면 `force_exit` 까지 이어질 수 있다.
-
-준비 항목:
-
-- OpenDART API 인증키
-
-현재 코드상 연결 필드:
-
-- `DART API Key`
-
-운영 포인트:
-
-- DART 는 시장 인텔리전스에서 가장 민감한 소스 중 하나다.
-- 현재 구현은 `receipt_no` 기준 incremental cursor 를 사용한다.
-- corp code 캐시는 `data/dart_corp_codes.json` 에 유지될 수 있다.
-
-## 4.4 FRED
-
-FRED 는 매크로 레짐 판단에 사용된다.  
-현재 기본 시리즈는 `VIXCLS`, `DGS10` 이다.
-
-준비 항목:
-
-- FRED API Key
-
-현재 코드상 연결 필드:
-
-- `FRED API Key`
-
-운영 포인트:
-
-- 필수는 아니지만 `market_risk_mode`, `portfolio_budget_scale` 계산에 영향을 준다.
-- NAVER/DART 만큼 직접적이지는 않지만, 리스크 오프 필터 품질에 영향이 있다.
-
-## 4.5 AI Provider
-
-AI는 선택 기능이다. 기본은 규칙 기반이 우선이고, AI는 보조 해석만 한다.
-
-준비 항목:
-
-- OpenAI API Key 또는 Gemini API Key 중 하나
-- 운영할 모델명
-- 일일 예산
-- 종목당 최대 호출 수
-
-현재 코드상 연결 필드:
-
-- `AI 요약 사용`
-- `AI Provider` = `gemini` 또는 `openai`
-- `AI Model`
-- `AI API Key`
-
-운영 포인트:
-
-- 기본적으로 처음에는 `OFF` 로 두는 것이 맞다.
-- 실제 운영 초기에는 AI를 끈 상태로 규칙 기반 동작을 먼저 검증한다.
-- 이후 `min_score_to_call`, `max_calls_per_day`, `max_calls_per_symbol`, `daily_budget_krw` 를 보수적으로 조정한다.
-- 현재 정책상 AI 단독으로 `force_exit` 권한을 주지 않는 것이 안전하다.
-
-## 4.6 Telegram
-
-필수는 아니지만 운영 알림에 매우 유용하다.
-
-준비 항목:
-
-- Bot Token
-- Chat ID
-
-운영 포인트:
-
-- 장전 브리핑, 차단 경보, 연결 상태 추적에 유용하다.
-- 민감정보를 메시지에 직접 포함하지 않도록 주의한다.
-
-## 5. 로컬 환경 준비
-
-실전 운영 전 로컬 환경도 API 준비의 일부다.
-
-필수 권장 환경:
-
-- Windows
-- Python 3.10+
-- `PyQt6`
-- `requests`
-- `websockets`
-- `keyring`
-- 인터넷 outbound HTTPS/WSS 허용
-
-실무 체크:
-
-- OS 시간이 정확해야 한다.
-- 백신/보안 솔루션이 WebSocket 을 차단하지 않는지 본다.
-- 사내 프록시 환경이면 `api.kiwoom.com`, `openapi.naver.com`, `opendart.fss.or.kr`, `api.stlouisfed.org`, `api.openai.com` 또는 `generativelanguage.googleapis.com` 연결을 확인한다.
-- 노트북 절전, 네트워크 끊김, VPN 자동 재연결 정책이 실시간 수신에 영향을 주지 않는지 확인한다.
-
-## 6. 저장 파일과 보안 관리
-
-현재 코드 기준 주요 파일 경로:
-
-- 설정 파일: `kiwoom_settings.json`
-- 토큰 캐시: `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`
-- 시장 인텔리전스 이벤트 로그: `data/market_intelligence_events.jsonl`
-- 의사결정 감사 로그: `data/decision_audit.jsonl`
-- 거래내역: `kiwoom_trade_history.json`
-
-보안 원칙:
-
-1. `kiwoom_settings.json`, `kiwoom_token_cache_live.json`, `kiwoom_token_cache_mock.json`, `data/*.jsonl` 을 외부 공유나 Git 커밋 대상에서 제외한다.
-2. `keyring` 이 정상 동작하는 환경을 우선 사용한다.
-3. 운영 PC는 개인용과 분리하거나 최소한 OS 계정을 분리한다.
-4. 원격제어 툴 사용 시 클립보드/파일 전송 로그를 점검한다.
-5. 에러 스크린샷을 공유할 때 App Key, Secret, API Key, 계좌번호를 반드시 가린다.
-
-## 7. 실제 UI 입력 매핑
-
-실제 입력 위치는 아래처럼 나뉜다.
-
-### `🔐 API/알림` 탭
-
-- `앱 키`
-- `시크릿 키`
-- `모의투자`
-- `봇 토큰`
-- `챗 ID`
-- `텔레그램 알림 사용`
-
-### `🧠 인텔리전스 설정` 탭
-
-- `시장 인텔리전스 사용`
-- `NAVER 뉴스`
-- `OpenDART`
-- `NAVER Datalab`
-- `FRED Macro`
-- `NAVER Client ID`
-- `NAVER Client Secret`
-- `DART API Key`
-- `FRED API Key`
-
-### `🧠 인텔리전스 설정 > AI 요약`
-
-- `AI 요약 사용`
-- `AI 제공사`
-- `모델 이름`
-- `AI API Key`
-- `AI 하루 호출수`
-- `AI 종목당 호출수`
-- `AI 하루 예산(원)`
-
-## 8. 실전 투입 전 권장 순서
-
-아래 순서대로 진행하는 것이 가장 안전하다.
-
-1. `keyring` 동작부터 확인한다.
-2. 키움 App Key/Secret 만 먼저 입력하고 연결 테스트를 한다.
-3. 계좌 목록이 정상적으로 내려오는지 본다.
-4. WebSocket 이 실제로 체결/호가를 받는지 확인한다.
-5. NAVER 키를 넣고 `뉴스` 와 `Datalab` 을 각각 수동 새로고침해 본다.
-6. DART 키를 넣고 공시 수집이 되는지 본다.
-7. FRED 키를 넣고 `macro` 상태가 갱신되는지 본다.
-8. 이 단계까지는 AI를 끈다.
-9. `🧠 인텔리전스 현황` 탭에서 `소스 상태`, `자동매매 정책`, `수량 배수`, `청산 정책` 을 확인한다.
-10. `📼 인텔리전스 리플레이` 탭에서 이벤트 로그와 감사 로그가 누적되는지 확인한다.
-11. 소수 종목, 보수적 설정, 매우 작은 비중으로 시뮬레이션 또는 제한된 운영을 시작한다.
-12. 충분히 검증한 뒤에만 실전 비중을 올린다.
-
-## 9. 운영 전 점검 체크리스트
-
-### 연결
-
-- 키움 REST 연결 성공
-- 계좌 목록 조회 성공
-- 계좌 정보 조회 성공
-- WebSocket 연결 성공
-
-### 주문 가드
-
-- `asset_scope = kr_stock_live`
-- `short_enabled = False`
-- 선택 전략이 `live_supported = True`
-- SHORT 가능 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`) 미선택
-- `use_split = True` 인 경우 `execution_policy = limit`
-
-### 시장 인텔리전스
-
-- NAVER 뉴스 상태 정상
-- NAVER Datalab 상태 정상
-- DART 상태 정상
-- FRED 상태 정상 또는 의도적으로 비활성화
-- AI는 초기엔 비활성 또는 매우 보수적 예산
-
-### 로그/감사
-
-- `data/market_intelligence_events.jsonl` 생성 확인
-- `data/decision_audit.jsonl` 생성 확인
-- `📼 인텔리전스 리플레이` 탭에서 최근 이벤트 확인
-- `🩺 시스템 진단` 탭에서 `sync_failed`, `외부 데이터 오류`, `소스 상태` 확인
-
-## 10. 자주 발생하는 문제
-
-### 10.1 `API 연결 실패`
-
-가능 원인:
-
-- App Key / Secret 오입력
-- API 사용 신청 미완료
-- 계좌 권한 없음
-- 네트워크 차단
-- 토큰 발급 실패
-
-### 10.2 계좌 목록이 비어 있음
-
-가능 원인:
-
-- API 연결은 됐지만 주문/계좌 조회 권한 미부여
-- 포털 인증/인증서/추가 로그인 상태 미완료
-- 실거래 계좌 연결 상태 문제
-
-### 10.3 NAVER 403 또는 빈 응답
-
-가능 원인:
-
-- 애플리케이션에 해당 API 권한 미설정
-- 잘못된 Client ID / Secret
-- 호출량 초과
-- 질의가 너무 협소해서 `ok_empty`
-
-### 10.4 DART 가 비어 있음
-
-가능 원인:
-
-- 인증키 오입력
-- 조회 기간 내 공시 부재
-- 종목코드와 DART 고유번호 매핑 초기 단계
-
-### 10.5 FRED 가 비어 있음
-
-가능 원인:
-
-- API Key 없음
-- 키는 맞지만 시리즈 호출 실패
-- 일시 네트워크 문제
-
-### 10.6 AI가 동작하지 않음
-
-가능 원인:
-
-- `AI API Key` 누락
-- Provider/Model 오입력
-- 예산 초과
-- 호출 횟수 초과
-- 응답 포맷 파싱 실패
-
-### 10.7 `모의투자` 인데 기대와 다르게 동작함
-
-현재 코드 제한:
-
-- `모의투자` 체크가 엔드포인트 전환까지 보장하지는 않는다.
-- 실제 모의 전용 분기를 기대하면 별도 검토가 필요하다.
-
-## 11. 권장 롤아웃 정책
-
-초기 1주 운영 권장안:
-
-1. 첫 2~3일은 주문 없이 API/로그만 검증한다.
-2. 다음 2~3일은 소수 종목 + 최소 비중으로 운영한다.
-3. AI는 마지막에 켠다.
-4. `force_exit` 는 DART 기반 이벤트에서만 허용 상태를 유지한다.
-5. 매일 장 종료 후 `📼 인텔리전스 리플레이` 탭과 `decision_audit.jsonl` 을 검토한다.
-
-## 12. 공식 참고 링크
-
-- 키움 REST API 포털: https://openapi.kiwoom.com/m/main/home
-- 키움 REST API 로그인/신청 화면: https://openapi.kiwoom.com/mgmt/VOpenApiRegView?dummyVal=0
+- 키움 REST API: https://openapi.kiwoom.com/m/main/home
 - NAVER 뉴스 검색 API: https://developers.naver.com/docs/serviceapi/search/news/news.md
-- NAVER 데이터랩 검색어 트렌드 API: https://developers.naver.com/docs/serviceapi/datalab/search/search.md
-- OpenDART 개발가이드 예시: https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS006&apiId=2020055
-- FRED API 문서: https://fred.stlouisfed.org/docs/api/fred/v2/index.html
-- OpenAI API Key 도움말: https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key
-- Google AI Studio / Gemini API Key: https://ai.google.dev/aistudio/
-
-## 13. 최종 결론
-
-이 프로젝트를 실제 API와 연결하려면 준비물은 단순히 “키 몇 개”가 아니다.
-
-- 브로커 권한
-- 계좌 조회/주문 가능 상태
-- 실시간 수신 환경
-- 외부 데이터 API 키
-- 보안 저장소
-- 로그/감사 확인 체계
-- 실전 가드 조건
-
-여기까지 모두 준비돼야 실사용이 가능하다.  
-특히 현재 코드 기준으로는 `모의투자` 엔드포인트 분기와 `keyring` fallback 보안 상태를 먼저 확인하는 것이 최우선이다.
+- NAVER Datalab API: https://developers.naver.com/docs/serviceapi/datalab/search/search.md
+- OpenDART: https://opendart.fss.or.kr/
+- FRED API: https://fred.stlouisfed.org/docs/api/fred/

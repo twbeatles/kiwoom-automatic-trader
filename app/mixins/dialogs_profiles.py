@@ -290,6 +290,19 @@ class DialogsProfilesMixin(TraderMixinBase):
             order = dialog.order_result
             if not self._validate_manual_order_request(order):
                 return
+            signal_only = getattr(self, "_is_signal_only_mode", None)
+            if callable(signal_only) and bool(signal_only()):
+                recorder = getattr(self, "_record_signal_only_order", None)
+                if callable(recorder):
+                    recorder(
+                        side="buy" if order.get("type") == "매수" else "sell",
+                        code=str(order.get("code", "")),
+                        quantity=int(order.get("qty", 0) or 0),
+                        price=int(order.get("expected_price", order.get("price", 0)) or 0),
+                        reason="MANUAL_ORDER",
+                        payload=dict(order),
+                    )
+                return
             if self._manual_order_live_guard_required():
                 confirm_guard = getattr(self, "_confirm_live_trading_guard", None)
                 if callable(confirm_guard) and not bool(confirm_guard()):
@@ -429,6 +442,7 @@ class DialogsProfilesMixin(TraderMixinBase):
             "use_risk": self.chk_use_risk.isChecked(),
             "daily_loss_basis": combo_value(self.combo_daily_loss_basis, "total_equity") if hasattr(self, "combo_daily_loss_basis") else "total_equity",
             "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked() if hasattr(self, "chk_sync_history_flush_on_exit") else True,
+            "allow_plaintext_secret_fallback": self.chk_allow_plaintext_secret_fallback.isChecked() if hasattr(self, "chk_allow_plaintext_secret_fallback") else False,
             "codes": self.input_codes.text(),
             "use_ma": self.chk_use_ma.isChecked(),
             "ma_short": self.spin_ma_short.value(),
@@ -470,6 +484,7 @@ class DialogsProfilesMixin(TraderMixinBase):
             "short_enabled": self.chk_short_enabled.isChecked() if hasattr(self, "chk_short_enabled") else False,
             "asset_scope": combo_value(self.combo_asset_scope, "kr_stock_live") if hasattr(self, "combo_asset_scope") else "kr_stock_live",
             "execution_policy": combo_value(self.combo_execution_policy, "market") if hasattr(self, "combo_execution_policy") else "market",
+            "execution_mode": combo_value(self.combo_execution_mode, getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")) if hasattr(self, "combo_execution_mode") else getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
             "backtest_config": {
                 "timeframe": combo_value(self.combo_backtest_timeframe, "1d") if hasattr(self, "combo_backtest_timeframe") else "1d",
                 "lookback_days": self.spin_backtest_lookback.value() if hasattr(self, "spin_backtest_lookback") else 365,
@@ -543,6 +558,8 @@ class DialogsProfilesMixin(TraderMixinBase):
             set_combo_value(self.combo_daily_loss_basis, str(settings['daily_loss_basis']))
         if 'sync_history_flush_on_exit' in settings and hasattr(self, "chk_sync_history_flush_on_exit"):
             self.chk_sync_history_flush_on_exit.setChecked(bool(settings['sync_history_flush_on_exit']))
+        if 'allow_plaintext_secret_fallback' in settings and hasattr(self, "chk_allow_plaintext_secret_fallback"):
+            self.chk_allow_plaintext_secret_fallback.setChecked(bool(settings['allow_plaintext_secret_fallback']))
         if 'use_ma' in settings:
             self.chk_use_ma.setChecked(settings['use_ma'])
         if 'ma_short' in settings:
@@ -641,6 +658,8 @@ class DialogsProfilesMixin(TraderMixinBase):
             set_combo_value(self.combo_asset_scope, str(settings['asset_scope']))
         if 'execution_policy' in settings and hasattr(self, "combo_execution_policy"):
             set_combo_value(self.combo_execution_policy, str(settings['execution_policy']))
+        if 'execution_mode' in settings and hasattr(self, "combo_execution_mode"):
+            set_combo_value(self.combo_execution_mode, str(settings['execution_mode']))
         strategy_pack_settings = settings.get('strategy_pack')
         if isinstance(strategy_pack_settings, dict):
             default_pack_raw = getattr(Config, "DEFAULT_STRATEGY_PACK", {})
@@ -714,6 +733,9 @@ class DialogsProfilesMixin(TraderMixinBase):
                 self.config.market_intelligence = dict(mi)
             if hasattr(self, "chk_market_intel_enabled"):
                 self.chk_market_intel_enabled.setChecked(bool(mi.get('enabled', True)))
+            source_policy = mi.get('source_policy', {}) if isinstance(mi.get('source_policy'), dict) else {}
+            if hasattr(self, "chk_market_intel_strict_guard"):
+                self.chk_market_intel_strict_guard.setChecked(bool(source_policy.get('strict_entry_guard', False)))
             providers = mi.get('providers', {}) if isinstance(mi.get('providers'), dict) else {}
             if hasattr(self, "chk_market_news"):
                 self.chk_market_news.setChecked(bool(providers.get('news', True)))
@@ -762,6 +784,8 @@ class DialogsProfilesMixin(TraderMixinBase):
                 "use_slippage_guard",
                 "max_slippage_bps",
                 "use_order_health_guard",
+                "execution_mode",
+                "allow_plaintext_secret_fallback",
             ):
                 if key in settings:
                     setattr(self.config, key, settings[key])

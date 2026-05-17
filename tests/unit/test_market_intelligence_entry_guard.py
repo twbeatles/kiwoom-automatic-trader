@@ -34,14 +34,23 @@ class TestMarketIntelligenceEntryGuard(unittest.TestCase):
             "bid_price": 1000,
         }
 
-    def test_idle_market_intelligence_fails_closed_and_requests_refresh(self):
+    def test_idle_market_intelligence_relaxed_default_allows_and_requests_refresh(self):
         trader = _Harness()
+
+        allowed, reason = trader._can_enter_trade("005930", self._info(status="idle"), datetime.datetime.now())
+
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "")
+        self.assertEqual(trader.refresh_requests[0][1], "entry_guard_idle")
+
+    def test_idle_market_intelligence_strict_mode_fails_closed(self):
+        trader = _Harness()
+        trader.config.market_intelligence["source_policy"]["strict_entry_guard"] = True
 
         allowed, reason = trader._can_enter_trade("005930", self._info(status="idle"), datetime.datetime.now())
 
         self.assertFalse(allowed)
         self.assertEqual(reason, "market_intel_fresh_guard")
-        self.assertEqual(trader.refresh_requests[0][1], "entry_guard_idle")
 
     def test_high_risk_disclosure_blocks_entry(self):
         trader = _Harness()
