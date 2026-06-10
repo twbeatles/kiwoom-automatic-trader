@@ -84,10 +84,10 @@ class TestSyncFailedFailsafe(unittest.TestCase):
         trader = _OrderSyncHarness()
         scheduled = []
 
-        with patch("app.mixins.order_sync.QTimer.singleShot", side_effect=lambda ms, _cb: scheduled.append(ms)), patch(
-            "app.mixins.order_sync.Config.POSITION_SYNC_MAX_RETRIES", 1
-        ), patch("app.mixins.order_sync.Config.POSITION_SYNC_DEBOUNCE_MS", 100), patch(
-            "app.mixins.order_sync.Config.POSITION_SYNC_BACKOFF_MAX_MS", 500
+        with patch("app.features.order_sync.position_sync.QTimer.singleShot", side_effect=lambda ms, _cb: scheduled.append(ms)), patch(
+            "app.features.order_sync.position_sync.Config.POSITION_SYNC_MAX_RETRIES", 1
+        ), patch("app.features.order_sync.position_sync.Config.POSITION_SYNC_DEBOUNCE_MS", 100), patch(
+            "app.features.order_sync.position_sync.Config.POSITION_SYNC_BACKOFF_MAX_MS", 500
         ):
             trader._on_position_sync_error({"005930"}, Exception("e1"))
             trader._position_sync_scheduled = False

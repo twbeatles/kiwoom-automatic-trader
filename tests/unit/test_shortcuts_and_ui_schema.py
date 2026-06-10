@@ -60,6 +60,10 @@ class _Harness(SystemShellMixin):
 
 
 class TestShortcutsAndUISchema(unittest.TestCase):
+    def _read_feature_text(self, path: str) -> str:
+        root = Path(path)
+        return "\n".join(file.read_text(encoding="utf-8") for file in root.glob("*.py"))
+
     def test_shortcut_ctrl_p_opens_profile_manager(self):
         self.assertEqual(Config.SHORTCUTS.get("open_profile_manager"), "Ctrl+P")
         self.assertEqual(Config.SHORTCUTS.get("open_presets"), "Ctrl+Shift+P")
@@ -75,14 +79,13 @@ class TestShortcutsAndUISchema(unittest.TestCase):
         self.assertTrue(any(key == "Ctrl+Shift+P" and fn.__name__ == "_open_presets" for key, fn in records))
 
     def test_auto_start_widget_single_source_of_truth(self):
-        path = Path("app/mixins/ui_build.py")
-        text = path.read_text(encoding="utf-8")
+        text = self._read_feature_text("app/features/ui_build")
         count = len(re.findall(r"self\.chk_auto_start\s*=\s*QCheckBox", text))
         self.assertEqual(count, 1)
 
     def test_main_tab_labels_and_beginner_sections_exist(self):
-        ui_text = Path("app/mixins/ui_build.py").read_text(encoding="utf-8")
-        market_text = Path("app/mixins/market_intelligence.py").read_text(encoding="utf-8")
+        ui_text = self._read_feature_text("app/features/ui_build")
+        market_text = self._read_feature_text("app/features/market_intelligence")
 
         for label in (
             "🎯 핵심 설정",

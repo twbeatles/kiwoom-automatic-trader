@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-05-17
+> **최종 업데이트**: 2026-06-10
 
 ---
 
@@ -11,13 +11,15 @@
 이 프로젝트는 현재 **엔트리 래퍼 + 앱 패키지 분할 구조**입니다.
 
 - 실행 진입점: `키움증권 자동매매.py`
-- 실구현 클래스: `app/main_window.py`의 `KiwoomProTrader`
-- 기능 모듈: `app/mixins/*.py`
-- 전략 오케스트레이션: `strategy_manager.py`
+- 실구현 클래스: `app/core/window.py`의 `KiwoomProTrader`
+- 기능 모듈: `app/features/*`
+- 호환 모듈: `app/main_window.py`, `app/mixins/*.py`, `config.py`, `strategy_manager.py`
+- 전략 오케스트레이션: `strategies/manager.py`
 - 전략 세부 책임: `strategies/manager_mixins/*.py`
 - 다이얼로그 구현: `dialogs/*.py`
 - 다이얼로그 호환 import: `ui_dialogs.py`
 - 타입 보조: `app/mixins/_typing.py`의 `TraderMixinBase`
+- 설정 구현: `app/configuration/base.py`
 - 공용 지원: `app/support/widgets.py`, `app/support/worker.py`
 - 주문 라우팅 지원: `app/support/execution_policy.py`
 - 백테스트 UI 실행 adapter: `app/support/backtest_runner.py`
@@ -31,13 +33,13 @@
 ## 코드베이스 맵
 
 ```text
-app/main_window.py
+app/core/window.py
   - __init__
   - _connect_config_signals
   - signals: sig_log, sig_execution, sig_order_execution, sig_update_table
 
-app/mixins/ui_build.py
-  - UI 생성/탭 구성
+app/features/ui_build/
+  - UI shell, 백테스트 UI, 설정/시장/데이터 탭 구성
 
 app/mixins/market_data_tabs.py
   - 차트/호가/조건검색/순위조회
@@ -48,20 +50,23 @@ app/mixins/system_shell.py
 app/mixins/api_account.py
   - API 연결, 계좌 갱신, 실거래 확인 가드
 
-app/mixins/trading_session.py
+app/features/trading_session/
   - 시작/중지, 유니버스 초기화, 긴급청산, 취소 우선 종료 정리
 
-app/mixins/order_sync.py
+app/features/order_sync/
   - 주문 상태 추적, 체결 동기화
 
-app/mixins/execution_engine.py
+app/features/execution/
   - 매수/매도 실행 및 콜백
 
-app/mixins/market_intelligence.py
+app/features/market_intelligence/
   - 뉴스/공시/검색트렌드/매크로 수집, 브리핑, 경보, 인텔리전스 탭
 
-app/mixins/persistence_settings.py
+app/features/persistence/
   - 거래내역, 통계, 설정 저장/복원
+
+app/features/diagnostics/
+  - 시스템 진단 테이블과 상세 패널
 
 app/mixins/dialogs_profiles.py
   - 프리셋/프로필/수동주문/예약 다이얼로그
@@ -69,8 +74,11 @@ app/mixins/dialogs_profiles.py
 app/mixins/_typing.py
   - pyright용 type-only Qt mixin 베이스
 
-strategy_manager.py
-  - StrategyManager 조립/orchestration
+app/configuration/base.py
+  - Config / TradingConfig canonical 구현
+
+strategies/manager.py
+  - StrategyManager canonical 조립/orchestration
 
 strategies/manager_mixins/
   - _typing / evaluation / indicators / market_intelligence / portfolio_risk / signal_filters
@@ -198,7 +206,7 @@ python -m pytest tests\unit --override-ini addopts= --tb=short
 python -m pyright .
 python tools\refactor_verify.py
 ```
-- 현재 기준 `tests/unit` 전체 143개 테스트 통과
+- 현재 기준 `tests/unit` 전체 144개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과
@@ -230,7 +238,7 @@ python -m pytest -q tests/unit
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 pyright .
 ```
-- 현재 기준 `tests/unit` 전체 143개 테스트 통과
+- 현재 기준 `tests/unit` 전체 144개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 
@@ -275,7 +283,7 @@ pyright .
 
 1. `start_trading(from_schedule=False) -> bool` 로 예약 시작 상태머신을 정리했습니다.
 2. 수동 주문은 실계좌에서 주문마다 `_confirm_live_trading_guard()` 를 다시 통과하고, 6자리 숫자 코드/지정가 1원 이상/매도 가능수량 검증을 강제합니다.
-3. `strategy_manager.py` 는 현재 orchestration 레이어이고 실제 전략 구현 책임은 `strategies/manager_mixins/` 로 분리되었습니다.
+3. `strategies/manager.py` 는 현재 orchestration 레이어이고 실제 전략 구현 책임은 `strategies/manager_mixins/` 로 분리되었습니다. 루트 `strategy_manager.py` 는 호환 facade입니다.
 4. `ui_dialogs.py` 는 호환 re-export 레이어이고 실제 다이얼로그는 `dialogs/` 패키지에 있습니다.
 5. `KiwoomTrader.spec` 는 `api.endpoints`, `dialogs`, `strategies` 하위 모듈을 explicit import + `collect_submodules(...)` 로 함께 수집합니다.
 6. 최신 검증 기준:

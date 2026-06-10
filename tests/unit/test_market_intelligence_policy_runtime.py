@@ -114,7 +114,7 @@ class TestMarketIntelligencePolicyRuntime(unittest.TestCase):
         tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
         try:
             audit_path = Path(tmpdir) / "decision_audit.jsonl"
-            with patch("app.mixins.market_intelligence.Config.MARKET_INTELLIGENCE_DECISION_AUDIT_FILE", str(audit_path)):
+            with patch("app.features.market_intelligence.audit.Config.MARKET_INTELLIGENCE_DECISION_AUDIT_FILE", str(audit_path)):
                 trader._record_decision_audit_event(
                     code="005930",
                     info=info,

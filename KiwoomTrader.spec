@@ -1,4 +1,4 @@
-﻿# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python ; coding: utf-8 -*-
 """
 Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 경량화 최적화 빌드 설정 (ONEFILE 모드)
@@ -12,6 +12,7 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-04-12: live/mock API endpoint router(api.endpoints)와 외부 보유/주문 정리 런타임 보강 반영, 패키징 메타데이터 동기화
 2026-04-29: 백테스트 UI runner(app.support.backtest_runner), 전략 mixin typing, API 계약 테스트 기준 동기화
 2026-05-17: signal_only/live 실행 모드, WebSocket dispatcher, 미체결 adapter, 보안 fallback UI는 기존 app/api 수집 규칙으로 포함됨
+2026-06-10: app.core/app.features/app.configuration 대규모 구조 분리와 strategies.manager canonical 경로 반영
 """
 
 from pathlib import Path
@@ -35,18 +36,18 @@ hiddenimports = [
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
-    
+
     # 네트워크 모듈
     'websockets',
     'websockets.asyncio',
     'websockets.asyncio.client',
     'websockets.client',
     'websockets.exceptions',
-    
+
     # 보안 모듈
     'keyring.backends',
     'keyring.backends.Windows',
-    
+
     # API 모듈
     'api',
     'api.auth',
@@ -57,6 +58,23 @@ hiddenimports = [
     'app',
     'app.__init__',
     'app.main_window',
+    'app.core',
+    'app.core.window',
+    'app.configuration',
+    'app.configuration.base',
+    'app.configuration.paths',
+    'app.configuration.api',
+    'app.configuration.strategy',
+    'app.configuration.risk',
+    'app.configuration.market_intelligence',
+    'app.features',
+    'app.features.diagnostics',
+    'app.features.execution',
+    'app.features.market_intelligence',
+    'app.features.order_sync',
+    'app.features.persistence',
+    'app.features.trading_session',
+    'app.features.ui_build',
     'app.mixins',
     'app.mixins.ui_build',
     'app.mixins.market_data_tabs',
@@ -77,6 +95,7 @@ hiddenimports = [
     'app.support.backtest_runner',
     'config',
     'strategy_manager',
+    'strategies.manager',
     'dialogs',
     'sound_notifier',
     'profile_manager',
@@ -91,11 +110,11 @@ hiddenimports = [
     'data.providers.ai_provider',
     'data.providers.dart_provider',
     'data.providers.macro_provider',
-    
+
     # 유틸리티
     'dateutil',
     'dateutil.parser',
-    
+
     # 시스템
     'winreg',
 ]
@@ -121,7 +140,7 @@ excludes = [
     'sklearn',
     'seaborn',
     'plotly',
-    
+
     # 개발/테스트 도구
     'IPython',
     'jupyter',
@@ -130,26 +149,26 @@ excludes = [
     'unittest',
     'pdb',
     'pydoc',
-    
+
     # 대체 GUI
     'tkinter',
     'Tkinter',
     'PIL',
-    
+
     # 웹 프레임워크
     'flask',
     'django',
     'tornado',
     'bottle',
-    
+
     # ORM/DB 라이브러리
     'sqlalchemy',
     'pymongo',
     'psycopg2',
-    
+
     # 빌드 도구
     'lib2to3',
-    
+
     # 문서화
     'sphinx',
     'docutils',
@@ -178,7 +197,7 @@ a = Analysis(
 # PYZ (Python ZIP archive) 단계
 # ============================================================================
 pyz = PYZ(
-    a.pure, 
+    a.pure,
     a.zipped_data,
     cipher=block_cipher
 )

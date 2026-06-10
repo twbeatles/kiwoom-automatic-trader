@@ -117,8 +117,8 @@ class TestSettingsDefaultConsistency(unittest.TestCase):
                 json.dumps({"settings_version": 4, "codes": "005930"}, ensure_ascii=False),
                 encoding="utf-8",
             )
-            with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.mixins.persistence_settings.keyring.get_password", return_value=""
+            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
+                "app.features.persistence.settings_io.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
         finally:

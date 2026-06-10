@@ -64,7 +64,7 @@ class TestSignalOnlyExecution(unittest.TestCase):
     def test_signal_only_buy_never_calls_broker_or_reserves_cash(self):
         trader = _Harness()
         with tempfile.TemporaryDirectory() as tmpdir, patch(
-            "app.mixins.execution_engine.Config.ORDER_LIFECYCLE_EVENTS_FILE",
+            "app.features.execution.mode_lifecycle.Config.ORDER_LIFECYCLE_EVENTS_FILE",
             str(Path(tmpdir) / "orders.jsonl"),
         ):
             trader._execute_buy("005930", quantity=2, price=1000)
@@ -78,7 +78,7 @@ class TestSignalOnlyExecution(unittest.TestCase):
     def test_signal_only_sell_never_calls_broker(self):
         trader = _Harness()
         with tempfile.TemporaryDirectory() as tmpdir, patch(
-            "app.mixins.execution_engine.Config.ORDER_LIFECYCLE_EVENTS_FILE",
+            "app.features.execution.mode_lifecycle.Config.ORDER_LIFECYCLE_EVENTS_FILE",
             str(Path(tmpdir) / "orders.jsonl"),
         ):
             trader._execute_sell("005930", quantity=1, price=1000, reason="TEST")

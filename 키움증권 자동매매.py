@@ -5,7 +5,7 @@ import sys
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from app.main_window import KiwoomProTrader
+from app.core.window import KiwoomProTrader
 
 
 def main():

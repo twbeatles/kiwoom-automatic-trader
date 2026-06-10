@@ -142,8 +142,8 @@ class TestStartPositionSync(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("조회 실패", reason)
 
-    @patch("app.mixins.trading_session.QMessageBox.critical")
-    @patch("app.mixins.trading_session.QMessageBox.warning")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_start_trading_stops_when_snapshot_sync_fails(self, _warning, _critical):
         trader = _StartHarness((False, "sync failed"))
 

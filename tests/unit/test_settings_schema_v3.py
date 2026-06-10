@@ -112,8 +112,8 @@ class TestSettingsSchemaV3Migration(unittest.TestCase):
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(json.dumps({"settings_version": 2, "betting": 11.0}), encoding="utf-8")
 
-            with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.mixins.persistence_settings.keyring.get_password", return_value=""
+            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
+                "app.features.persistence.settings_io.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
         finally:

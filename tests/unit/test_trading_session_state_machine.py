@@ -69,8 +69,8 @@ class _Harness(TradingSessionMixin):
 
 
 class TestTradingSessionStateMachine(unittest.TestCase):
-    @patch("app.mixins.trading_session.QMessageBox.critical")
-    @patch("app.mixins.trading_session.QMessageBox.warning")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_start_trading_normalizes_codes(self, _warning, _critical):
         trader = _Harness("005930, 005930, abc, 12345, 000660", ["005930", "000660"])
 
@@ -83,8 +83,8 @@ class TestTradingSessionStateMachine(unittest.TestCase):
         self.assertTrue(trader.btn_stop.enabled)
         self.assertTrue(trader.btn_emergency.enabled)
 
-    @patch("app.mixins.trading_session.QMessageBox.critical")
-    @patch("app.mixins.trading_session.QMessageBox.warning")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_start_trading_rolls_back_on_empty_init(self, _warning, _critical):
         trader = _Harness("005930", [])
 
@@ -96,8 +96,8 @@ class TestTradingSessionStateMachine(unittest.TestCase):
         self.assertFalse(trader.btn_emergency.enabled)
         self.assertFalse(trader.schedule_started)
 
-    @patch("app.mixins.trading_session.QMessageBox.critical")
-    @patch("app.mixins.trading_session.QMessageBox.warning")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_start_trading_blocks_split_buy_without_limit_policy(self, warning, _critical):
         trader = _Harness("005930", ["005930"])
         trader.config.use_split = True

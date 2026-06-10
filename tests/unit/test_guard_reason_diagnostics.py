@@ -73,7 +73,7 @@ class _Harness:
 class TestGuardReasonDiagnostics(unittest.TestCase):
     def test_guard_reason_column_is_populated(self):
         trader = _Harness()
-        with patch("app.main_window.QTableWidgetItem", _DummyItem):
+        with patch("app.features.diagnostics.mixin.QTableWidgetItem", _DummyItem):
             trader._refresh_diagnostics()
 
         market_state_item = trader.diagnostic_table.item(0, 12)

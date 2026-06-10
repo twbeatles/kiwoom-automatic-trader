@@ -75,7 +75,7 @@ class _Harness(PersistenceSettingsMixin):
 
 
 class TestTradeHistorySingleWriter(unittest.TestCase):
-    @patch("app.mixins.persistence_settings.Worker", _FakeWorker)
+    @patch("app.features.persistence.trade_history.Worker", _FakeWorker)
     def test_single_writer_keeps_latest_snapshot_order(self):
         trader = _Harness(sync_flush=False)
         trader.trade_history = [{"seq": 1}]
@@ -96,7 +96,7 @@ class TestTradeHistorySingleWriter(unittest.TestCase):
         self.assertFalse(trader._history_save_inflight)
         self.assertIsNone(trader._history_save_pending_snapshot)
 
-    @patch("app.mixins.persistence_settings.Worker", _FakeWorker)
+    @patch("app.features.persistence.trade_history.Worker", _FakeWorker)
     def test_exit_flush_persists_latest_snapshot_even_with_async_policy(self):
         trader = _Harness(sync_flush=False)
         trader.trade_history = [{"seq": 9}]

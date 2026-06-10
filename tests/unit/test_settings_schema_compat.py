@@ -105,8 +105,8 @@ class TestSettingsSchemaCompat(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.mixins.persistence_settings.keyring.get_password", side_effect=RuntimeError("no keyring")
+            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
+                "app.features.persistence.settings_io.keyring.get_password", side_effect=RuntimeError("no keyring")
             ):
                 trader._load_settings()
         finally:
@@ -131,8 +131,8 @@ class TestSettingsSchemaCompat(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.mixins.persistence_settings.keyring.get_password", return_value=""
+            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
+                "app.features.persistence.settings_io.keyring.get_password", return_value=""
             ):
                 trader._load_settings()
         finally:

@@ -83,13 +83,16 @@ class TestDiagnosticsExternalColumns(unittest.TestCase):
             "시장 위험 모드",
             "주문 안정성 모드",
         ]
-        source = Path("app/mixins/ui_build.py").read_text(encoding="utf-8")
+        source = "\n".join(
+            file.read_text(encoding="utf-8")
+            for file in Path("app/features/ui_build").glob("*.py")
+        )
         for col in cols:
             self.assertIn(col, source)
 
     def test_refresh_diagnostics_populates_external_values(self):
         trader = _Harness()
-        with patch("app.main_window.QTableWidgetItem", _DummyItem):
+        with patch("app.features.diagnostics.mixin.QTableWidgetItem", _DummyItem):
             trader._refresh_diagnostics()
 
         status_item = trader.diagnostic_table.item(0, 9)

@@ -1,6 +1,6 @@
 # 실제 API 준비 가이드
 
-기준일: 2026-05-17  
+기준일: 2026-06-10
 기준: 현재 저장소 코드, `README.md`, `CLAUDE.md`, `GEMINI.md`, `KiwoomTrader.spec`
 
 이 문서는 Kiwoom Pro Algo-Trader를 실제 API와 연결하기 전에 준비해야 할 항목과 운영 순서를 정리한다. 현재 기본 정책은 실거래 사고 방지를 우선하며, 신규/모의 환경에서는 `signal_only`와 완화형 인텔리전스 guard로 먼저 검증하도록 설계되어 있다.
@@ -119,9 +119,9 @@ python tools\refactor_verify.py
 pyinstaller --clean KiwoomTrader.spec
 ```
 
-2026-05-17 기준 검증 결과:
+2026-06-10 기준 검증 결과:
 
-- `tests/unit` 전체 143개 테스트 통과
+- `tests/unit` 전체 144개 테스트 통과
 - Python 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과

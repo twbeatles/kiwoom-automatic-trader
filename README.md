@@ -1,4 +1,4 @@
-﻿# 🚀 Kiwoom Pro Algo-Trader v4.5
+# 🚀 Kiwoom Pro Algo-Trader v4.5
 
 키움증권 REST API 기반 프리미엄 자동매매 프로그램
 
@@ -20,6 +20,7 @@
 - [v4.5 신규 기능](#-v45-신규-기능)
 - [기술 스택](#-기술-스택)
 - [프로젝트 구조](#-프로젝트-구조)
+- [2026-06-10 대규모 구조 분리 리팩토링 업데이트](#-2026-06-10-대규모-구조-분리-리팩토링-업데이트)
 - [2026-04-08 구조 분리/패키징 동기화 업데이트](#-2026-04-08-구조-분리패키징-동기화-업데이트)
 - [설치 및 실행](#-설치-및-실행)
 - [사용 방법](#-사용-방법)
@@ -41,7 +42,7 @@
 
 ## 📖 소개
 
-**Kiwoom Pro Algo-Trader**는 키움증권 REST API를 활용한 전문가급 자동매매 프로그램입니다. 
+**Kiwoom Pro Algo-Trader**는 키움증권 REST API를 활용한 전문가급 자동매매 프로그램입니다.
 PyQt6 기반의 직관적인 GUI와 30개 이상의 고급 기능을 제공하여 효율적인 알고리즘 트레이딩을 지원합니다.
 
 ### ✨ 주요 특징
@@ -181,28 +182,28 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 
 ## 📁 프로젝트 구조
 
-> 기준: 2026-05-17, 현재 저장소 코드
+> 기준: 2026-06-10, 현재 저장소 코드
 
 ```text
 kiwoom-automatic-trader/
 ├── api/                     # REST/WS 모델, 인증, live/mock 엔드포인트 라우팅, 클라이언트
 ├── app/
-│   ├── main_window.py       # KiwoomProTrader 조립 클래스
-│   ├── mixins/
-│   │   ├── _typing.py       # pyright용 type-only Qt base
-│   │   └── ...              # UI/세션/인텔리전스/실행/동기화/저장/프로필
+│   ├── core/window.py       # KiwoomProTrader canonical 조립 클래스
+│   ├── features/            # UI/세션/인텔리전스/실행/동기화/저장/진단 feature 패키지
+│   ├── configuration/       # Config/TradingConfig canonical 구현과 카테고리별 export
+│   ├── mixins/              # 기존 import 경로 호환 shim + 소형 mixin
 │   └── support/             # worker/widgets/execution_policy/ui_text/backtest_runner
 ├── backtest/                # 이벤트 드리븐 백테스트 엔진
 ├── dialogs/                 # 프리셋/검색/주문/프로필/예약 다이얼로그 구현
-├── strategies/              # 전략팩 + strategy_manager helper mixins
+├── strategies/              # StrategyManager canonical 구현 + 전략팩 + helper mixins
 │   └── manager_mixins/      # 전략 평가/지표/리스크/인텔 책임 분리
 ├── portfolio/               # 포지션 예산 배분
 ├── data/providers/          # 외부 데이터 provider
 ├── tests/unit/              # 단위 테스트
 ├── tools/                   # refactor/perf 검증 도구
-├── config.py
+├── config.py                # app.configuration.base 호환 facade
 ├── pyrightconfig.json       # repo-wide pyright 기준(Python 3.10)
-├── strategy_manager.py      # orchestration 레이어 (실구현은 strategies/manager_mixins)
+├── strategy_manager.py      # strategies.manager 호환 facade
 ├── KiwoomTrader.spec
 ├── ui_dialogs.py            # dialogs 패키지 호환 re-export
 └── 문서: README.md / CLAUDE.md / GEMINI.md / PROJECT_STRUCTURE_ANALYSIS.md / REAL_API_PREPARATION_GUIDE.md
@@ -210,19 +211,52 @@ kiwoom-automatic-trader/
 
 ### 파일별 역할
 
-| 파일 | 라인 수(2026-04-29) | 주요 기능 |
+| 경로 | 라인 수(2026-06-10) | 주요 기능 |
 |------|---------------------:|-----------|
-| `키움증권 자동매매.py` | 27 | `app.main_window.KiwoomProTrader` 실행 래퍼 |
-| `app/main_window.py` | 760 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태(`external_positions` 포함) |
-| `app/mixins/*.py` | 분할 모듈 | UI/API/주문/저장/다이얼로그 기능별 구현 |
-| `app/mixins/market_intelligence.py` | 2281 | 시장 인텔리전스 수집, 정책 계산, 리플레이/감사 뷰어 |
-| `strategies/manager_mixins/*.py` | 1797 | 전략 평가, 지표 계산, 포지션/리스크, 인텔 가드 |
-| `strategy_manager.py` | 32 | `StrategyManager` 조립/orchestration 레이어 |
-| `config.py` | 909 | 설정 상수, v7 스키마, 실행 모드, 가드/market intelligence 기본값 |
+| `키움증권 자동매매.py` | 27 | `app.core.window.KiwoomProTrader` 실행 래퍼 |
+| `app/core/window.py` | 778 | 메인 클래스 선언 + 공용 시그널 + 런타임 상태(`external_positions` 포함) |
+| `app/features/ui_build/` | 1,430 | UI shell, 설정/시장/데이터 탭, 백테스트 UI |
+| `app/features/trading_session/` | 1,878 | 시작/중지, 포지션/외부 데이터, cleanup, 시장 상태, 테이블 |
+| `app/features/execution/` | 1,123 | 실행 모드, 현금 예약, 진입 가드, 매수/매도 흐름 |
+| `app/features/order_sync/` | 1,108 | 주문 상태머신, 체결 이벤트, pending/manual/position sync |
+| `app/features/market_intelligence/` | 2,589 | 인텔 상태/점수/정책/감사/수집 루프/리플레이 UI |
+| `app/features/persistence/` | 1,050 | 설정 스키마, 거래 내역, keyring/설정 저장·복원 |
+| `app/features/diagnostics/` | 300 | 시스템 진단 테이블과 상세 패널 |
+| `app/mixins/*.py` | shim/소형 모듈 | 기존 import 경로 호환 + API/시스템/다이얼로그 등 소형 mixin |
+| `strategies/manager.py` | 32 | `StrategyManager` canonical orchestration 레이어 |
+| `strategies/manager_mixins/*.py` | 1,797 | 전략 평가, 지표 계산, 포지션/리스크, 인텔 가드 |
+| `config.py` | 3 | `Config`, `TradingConfig` 호환 facade |
+| `app/configuration/base.py` | 864 | 설정 상수, v7 스키마, 실행 모드, 가드/market intelligence 기본값 |
 | `dialogs/*.py` | 575 | 프리셋/검색/수동주문/프로필/예약 다이얼로그 구현 |
 | `ui_dialogs.py` | 22 | 기존 import 경로 호환 re-export |
 
 ---
+
+## 🔄 2026-06-10 대규모 구조 분리 리팩토링 업데이트
+
+이번 업데이트는 동작 변경 없이 큰 단일 mixin 파일을 SOLID 책임 경계에 맞춰 `app/features/` 하위 패키지로 분리한 구조 정리입니다.
+
+### 반영된 핵심 변경
+
+- `KiwoomProTrader` canonical 구현을 `app/core/window.py`로 이동하고 `app/main_window.py`는 호환 re-export로 유지합니다.
+- UI, trading session, execution, order sync, persistence, market intelligence, diagnostics 책임을 `app/features/*` 하위 모듈로 분리했습니다.
+- `Config`/`TradingConfig` canonical 구현은 `app/configuration/base.py`로 이동하고, `config.py`는 기존 import 호환 facade로 유지합니다.
+- `StrategyManager` canonical 구현은 `strategies/manager.py`로 이동하고, 루트 `strategy_manager.py`는 기존 import 호환 facade로 유지합니다.
+- `tools/refactor_verify.py`는 중첩 mixin 상속을 추적하며 `docs/refactor/pre_large_split_manifest.json` 기준으로 313개 메서드 누락 여부를 확인합니다.
+- `KiwoomTrader.spec`는 `app.core`, `app.features`, `app.configuration`, `strategies.manager` 경로를 explicit hiddenimport에 반영했습니다.
+
+### 현재 구조에서 기억할 점
+
+- 기존 import인 `from app.main_window import KiwoomProTrader`, `from app.mixins.trading_session import TradingSessionMixin`, `from config import Config`, `from strategy_manager import StrategyManager`는 계속 동작합니다.
+- 새 코드 탐색 기준은 `app/core/window.py`, `app/features/*`, `app/configuration/base.py`, `strategies/manager.py`입니다.
+
+### 검증 결과
+
+- `python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py "키움증권 자동매매.py"` 통과
+- `python tools\refactor_verify.py` 통과
+- `python -m pytest tests\unit --override-ini addopts= --tb=short` 통과(144개)
+- `python -m pyright .` 0 errors
+- `pyinstaller --clean KiwoomTrader.spec` 성공, `dist/KiwoomTrader_v4.5.exe` 생성
 
 ## 🔄 2026-04-08 구조 분리/패키징 동기화 업데이트
 
@@ -288,17 +322,17 @@ pyinstaller --clean KiwoomTrader.spec
 # 정적 분석
 python -m pyright .
 
-# 기준선 생성 (최초 1회)
-python tools/refactor_manifest.py --source "app/main_window.py" --output docs/refactor/baseline_manifest.json
+# 대규모 분리 기준선 생성
+python tools/refactor_manifest.py --source "app/core/window.py" --output docs/refactor/pre_large_split_manifest.json
 
 # 현재 구조 동등성 검증
 python tools/refactor_verify.py
 
 # 단위 테스트
-python -m pytest -q tests/unit
+python -m pytest tests\unit --override-ini addopts= --tb=short
 
 # 문법 컴파일
-python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py "키움증권 자동매매.py"
 ```
 
 검증 항목:
@@ -306,6 +340,34 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 - 필수 시그널(`sig_log`, `sig_execution`, `sig_order_execution`, `sig_update_table`)
 - `_save_settings/_load_settings/_get_current_settings/_apply_settings` 키 parity
 - 단축키 키셋 parity
+
+---
+
+## 🔄 2026-05-17 실행 안전장치 종합 업데이트
+
+- 기본 실행 모드는 `signal_only`이며, 이 모드에서는 자동/수동/분할 주문이 브로커 주문 API를 호출하지 않고 `data/order_lifecycle_events.jsonl`에 감사 로그만 남깁니다.
+- 실제 주문은 상세 설정의 실행 모드를 `live`로 바꾸고 기존 실거래 보호 확인을 통과해야 합니다.
+- 시장 인텔리전스 fresh/source guard는 기본적으로 경고형이며, 실거래 fail-closed가 필요하면 `market_intelligence.source_policy.strict_entry_guard`를 켭니다.
+- 거래 시작 전 preflight 로그에 실행 모드, API 모드, 계좌, WebSocket 상태, strict 인텔리전스 여부, 미체결 조회 지원 여부가 기록됩니다.
+- Keyring 저장 실패 시 실거래 평문 secret fallback은 기본 차단되며, 도구 메뉴에서 민감정보/토큰 삭제를 실행할 수 있습니다.
+- WebSocket 콜백은 Qt 메인 스레드 signal dispatcher를 통해 전달되며, 백그라운드 스레드에서 UI 객체를 직접 건드리지 않습니다.
+- 주문 취소는 정상 생명주기 이벤트로 감사 로그에 남기고, 주문 건강도 degrade는 거부/실패 이벤트에만 적용합니다.
+- 거래 내역 저장은 atomic write로 수행하며, 저장 실패는 Worker error로 노출됩니다.
+- REST 응답 숫자 파싱은 빈 값, 콤마, 부호, 누락 필드를 안전하게 처리합니다.
+- `requirements.txt`는 런타임 의존성만 담고, 개발/검증 도구는 `requirements-dev.txt`로 분리했습니다.
+- `KiwoomTrader.spec`는 `icon.png`를 실제 앱 아이콘으로 연결하고, 런타임 생성 JSON/JSONL 산출물은 번들에 포함하지 않습니다.
+
+### 최신 검증 결과
+
+```bash
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py "키움증권 자동매매.py"
+python tools\refactor_verify.py
+python -m pytest tests\unit --override-ini addopts= --tb=short
+```
+
+- 결과: `tests/unit` 전체 144개 테스트 통과
+- 결과: Python 문법 컴파일 검증 통과
+- 결과: refactor verification 통과
 
 ---
 
@@ -330,7 +392,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 pyright .
 ```
 
-- 결과: **`tests/unit` 전체 143개 테스트 통과**
+- 결과: **`tests/unit` 전체 144개 테스트 통과**
 - 결과: Python 문법 컴파일 검증 통과
 - 결과: `pyright .` 0 errors
 
@@ -412,29 +474,6 @@ python -m pytest -q tests/unit
 - 당시 결과: **`tests/unit` 전체 104개 테스트 통과** (2026-03-25 재실행 기준)
 - 로컬 재실행 시간: **약 21.44초**
 
-### 구현 정합성 메모
-
-- 과거 구현 검토 문서는 현재 문서 세트에 흡수됐고, 저장소 기준 문서는 `PROJECT_STRUCTURE_ANALYSIS.md`와 `REAL_API_PREPARATION_GUIDE.md`를 기준으로 유지합니다.
-- 이 메모의 `분할 매수`, `SHORT 전략`, `예약 매매`, `수동 주문` 관련 후속 구현은 상단 `2026-04-08 주문·예약 안전화 업데이트`와 `2026-04-29 실행 안전장치·백테스트 UI·문서 동기화 업데이트`에 반영되었습니다.
-- 오프스크린 UI 초기화 스모크 테스트 기준으로 `ui_build.py`의 분할매수 기본값 상수명을 현재 코드와 맞게 정리했습니다.
-
----
-
-## 🔄 2026-05-17 실행 안전장치 종합 업데이트
-
-- 기본 실행 모드는 `signal_only`이며, 이 모드에서는 자동/수동/분할 주문이 브로커 주문 API를 호출하지 않고 `data/order_lifecycle_events.jsonl`에 감사 로그만 남깁니다.
-- 실제 주문은 상세 설정의 실행 모드를 `live`로 바꾸고 기존 실거래 보호 확인을 통과해야 합니다.
-- 시장 인텔리전스 fresh/source guard는 기본적으로 경고형이며, 실거래 fail-closed가 필요하면 `market_intelligence.source_policy.strict_entry_guard`를 켭니다.
-- 거래 시작 전 preflight 로그에 실행 모드, API 모드, 계좌, WebSocket 상태, strict 인텔리전스 여부, 미체결 조회 지원 여부가 기록됩니다.
-- 미체결 주문 조회는 내부 adapter만 추가된 상태이며, 공식 Kiwoom REST 엔드포인트가 확인되기 전까지 preflight에서 `unsupported`로 표시됩니다.
-- Keyring 저장 실패 시 실거래 평문 secret fallback은 기본 차단되며, 도구 메뉴에서 민감정보/토큰 삭제를 실행할 수 있습니다.
-- WebSocket 콜백은 Qt 메인 스레드 signal dispatcher를 통해 전달되며, 백그라운드 스레드에서 UI 객체를 직접 건드리지 않습니다.
-- 주문 취소는 정상 생명주기 이벤트로 감사 로그에 남기고, 주문 건강도 degrade는 거부/실패 이벤트에만 적용합니다.
-- 거래 내역 저장은 atomic write로 수행하며, 저장 실패는 Worker error로 노출됩니다.
-- REST 응답 숫자 파싱은 빈 값, 콤마, 부호, 누락 필드를 안전하게 처리합니다.
-- `requirements.txt`는 런타임 의존성만 담고, 개발/검증 도구는 `requirements-dev.txt`로 분리했습니다.
-- `KiwoomTrader.spec`는 `icon.png`를 실제 앱 아이콘으로 연결하고, 런타임 생성 JSON/JSONL 산출물은 번들에 포함하지 않습니다.
-
 ### 최신 검증 결과
 
 ```bash
@@ -444,7 +483,7 @@ python -m pyright .
 python tools\refactor_verify.py
 ```
 
-- 결과: `tests/unit` 전체 143개 테스트 통과
+- 결과: `tests/unit` 전체 144개 테스트 통과
 - 결과: Python 문법 컴파일 검증 통과
 - 결과: `pyright .` 0 errors
 - 결과: refactor verification 통과
@@ -458,7 +497,7 @@ python tools\refactor_verify.py
 ### 반영된 핵심 변경
 
 - 설정 스키마를 `market_intelligence` 포함 구조로 확장했고, 현재 canonical 스키마는 `settings_version = 7`
-- `app/mixins/market_intelligence.py`를 추가해 뉴스/공시/검색트렌드/매크로 수집 루프, 브리핑, 경보, JSONL 이벤트 로그를 분리
+- 2026-03-24 당시 `app/mixins/market_intelligence.py`를 추가해 뉴스/공시/검색트렌드/매크로 수집 루프, 브리핑, 경보, JSONL 이벤트 로그를 분리했습니다. 현재 canonical 구현은 `app/features/market_intelligence/`입니다.
 - 메인 탭에 `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`를 분리하고, `🔐 API/알림` 탭은 인증/알림 전용으로 재정리
 - 신규 provider 추가:
   - `data/providers/news_provider.py`
@@ -672,7 +711,7 @@ python -m pytest -q tests/unit
   - 1단계: +3% → 30% 청산
   - 2단계: +5% → 추가 30% 청산
   - 3단계: +8% → 추가 20% 청산
-  
+
 - **트레일링 스톱**
   - 수익률이 3% 도달 시 발동
   - 고점 대비 1.5% 하락 시 청산
@@ -922,7 +961,7 @@ MIT License
 
 - **작성자**: Kiwoom Pro Algo-Trader
 - **버전**: 4.5
-- **최종 업데이트**: 2026-05-17
+- **최종 업데이트**: 2026-06-10
 
 ---
 

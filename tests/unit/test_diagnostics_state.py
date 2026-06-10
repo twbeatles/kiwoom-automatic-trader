@@ -75,8 +75,8 @@ class TestDiagnosticsState(unittest.TestCase):
         trader._set_pending_order("005930", "buy", "BUY")
         self.assertEqual(trader.diag["005930"]["pending_side"], "buy")
 
-        with patch("app.mixins.order_sync.Config.POSITION_SYNC_MAX_RETRIES", 1), patch(
-            "app.mixins.order_sync.QTimer.singleShot", side_effect=lambda *_args, **_kwargs: None
+        with patch("app.features.order_sync.position_sync.Config.POSITION_SYNC_MAX_RETRIES", 1), patch(
+            "app.features.order_sync.position_sync.QTimer.singleShot", side_effect=lambda *_args, **_kwargs: None
         ):
             trader._on_position_sync_error({"005930"}, Exception("boom1"))
             trader._position_sync_scheduled = False

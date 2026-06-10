@@ -58,7 +58,7 @@ class TestPositionSyncDebounce(unittest.TestCase):
         trader = _Harness()
         callbacks = []
 
-        with patch("app.mixins.order_sync.QTimer.singleShot", side_effect=lambda _ms, cb: callbacks.append(cb)):
+        with patch("app.features.order_sync.position_sync.QTimer.singleShot", side_effect=lambda _ms, cb: callbacks.append(cb)):
             trader._sync_position_from_account("005930")
             trader._sync_position_from_account("000660")
 

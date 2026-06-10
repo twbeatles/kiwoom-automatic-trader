@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-05-17
+> **최종 업데이트**: 2026-06-10
 
 ---
 
@@ -12,19 +12,12 @@
 키움증권 자동 매매 프로그램/
 ├── 키움증권 자동매매.py        # 엔트리포인트 래퍼(main)
 ├── app/
-│   ├── main_window.py         # KiwoomProTrader 클래스(조립)
-│   ├── mixins/
-│   │   ├── _typing.py
-│   │   ├── ui_build.py
-│   │   ├── market_data_tabs.py
-│   │   ├── system_shell.py
-│   │   ├── api_account.py
-│   │   ├── trading_session.py
-│   │   ├── order_sync.py
-│   │   ├── execution_engine.py
-│   │   ├── market_intelligence.py
-│   │   ├── persistence_settings.py
-│   │   └── dialogs_profiles.py
+│   ├── core/
+│   │   └── window.py          # KiwoomProTrader canonical 조립 클래스
+│   ├── features/              # UI/세션/실행/주문동기화/저장/인텔/진단 feature 패키지
+│   ├── configuration/         # Config/TradingConfig canonical 구현
+│   ├── main_window.py         # app.core.window 호환 re-export
+│   ├── mixins/                # 기존 import 경로 shim + 소형 mixin
 │   └── support/
 │       ├── backtest_runner.py
 │       ├── execution_policy.py
@@ -43,6 +36,7 @@
 │   ├── schedule.py
 │   └── stock_search.py
 ├── strategies/
+│   ├── manager.py
 │   ├── pack.py
 │   └── manager_mixins/
 │       ├── _typing.py
@@ -66,9 +60,10 @@
 
 핵심 포인트:
 - `키움증권 자동매매.py`는 더 이상 모놀리식 본체가 아닙니다.
-- 실제 클래스는 `app.main_window.KiwoomProTrader` 입니다.
-- 기능별 구현은 믹스인으로 분리되어 있습니다.
-- `StrategyManager`의 실제 구현은 `strategies/manager_mixins/`에 분산되어 있고, 루트 `strategy_manager.py`는 조립 레이어입니다.
+- 실제 클래스는 `app.core.window.KiwoomProTrader` 입니다. `app.main_window`는 기존 import 호환용입니다.
+- 큰 기능 구현은 `app/features/*` 하위 feature mixin 패키지로 분리되어 있습니다.
+- `Config`/`TradingConfig` 실제 구현은 `app/configuration/base.py`이며, 루트 `config.py`는 호환 facade입니다.
+- `StrategyManager`의 실제 구현은 `strategies/manager.py`이고 세부 책임은 `strategies/manager_mixins/`에 분산되어 있습니다. 루트 `strategy_manager.py`는 호환 facade입니다.
 - 다이얼로그 실제 구현은 `dialogs/`에 있고, `ui_dialogs.py`는 기존 import 호환용입니다.
 - 정적 분석 시 믹스인은 `app/mixins/_typing.py`의 `TraderMixinBase`를 공통 베이스로 사용합니다.
 - 백테스트 UI 실행 adapter는 `app/support/backtest_runner.py`입니다.
@@ -77,7 +72,7 @@
 
 ## 메인 클래스 구성
 
-### `KiwoomProTrader` (`app/main_window.py`)
+### `KiwoomProTrader` (`app/core/window.py`)
 
 - 직접 구현 메서드:
   - `__init__`
@@ -92,15 +87,16 @@
 
 | 모듈 | 책임 |
 |------|------|
-| `app/mixins/ui_build.py` | 대시보드/탭/UI 위젯 구성 |
+| `app/features/ui_build/` | 대시보드/탭/UI 위젯 구성 |
 | `app/mixins/market_data_tabs.py` | 차트/호가/조건검색/순위 조회 |
 | `app/mixins/system_shell.py` | 로깅, 트레이, 메뉴, 단축키, 종료 |
 | `app/mixins/api_account.py` | API 연결/계좌 동기화/실거래 가드 |
-| `app/mixins/trading_session.py` | 시작/중지/유니버스/강제청산 |
-| `app/mixins/order_sync.py` | 실시간 주문 상태 동기화 |
-| `app/mixins/execution_engine.py` | 매수/매도 실행 엔진 |
-| `app/mixins/market_intelligence.py` | 뉴스/공시/트렌드/매크로 수집, 브리핑, 경보, 인텔리전스 탭 |
-| `app/mixins/persistence_settings.py` | 내역/통계/설정 저장·복원 |
+| `app/features/trading_session/` | 시작/중지/유니버스/강제청산 |
+| `app/features/order_sync/` | 실시간 주문 상태 동기화 |
+| `app/features/execution/` | 매수/매도 실행 엔진 |
+| `app/features/market_intelligence/` | 뉴스/공시/트렌드/매크로 수집, 브리핑, 경보, 인텔리전스 탭 |
+| `app/features/persistence/` | 내역/통계/설정 저장·복원 |
+| `app/features/diagnostics/` | 시스템 진단 테이블/상세 패널 |
 | `app/mixins/dialogs_profiles.py` | 프리셋/프로필/검색/수동주문/예약 |
 
 ---
@@ -249,7 +245,7 @@ python -m pytest -q tests/unit
 ## 2026-03-24 시장 인텔리전스 동기화 메모
 
 1. 신규 믹스인/탭
-- `app/mixins/market_intelligence.py`를 추가했습니다.
+- 2026-03-24 당시 `app/mixins/market_intelligence.py`를 추가했습니다. 현재 canonical 구현은 `app/features/market_intelligence/`입니다.
 - 현재 기준 메인 탭에는 `🧠 인텔리전스 설정`, `🧠 인텔리전스 현황`, `📼 인텔리전스 리플레이`가 분리되어 있고, `🔐 API/알림` 탭은 인증/알림 전용으로 정리되었습니다.
 
 2. 외부 데이터 계층 확장
@@ -288,7 +284,7 @@ pyinstaller --clean KiwoomTrader.spec
 ## 자주 하는 실수
 
 1. `KiwoomProTrader`를 `키움증권 자동매매.py`에서 직접 수정하는 경우
-- 실제 구현은 `app/main_window.py` + `app/mixins/*.py`입니다.
+- 실제 구현은 `app/core/window.py` + `app/features/*`입니다. `app/main_window.py`와 큰 `app/mixins/*` 모듈은 기존 import 경로 호환 레이어입니다.
 
 2. 설정 키를 저장만 하고 로드/프로필 반영에서 누락하는 경우
 - 키 parity 검증으로 반드시 확인합니다.
@@ -364,7 +360,7 @@ python -m pytest tests\unit --override-ini addopts= --tb=short
 python -m pyright .
 python tools\refactor_verify.py
 ```
-- 현재 기준 `tests/unit` 전체 143개 테스트 통과
+- 현재 기준 `tests/unit` 전체 144개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과
@@ -423,7 +419,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 - 전략팩의 SHORT 방향 전략(`pairs_trading_cointegration`, `stat_arb_residual`, `ff5_factor_ls`)은 현재 자동매매 비지원/백테스트 전용으로 차단됩니다.
 - `portfolio/allocator.py`, `portfolio_mode`는 여전히 연구용/확장 경로이며 자동매매 런타임에는 직접 연결되지 않습니다.
 - `feature_flags.enable_backtest`는 백테스트 UI 실행 토글로 사용되며 실주문 라우팅과는 분리됩니다.
-- `strategy_manager.py`는 현재 orchestration 레이어이며, 전략 평가/지표/리스크/인텔 책임은 `strategies/manager_mixins/`로 이동했습니다.
+- `strategies/manager.py`는 현재 orchestration 레이어이며, 전략 평가/지표/리스크/인텔 책임은 `strategies/manager_mixins/`로 이동했습니다. 루트 `strategy_manager.py`는 호환 facade입니다.
 - `ui_dialogs.py`는 호환 re-export 레이어로 유지되고, 실제 다이얼로그 구현은 `dialogs/` 패키지에 있습니다.
 
 3. 수동 주문

@@ -18,6 +18,7 @@ __pycache__/
 .mypy_cache/
 .pyright_cache/
 .ruff_cache/
+.codegraph/
 .tox/
 .nox/
 .coverage
@@ -86,6 +87,7 @@ data/*.jsonl
 !data/stock_master_cache.json
 !docs/refactor/*.json
 tmp/
+tmp*/
 temp/
 *.bak
 *.tmp

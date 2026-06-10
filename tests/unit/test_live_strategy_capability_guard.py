@@ -77,7 +77,7 @@ class _Harness(TradingSessionMixin):
 
 
 class TestLiveStrategyCapabilityGuard(unittest.TestCase):
-    @patch("app.mixins.trading_session.QMessageBox.warning")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_live_start_blocked_for_sim_only_strategy(self, warn):
         trader = _Harness()
 
@@ -88,7 +88,7 @@ class TestLiveStrategyCapabilityGuard(unittest.TestCase):
         self.assertTrue(warn.called)
         self.assertTrue(any("전략가드" in msg for msg in trader.logs))
 
-    @patch("app.mixins.trading_session.QMessageBox.warning")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_mock_start_also_blocked_for_short_only_strategy(self, warn):
         trader = _Harness()
         trader.chk_mock = _DummyCheck(True)

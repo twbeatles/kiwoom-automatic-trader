@@ -3,46 +3,17 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Set, Tuple
+
+from refactor_introspection import collect_inherited_methods, collect_signal_names, read_text, resolve_class
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-BASELINE_PATH = ROOT_DIR / "docs/refactor/baseline_manifest.json"
+PRE_LARGE_SPLIT_PATH = ROOT_DIR / "docs/refactor/pre_large_split_manifest.json"
+BASELINE_PATH = PRE_LARGE_SPLIT_PATH if PRE_LARGE_SPLIT_PATH.exists() else ROOT_DIR / "docs/refactor/baseline_manifest.json"
+CANONICAL_WINDOW_PATH = ROOT_DIR / "app/core/window.py"
 MAIN_WINDOW_PATH = ROOT_DIR / "app/main_window.py"
 CLASS_NAME = "KiwoomProTrader"
-
-
-def _read(path: Path) -> str:
-    return path.read_text(encoding="utf-8-sig")
-
-
-def _parse(path: Path) -> ast.Module:
-    return ast.parse(_read(path))
-
-
-def _find_class(mod: ast.Module, class_name: str) -> ast.ClassDef:
-    for node in mod.body:
-        if isinstance(node, ast.ClassDef) and node.name == class_name:
-            return node
-    raise RuntimeError(f"{class_name} not found in {mod}")
-
-
-def _collect_methods(class_node: ast.ClassDef) -> Dict[str, ast.FunctionDef]:
-    return {n.name: n for n in class_node.body if isinstance(n, ast.FunctionDef)}
-
-
-def _collect_signal_names(class_node: ast.ClassDef) -> Set[str]:
-    out: Set[str] = set()
-    for node in class_node.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not isinstance(node.value, ast.Call):
-            continue
-        if isinstance(node.value.func, ast.Name) and node.value.func.id == "pyqtSignal":
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    out.add(target.id)
-    return out
 
 
 def _collect_dict_literal_keys(func_node: ast.FunctionDef) -> Set[str]:
@@ -75,7 +46,7 @@ def _collect_settings_access_keys(func_node: ast.FunctionDef) -> Set[str]:
 
 
 def _source_of_node(path: Path, node: ast.AST) -> str:
-    lines = _read(path).splitlines(keepends=True)
+    lines = read_text(path).splitlines(keepends=True)
     start = getattr(node, "lineno", None)
     end = getattr(node, "end_lineno", None)
     if start is None or end is None:
@@ -83,49 +54,11 @@ def _source_of_node(path: Path, node: ast.AST) -> str:
     return "".join(lines[start - 1:end])
 
 
-def _collect_mixin_class_files(main_mod: ast.Module) -> Dict[str, Path]:
-    out: Dict[str, Path] = {}
-    for node in main_mod.body:
-        if not isinstance(node, ast.ImportFrom):
-            continue
-        if node.level != 1:
-            continue
-        if not node.module or not node.module.startswith("mixins."):
-            continue
-        path = ROOT_DIR / "app" / (node.module.replace(".", "/") + ".py")
-        for alias in node.names:
-            out[alias.name] = path
-    return out
-
-
 def _collect_refactored_state() -> Tuple[Set[str], Set[str], Dict[str, ast.FunctionDef], Dict[str, Path]]:
-    main_mod = _parse(MAIN_WINDOW_PATH)
-    main_class = _find_class(main_mod, CLASS_NAME)
-    mixin_files = _collect_mixin_class_files(main_mod)
-
-    all_methods: Dict[str, ast.FunctionDef] = {}
-    method_origin: Dict[str, Path] = {}
-
-    # methods defined directly in main class
-    for name, node in _collect_methods(main_class).items():
-        all_methods[name] = node
-        method_origin[name] = MAIN_WINDOW_PATH
-
-    # methods inherited from mixins
-    for base in main_class.bases:
-        if not isinstance(base, ast.Name):
-            continue
-        base_name = base.id
-        if base_name not in mixin_files:
-            continue
-        mixin_path = mixin_files[base_name]
-        mixin_mod = _parse(mixin_path)
-        mixin_class = _find_class(mixin_mod, base_name)
-        for name, node in _collect_methods(mixin_class).items():
-            all_methods[name] = node
-            method_origin[name] = mixin_path
-
-    return set(all_methods.keys()), _collect_signal_names(main_class), all_methods, method_origin
+    source_path = CANONICAL_WINDOW_PATH if CANONICAL_WINDOW_PATH.exists() else MAIN_WINDOW_PATH
+    methods, origins, _ = collect_inherited_methods(source_path, CLASS_NAME)
+    _resolved_path, _mod, main_class = resolve_class(source_path, CLASS_NAME)
+    return set(methods.keys()), collect_signal_names(main_class), methods, origins
 
 
 def _collect_shortcut_keys(method_node: ast.FunctionDef, method_path: Path) -> Set[str]:
@@ -154,8 +87,8 @@ def main() -> int:
     if not BASELINE_PATH.exists():
         print(f"[FAIL] Missing baseline: {BASELINE_PATH}")
         return 1
-    if not MAIN_WINDOW_PATH.exists():
-        print(f"[FAIL] Missing refactored class file: {MAIN_WINDOW_PATH}")
+    if not MAIN_WINDOW_PATH.exists() and not CANONICAL_WINDOW_PATH.exists():
+        print(f"[FAIL] Missing refactored class file: {CANONICAL_WINDOW_PATH} or {MAIN_WINDOW_PATH}")
         return 1
 
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))

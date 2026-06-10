@@ -83,9 +83,9 @@ class TestPersistenceKeyringClear(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("app.mixins.persistence_settings.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.mixins.persistence_settings.KEYRING_AVAILABLE", True
-            ), patch("app.mixins.persistence_settings.keyring.delete_password") as mock_delete:
+            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
+                "app.features.persistence.settings_io.KEYRING_AVAILABLE", True
+            ), patch("app.features.persistence.settings_io.keyring.delete_password") as mock_delete:
                 trader._save_settings()
 
             self.assertEqual(mock_delete.call_count, 7)
