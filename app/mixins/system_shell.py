@@ -234,18 +234,34 @@ class SystemShellMixin(TraderMixinBase):
         if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0 and basis_amount > 0:
             self.daily_initial_deposit = basis_amount
 
-        if self.chk_use_risk.isChecked() and not self.daily_loss_triggered and self.daily_initial_deposit > 0:
-            loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
-            max_loss = float(getattr(cfg, "max_daily_loss", self.spin_max_loss.value()))
-            if loss_rate <= -max_loss:
-                self.daily_loss_triggered = True
-                self.log(
-                    f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원, 기준={loss_basis}) - 매매 중지"
-                )
-                self.stop_trading()
+        self._check_daily_loss_limit()
 
         if self._history_dirty:
             self._save_trade_history()
+
+    def _check_daily_loss_limit(self):
+        """일일 손실 한도 평가. 타이머뿐 아니라 매도 체결 누적 직후에도 호출되어
+        한도 도달 시 즉시 매매를 중지한다(다음 timer tick 전 진입 차단)."""
+        if bool(getattr(self, "daily_loss_triggered", False)):
+            return
+        if not self.is_running:
+            return
+        cfg = getattr(self, "config", None)
+        use_risk_chk = getattr(self, "chk_use_risk", None)
+        if use_risk_chk is None or not use_risk_chk.isChecked():
+            return
+        if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
+            return
+        loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
+        max_loss_spin = getattr(self, "spin_max_loss", None)
+        max_loss = float(getattr(cfg, "max_daily_loss", max_loss_spin.value() if max_loss_spin else 0))
+        if loss_rate <= -max_loss:
+            self.daily_loss_triggered = True
+            loss_basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+            self.log(
+                f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원, 기준={loss_basis}) - 매매 중지"
+            )
+            self.stop_trading()
 
     def _setup_shortcuts(self):
         """키보드 단축키 설정."""

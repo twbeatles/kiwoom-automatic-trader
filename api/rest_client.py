@@ -73,6 +73,9 @@ class KiwoomRESTClient:
         # 순위/기타
         "RANK_VOLUME": "ka20001",        # 거래량상위
         "RANK_FLUCTUATION": "ka20002",   # 등락률상위
+
+        # 미체결
+        "ORDER_OPEN": "ka400008",        # 미체결주문조회
     }
     
     def __init__(self, auth: KiwoomAuth, base_url: Optional[str] = None):
@@ -382,15 +385,67 @@ class KiwoomRESTClient:
 
     @property
     def supports_open_orders(self) -> bool:
-        return False
+        return True
 
     def get_open_orders(self, account_no: str) -> List[OpenOrder]:
-        """Return currently open orders when an official endpoint is configured.
+        """미체결 주문 조회.
 
-        The project does not include a verified Kiwoom REST TR for this yet, so
-        callers can probe support without guessing a live endpoint.
+        키움 REST TR `ka400008`(미체결주문조회) 기반.
+        공식 응답 스키마 문서와의 교차 검증이 끝나지 않은 상태이므로, 파싱은
+        여러 필드명 후보를 허용하고 실패 시 빈 리스트를 반환하여 실거래에
+        안전하게 동작하도록 한다. 스키마 확정 후 필드 매핑을 다듬을 것.
         """
-        raise NotImplementedError("Kiwoom open-order REST endpoint is not configured")
+        data = {
+            "tr_cd": self.TR_CODES["ORDER_OPEN"],
+            "acnt_no": account_no,
+        }
+
+        try:
+            result = self._request("POST", "/api/dostk/ordunfilled", data=data)
+        except Exception as exc:
+            self.logger.warning(f"미체결 주문 조회 예외: {exc}")
+            return []
+
+        if not result or result.get("return_code") != 0:
+            return []
+
+        rows = result.get("output", [])
+        if not isinstance(rows, list):
+            # 단건 응답인 경우 단일 dict를 리스트로 정규화
+            if isinstance(rows, dict):
+                rows = [rows]
+            else:
+                return []
+
+        orders: List[OpenOrder] = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            try:
+                order_no = str(item.get("ord_no") or item.get("org_ord_no") or "").strip()
+                code = str(item.get("stk_cd") or "").strip()
+                if not order_no or not code:
+                    continue
+                raw_side = str(item.get("ord_tp") or item.get("bs_tp") or "").strip()
+                side = "buy" if raw_side == "1" else ("sell" if raw_side == "2" else raw_side)
+                orders.append(
+                    OpenOrder(
+                        order_no=order_no,
+                        code=code,
+                        side=side,
+                        quantity=_safe_int(item.get("ord_qty", 0)),
+                        remaining_qty=_safe_int(
+                            item.get("unexec_qty", item.get("not_cncl_qty", item.get("rmn_qty", 0)))
+                        ),
+                        price=_safe_int(item.get("ord_prc", 0), absolute=True),
+                        status=str(item.get("ord_st") or item.get("cnf_tp") or "").strip(),
+                    )
+                )
+            except Exception as exc:
+                self.logger.warning(f"미체결 주문 파싱 실패(건 건너뜀): {exc}")
+                continue
+
+        return orders
     
     # =========================================================================
     # 주문 API

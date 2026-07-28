@@ -9,6 +9,7 @@ import json
 import time
 import hashlib
 import logging
+import threading
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -43,11 +44,14 @@ class KiwoomAuth:
         
         # 로거 설정
         self.logger = logging.getLogger('KiwoomAuth')
-        
+
         # 토큰 저장소
         self._access_token: Optional[str] = None
         self._token_type: str = "bearer"
         self._expires_at: float = 0  # Unix timestamp
+
+        # 토큰 갱신 동시성 보호 (WebSocket/REST Worker/UI 스레드 동시 호출 대응)
+        self._token_lock = threading.Lock()
         
         # 캐시 디렉토리 설정
         base_dir = Path(getattr(Config, "BASE_DIR", Path.cwd()))
@@ -60,13 +64,14 @@ class KiwoomAuth:
     
     def set_credentials(self, app_key: str, secret_key: str, is_mock: bool = False):
         """자격증명 설정/업데이트"""
-        self.app_key = app_key
-        self.secret_key = secret_key
-        self.is_mock = bool(is_mock)
-        self._configure_mode(self.is_mock)
-        # 자격증명 변경 시 토큰 초기화
-        self._access_token = None
-        self._expires_at = 0
+        with self._token_lock:
+            self.app_key = app_key
+            self.secret_key = secret_key
+            self.is_mock = bool(is_mock)
+            self._configure_mode(self.is_mock)
+            # 자격증명 변경 시 토큰 초기화
+            self._access_token = None
+            self._expires_at = 0
 
     def _configure_mode(self, is_mock: bool):
         endpoints = resolve_api_endpoints(is_mock)
@@ -81,19 +86,23 @@ class KiwoomAuth:
         """
         유효한 액세스 토큰을 반환합니다.
         만료된 경우 자동으로 갱신합니다.
-        
+
         Args:
             force_refresh: True면 강제로 새 토큰 발급
-            
+
         Returns:
             액세스 토큰 문자열, 실패 시 None
         """
-        # 토큰 갱신 시점 확인 (만료 5분 전에 갱신)
+        # 빠른 경로: 캐시 hit는 lock 없이 읽는다.
         if not force_refresh and self._access_token and time.time() < (self._expires_at - 300):
             return self._access_token
-        
-        # 새 토큰 발급
-        return self._request_new_token()
+
+        # 느린 경로: lock 내에서 캐시를 재확인(double-checked locking)한 뒤 갱신.
+        # 여러 스레드가 동시에 만료 시점에 도달해도 발급 요청은 1회로 수렴한다.
+        with self._token_lock:
+            if not force_refresh and self._access_token and time.time() < (self._expires_at - 300):
+                return self._access_token
+            return self._request_new_token()
     
     def _request_new_token(self) -> Optional[str]:
         """새 엑세스 토큰을 요청합니다."""
@@ -181,15 +190,16 @@ class KiwoomAuth:
     
     def invalidate_token(self):
         """현재 토큰을 무효화합니다 (로그아웃)."""
-        self._access_token = None
-        self._expires_at = 0
-        
-        # 캐시 파일 삭제
-        if self.cache_path.exists():
-            try:
-                self.cache_path.unlink()
-            except OSError:
-                pass
+        with self._token_lock:
+            self._access_token = None
+            self._expires_at = 0
+
+            # 캐시 파일 삭제
+            if self.cache_path.exists():
+                try:
+                    self.cache_path.unlink()
+                except OSError:
+                    pass
     
     def _save_token_cache(self):
         """토큰을 캐시 파일에 저장합니다."""

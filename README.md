@@ -349,10 +349,15 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 - 실제 주문은 상세 설정의 실행 모드를 `live`로 바꾸고 기존 실거래 보호 확인을 통과해야 합니다.
 - 시장 인텔리전스 fresh/source guard는 기본적으로 경고형이며, 실거래 fail-closed가 필요하면 `market_intelligence.source_policy.strict_entry_guard`를 켭니다.
 - 거래 시작 전 preflight 로그에 실행 모드, API 모드, 계좌, WebSocket 상태, strict 인텔리전스 여부, 미체결 조회 지원 여부가 기록됩니다.
-- Keyring 저장 실패 시 실거래 평문 secret fallback은 기본 차단되며, 도구 메뉴에서 민감정보/토큰 삭제를 실행할 수 있습니다.
+- Keyring 저장 실패 시 평문 secret fallback은 기본 차단되며(모의투자 포함), 명시적으로 `allow_plaintext_secret_fallback`을 켠 경우에만 평문 저장을 허용합니다. 도구 메뉴에서 민감정보/토큰 삭제를 실행할 수 있습니다.
 - WebSocket 콜백은 Qt 메인 스레드 signal dispatcher를 통해 전달되며, 백그라운드 스레드에서 UI 객체를 직접 건드리지 않습니다.
 - 주문 취소는 정상 생명주기 이벤트로 감사 로그에 남기고, 주문 건강도 degrade는 거부/실패 이벤트에만 적용합니다.
-- 거래 내역 저장은 atomic write로 수행하며, 저장 실패는 Worker error로 노출됩니다.
+- 거래 내역 저장과 설정 파일 저장은 모두 atomic write(`tmp` → `os.replace`)로 수행하며, 저장 실패는 Worker error로 노출됩니다.
+- 인증 토큰 갱신은 `threading.Lock` 기반 double-checked locking으로 보호되어 멀티스레드 환경에서 발급 요청이 1회로 수렴합니다.
+- 자동 매수(`_execute_buy`)는 현재가가 0(미확정)일 때 주문을 보류하여 잔액 검증 우회를 원천 차단합니다.
+- 매매 중지/긴급청산 cleanup 폴링 중에는 주문 동기화 콜백의 pending state 변경을 억제하여 cleanup 판단 정합성을 유지합니다.
+- 일일 손실 한도는 매도 체결 누적 직후 즉시 평가되어 다음 타이머 tick 전 진입을 차단합니다.
+- 미체결 주문 조회는 `ka400008` 기반 `get_open_orders()` adapter로 지원되며, preflight에서 `supported`로 표시됩니다(스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 안전 동작).
 - REST 응답 숫자 파싱은 빈 값, 콤마, 부호, 누락 필드를 안전하게 처리합니다.
 - `requirements.txt`는 런타임 의존성만 담고, 개발/검증 도구는 `requirements-dev.txt`로 분리했습니다.
 - `KiwoomTrader.spec`는 `icon.png`를 실제 앱 아이콘으로 연결하고, 런타임 생성 JSON/JSONL 산출물은 번들에 포함하지 않습니다.
@@ -365,9 +370,10 @@ python tools\refactor_verify.py
 python -m pytest tests\unit --override-ini addopts= --tb=short
 ```
 
-- 결과: `tests/unit` 전체 144개 테스트 통과
+- 결과: `tests/unit` 전체 172개 테스트 통과 (PROJECT_AUDIT 기반 안정성 패치 + 신규 11개 테스트 파일 반영)
 - 결과: Python 문법 컴파일 검증 통과
 - 결과: refactor verification 통과
+- 결과: `pyright .` 0 errors
 
 ---
 

@@ -288,8 +288,11 @@ class DialogsProfilesMixin(TraderMixinBase):
         dialog = ManualOrderDialog(self, self.rest_client, self.current_account)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.order_result:
             order = dialog.order_result
+            # 검증은 이 지점(단일 choke point)에서만 통과한다.
+            # 통과한 주문만 실행될 수 있도록 플래그로 표시하고, 아래 실제 주문 실행 직전에 다시 확인한다.
             if not self._validate_manual_order_request(order):
                 return
+            order["validated"] = True
             signal_only = getattr(self, "_is_signal_only_mode", None)
             if callable(signal_only) and bool(signal_only()):
                 recorder = getattr(self, "_record_signal_only_order", None)
@@ -308,7 +311,13 @@ class DialogsProfilesMixin(TraderMixinBase):
                 if callable(confirm_guard) and not bool(confirm_guard()):
                     return
             self.log(f"📝 수동 주문 요청: {order['type']} {order['code']} {order['qty']}주")
-            
+
+            # 방어막: 검증 통과 플래그가 없으면 절대 주문을 실행하지 않는다.
+            # (choke point 회귀로 인한 우회를 원천 차단)
+            if not bool(order.get("validated", False)):
+                self.log("❌ 수동 주문 차단: 검증을 통과하지 않은 요청입니다.")
+                return
+
             # 실제 주문 실행 (Worker 사용)
             code = order['code']
             qty = order['qty']

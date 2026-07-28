@@ -165,7 +165,7 @@
   - 기본 `execution_mode`는 `signal_only`이며 주문 API를 호출하지 않고 `data/order_lifecycle_events.jsonl`에 감사 로그를 남깁니다.
   - 실제 주문은 `execution_mode = "live"`와 기존 실거래 보호 확인을 모두 통과해야 합니다.
   - `market_intelligence.source_policy.strict_entry_guard = false`가 기본이며, strict를 켜면 stale/missing/error 인텔리전스를 신규 진입 차단으로 처리합니다.
-  - 미체결 주문 조회는 adapter만 존재하며 공식 REST 엔드포인트가 확인되기 전까지 preflight에서 unsupported로 표시합니다.
+  - 미체결 주문 조회는 `ka400008`(미체결주문조회) 기반 `get_open_orders()` adapter로 구현되어 preflight에서 `supported`로 표시합니다. 단, 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 동작합니다.
 
 - 유니버스 표준 키:
   - `prev_high`, `prev_low`
@@ -343,7 +343,7 @@ python -m pytest -q tests/unit
 5. WebSocket/REST/미체결 adapter
 - WebSocket 콜백은 Qt main-thread dispatcher signal을 경유합니다.
 - REST 숫자 응답은 빈 값/콤마/부호/누락 필드를 안전 변환 helper로 처리합니다.
-- 미체결 주문 조회는 `get_open_orders()` adapter만 있고, 공식 REST 엔드포인트 확인 전까지 unsupported 상태입니다.
+- 미체결 주문 조회는 `ka400008` 기반 `get_open_orders()` adapter로 구현되어 `supports_open_orders=True` 입니다. 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 안전하게 동작합니다.
 
 6. 백테스트 UI
 - 상세 설정의 백테스트 영역은 CSV bar 파일과 선택 JSONL 인텔리전스 이벤트를 Worker로 실행합니다.
@@ -360,10 +360,22 @@ python -m pytest tests\unit --override-ini addopts= --tb=short
 python -m pyright .
 python tools\refactor_verify.py
 ```
-- 현재 기준 `tests/unit` 전체 144개 테스트 통과
+- 현재 기준 `tests/unit` 전체 172개 테스트 통과 (PROJECT_AUDIT 기반 수정 + 신규 11개 테스트 파일 반영)
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과
+
+9. PROJECT_AUDIT 기반 안정성 패치 (2026-07-28)
+- `_execute_buy` 시장가 주문 가격 0 가드 추가(잔액 검증 우회 원천 차단).
+- `KiwoomAuth.get_token/_request_new_token/set_credentials/invalidate_token` 에 `threading.Lock` 기반 double-checked locking 적용(멀티스레드 토큰 갱신 경쟁 억제).
+- `_save_settings` 를 atomic write(`_atomic_write_json`)로 전환(저장 중 크래시 시 파일 절단 방지).
+- 모의투자(`is_mock`) 자동 평문 secret fallback 제거 — 평문 저장은 명시적 `allow_plaintext_secret_fallback=True` 일 때만 허용.
+- `_cleanup_active_orders` 폴링 중 `_on_order_execution` pending mutation 재진입 억제(`_cleanup_polling` 플래그). 체결 fill 동기화는 유지.
+- WebSocket `_connect_and_listen` 토큰 획득 실패 시 점진적 백오프(5→10→20→60초).
+- `_add_trade` 매도 체결 누적 직후 `_check_daily_loss_limit()` 즉시 평가(다음 timer tick 전 진입 차단).
+- 수동 주문 `_validate_manual_order_request` 통과 시 `order["validated"]` 플래그 부여 + 실행 직전 방어막(choke point 회귀 차단).
+- `TelegramNotifier` 의 `parse_mode='Markdown'` 제거(특수문자 포함 메시지 누락 방지).
+- 미체결 주문 조회 `get_open_orders()` 를 `ka400008` 기반으로 실구현, `supports_open_orders=True` 전환. 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트 반환.
 
 ---
 
@@ -523,3 +535,52 @@ python -m pytest -q tests/unit
 7. 진단/운영 지표(v4)
 - 진단 컬럼: `market state`, `guard reason`, `risk mode`, `health mode`
 - KPI: `guard_block_count_by_reason`, `shock_mode_minutes`, `order_health_degraded_count`, `avg_slippage_bps`
+
+<!-- SPECKIT-AGENT-GUIDE:START -->
+
+## Spec Kit / Spec-Driven Development (AI 에이전트 필독)
+
+> 이 블록은 GitHub Spec Kit 활성화 및 기능 명세 작업 결과를 AI 에이전트가 바로 쓰도록 정리한 안내입니다.
+> 수정 시 마커 주석을 유지하세요. 스크립트/후속 세션이 이 구간을 갱신합니다.
+
+### 이 저장소 상태
+
+- **프로젝트**: `kiwoom-automatic-trader`
+- **Spec Kit 초기화**: `.specify/ 있음`
+- **에이전트 스킬**: Grok=True, Claude=True, Codex/Agy(.agents)=True
+- **활성 기능**: 아직 `specs/` 기능 명세 없음 — `.specify/` 만 준비된 상태
+
+### 에이전트가 먼저 읽을 파일
+
+1. `.specify/` 및 `.grok/skills` / `.claude/skills` / `.agents/skills` 의 `speckit-*`
+2. 기능 작업 시작 시 `/speckit-specify` 로 `specs/00N-...` 생성
+
+### 권장 워크플로 (스킬 / 슬래시 커맨드)
+
+| 단계 | 커맨드 (Grok/Claude 등) | 산출 |
+|------|-------------------------|------|
+| 원칙 | `/speckit-constitution` | `.specify/memory/constitution.md` |
+| 명세 | `/speckit-specify` | `specs/<id>/spec.md` |
+| 계획 | `/speckit-plan` | `plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md` |
+| 작업 | `/speckit-tasks` | `tasks.md` |
+| 구현 | `/speckit-implement` | 코드 (tasks 순서) |
+| 갭점검 | `/speckit-converge` | `tasks.md` 에 Phase Convergence **append-only** |
+
+- Codex skills 모드: `$speckit-specify` 형태일 수 있음
+- 스킬 파일: `.grok/skills/speckit-*/SKILL.md`, `.claude/skills/speckit-*/SKILL.md`
+
+### 작업 규칙 (에이전트)
+
+1. **새 기능/큰 변경 전** 활성 `spec.md`·`tasks.md` 를 읽고, 없으면 specify→plan→tasks 순으로 만든다.
+2. **구현은 tasks.md 체크리스트**를 따른다. 완료 시 `- [ ]` → `- [x]`.
+3. **`/speckit-converge` 는 tasks.md 를 rewrite 하지 않는다** — 잔여 갭만 하단 Phase 로 append.
+4. brownfield 프로젝트는 상당 기능이 이미 있을 수 있다. 중복 구현 전에 코드·`[x]` 태스크를 확인한다.
+5. 웹/데스크톱 패리티 등 **out-of-scope Assumptions** 는 새 feature 로 분리하는 것을 선호한다.
+6. 기본 integration 은 **grok** 이며, 동일 레포에 claude / codex / agy 스킬도 multi-install 되어 있을 수 있다.
+
+### 관련 링크
+
+- Spec Kit: https://github.com/github/spec-kit
+- 로컬 CLI: `specify` (uv tool, 버전은 `specify version`)
+
+<!-- SPECKIT-AGENT-GUIDE:END -->

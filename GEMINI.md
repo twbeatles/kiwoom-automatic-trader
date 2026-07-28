@@ -191,11 +191,11 @@ pyinstaller --clean KiwoomTrader.spec
 3. WebSocket/REST/저장
 - WebSocket callback은 Qt main-thread dispatcher signal을 경유합니다.
 - REST 숫자 파싱은 빈 문자열, 콤마 숫자, 부호, 누락 필드를 안전하게 처리합니다.
-- 거래 내역 저장은 atomic write이며 실패 시 Worker error로 전파됩니다.
-- 미체결 주문 조회는 adapter만 있고 공식 REST 엔드포인트 확인 전까지 unsupported입니다.
+- 거래 내역 저장과 설정 파일 저장은 모두 atomic write(`tmp` → `os.replace`)이며 실패 시 Worker error로 전파됩니다.
+- 미체결 주문 조회는 `ka400008` 기반 `get_open_orders()` adapter로 구현되어 `supported`로 동작합니다. 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 안전하게 처리합니다.
 
 4. 보안/의존성/패키징
-- keyring 실패 시 실거래 평문 secret fallback은 opt-in입니다.
+- keyring 실패 시 평문 secret fallback은 opt-in입니다(모의투자 포함). `allow_plaintext_secret_fallback=True`일 때만 평문 저장을 허용한다.
 - `requirements.txt`는 런타임, `requirements-dev.txt`는 개발/검증 의존성입니다.
 - `KiwoomTrader.spec`는 `icon.png`를 앱 아이콘으로 연결하고, 런타임 JSON/JSONL 산출물은 번들하지 않습니다.
 
@@ -206,7 +206,7 @@ python -m pytest tests\unit --override-ini addopts= --tb=short
 python -m pyright .
 python tools\refactor_verify.py
 ```
-- 현재 기준 `tests/unit` 전체 144개 테스트 통과
+- 현재 기준 `tests/unit` 전체 172개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과
@@ -238,7 +238,7 @@ python -m pytest -q tests/unit
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 pyright .
 ```
-- 현재 기준 `tests/unit` 전체 144개 테스트 통과
+- 현재 기준 `tests/unit` 전체 172개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 
@@ -449,3 +449,52 @@ pytest -q tests/unit
 5. 당시 검증 결과 (2026-03-07)
 - `python -m pytest -q tests/unit`
 - 결과: **83 passed** (2026-03-07)
+
+<!-- SPECKIT-AGENT-GUIDE:START -->
+
+## Spec Kit / Spec-Driven Development (AI 에이전트 필독)
+
+> 이 블록은 GitHub Spec Kit 활성화 및 기능 명세 작업 결과를 AI 에이전트가 바로 쓰도록 정리한 안내입니다.
+> 수정 시 마커 주석을 유지하세요. 스크립트/후속 세션이 이 구간을 갱신합니다.
+
+### 이 저장소 상태
+
+- **프로젝트**: `kiwoom-automatic-trader`
+- **Spec Kit 초기화**: `.specify/ 있음`
+- **에이전트 스킬**: Grok=True, Claude=True, Codex/Agy(.agents)=True
+- **활성 기능**: 아직 `specs/` 기능 명세 없음 — `.specify/` 만 준비된 상태
+
+### 에이전트가 먼저 읽을 파일
+
+1. `.specify/` 및 `.grok/skills` / `.claude/skills` / `.agents/skills` 의 `speckit-*`
+2. 기능 작업 시작 시 `/speckit-specify` 로 `specs/00N-...` 생성
+
+### 권장 워크플로 (스킬 / 슬래시 커맨드)
+
+| 단계 | 커맨드 (Grok/Claude 등) | 산출 |
+|------|-------------------------|------|
+| 원칙 | `/speckit-constitution` | `.specify/memory/constitution.md` |
+| 명세 | `/speckit-specify` | `specs/<id>/spec.md` |
+| 계획 | `/speckit-plan` | `plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md` |
+| 작업 | `/speckit-tasks` | `tasks.md` |
+| 구현 | `/speckit-implement` | 코드 (tasks 순서) |
+| 갭점검 | `/speckit-converge` | `tasks.md` 에 Phase Convergence **append-only** |
+
+- Codex skills 모드: `$speckit-specify` 형태일 수 있음
+- 스킬 파일: `.grok/skills/speckit-*/SKILL.md`, `.claude/skills/speckit-*/SKILL.md`
+
+### 작업 규칙 (에이전트)
+
+1. **새 기능/큰 변경 전** 활성 `spec.md`·`tasks.md` 를 읽고, 없으면 specify→plan→tasks 순으로 만든다.
+2. **구현은 tasks.md 체크리스트**를 따른다. 완료 시 `- [ ]` → `- [x]`.
+3. **`/speckit-converge` 는 tasks.md 를 rewrite 하지 않는다** — 잔여 갭만 하단 Phase 로 append.
+4. brownfield 프로젝트는 상당 기능이 이미 있을 수 있다. 중복 구현 전에 코드·`[x]` 태스크를 확인한다.
+5. 웹/데스크톱 패리티 등 **out-of-scope Assumptions** 는 새 feature 로 분리하는 것을 선호한다.
+6. 기본 integration 은 **grok** 이며, 동일 레포에 claude / codex / agy 스킬도 multi-install 되어 있을 수 있다.
+
+### 관련 링크
+
+- Spec Kit: https://github.com/github/spec-kit
+- 로컬 CLI: `specify` (uv tool, 버전은 `specify version`)
+
+<!-- SPECKIT-AGENT-GUIDE:END -->

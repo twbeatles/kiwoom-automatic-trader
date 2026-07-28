@@ -4,9 +4,16 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+.zcode/
 *.swp
 *.swo
 *~
+
+# AI agent / spec-kit tooling (로컬 전용 — 프로젝트 코드가 아님)
+.agents/
+.claude/
+.grok/
+.specify/
 
 # Python cache / build
 __pycache__/

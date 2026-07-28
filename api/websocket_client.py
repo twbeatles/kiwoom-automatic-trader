@@ -168,14 +168,21 @@ class KiwoomWebSocketClient:
         """연결 및 메시지 수신 루프"""
         retry_count = 0
         max_retries = 5
-        
+        # 토큰 획득 연속 실패 시 점진적 백오프(인증 서버 부하/lock 경쟁 억제).
+        token_fail_count = 0
+        token_backoff_schedule = (5, 10, 20, 60)
+
         while not self._stop_event.is_set():
             try:
                 token = self.auth.get_token()
                 if not token:
-                    self.logger.error("토큰을 가져올 수 없습니다.")
-                    await asyncio.sleep(5)
+                    idx = min(token_fail_count, len(token_backoff_schedule) - 1)
+                    wait = token_backoff_schedule[idx]
+                    token_fail_count += 1
+                    self.logger.error(f"토큰을 가져올 수 없습니다. {wait}초 후 재시도({idx + 1}).")
+                    await asyncio.sleep(wait)
                     continue
+                token_fail_count = 0
                 
                 # WebSocket 연결
                 headers = {"Authorization": f"bearer {token}"}

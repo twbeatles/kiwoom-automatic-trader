@@ -288,41 +288,48 @@ class TradingSessionCleanupMixin(TraderMixinBase):
 
         client = getattr(self, "rest_client", None)
         account = str(getattr(self, "current_account", "") or "")
-        for target in live_targets:
-            order_no = str(target.get("order_no", "") or "").strip()
-            quantity = max(0, int(target.get("quantity", 0) or 0))
-            success = False
-            message = ""
-            if client is not None and account and order_no and quantity > 0:
-                try:
-                    result = client.cancel_order(account, order_no, target["code"], quantity)
-                    success = bool(getattr(result, "success", False))
-                    message = str(getattr(result, "message", "") or "")
-                except Exception as exc:
-                    message = str(exc)
-            else:
-                message = "API/account not ready"
-            target["cancel_success"] = success
-            target["cancel_message"] = message
-            if not success and hasattr(self, "log"):
-                self.log(
-                    f"[order-cleanup] cancel request failed ({reason}) {target['code']} {order_no}: {message}"
-                )
+        # 폴링 중 processEvents() 로 인해 _on_order_execution 이 재진입되어 pending state 를
+        # 변경하면 cleanup 판단이 흐려지므로, 폴링 구간 동안 pending mutation 을 억제한다.
+        # (체결 fill 동기화 자체는 _on_order_execution 내에서 별도로 유지된다)
+        self._cleanup_polling = True
+        try:
+            for target in live_targets:
+                order_no = str(target.get("order_no", "") or "").strip()
+                quantity = max(0, int(target.get("quantity", 0) or 0))
+                success = False
+                message = ""
+                if client is not None and account and order_no and quantity > 0:
+                    try:
+                        result = client.cancel_order(account, order_no, target["code"], quantity)
+                        success = bool(getattr(result, "success", False))
+                        message = str(getattr(result, "message", "") or "")
+                    except Exception as exc:
+                        message = str(exc)
+                else:
+                    message = "API/account not ready"
+                target["cancel_success"] = success
+                target["cancel_message"] = message
+                if not success and hasattr(self, "log"):
+                    self.log(
+                        f"[order-cleanup] cancel request failed ({reason}) {target['code']} {order_no}: {message}"
+                    )
 
-        unresolved = list(live_targets)
-        deadline = time.monotonic() + max(0.1, float(timeout_sec or 0.0))
-        while unresolved and time.monotonic() < deadline:
-            self._force_account_position_sync(reason=f"{reason}_poll")
+            unresolved = list(live_targets)
+            deadline = time.monotonic() + max(0.1, float(timeout_sec or 0.0))
+            while unresolved and time.monotonic() < deadline:
+                self._force_account_position_sync(reason=f"{reason}_poll")
+                unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
+                if not unresolved:
+                    break
+                app = QCoreApplication.instance()
+                if app is not None:
+                    app.processEvents()
+                time.sleep(0.2)
+
+            self._force_account_position_sync(reason=f"{reason}_final")
             unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
-            if not unresolved:
-                break
-            app = QCoreApplication.instance()
-            if app is not None:
-                app.processEvents()
-            time.sleep(0.2)
-
-        self._force_account_position_sync(reason=f"{reason}_final")
-        unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
+        finally:
+            self._cleanup_polling = False
 
         for target in placeholders:
             self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)

@@ -77,6 +77,10 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self.daily_realized_profit = int(getattr(self, "daily_realized_profit", 0) or 0) + int(
                 record.get("profit", 0) or 0
             )
+            # 매도 체결 누적 직후 일일 손실 한도를 즉시 평가하여 다음 timer tick 전 진입을 차단.
+            check_fn = getattr(self, "_check_daily_loss_limit", None)
+            if callable(check_fn):
+                check_fn()
     def _refresh_history_table(self):
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         today_history = [r for r in self.trade_history if r.get("timestamp", "").startswith(today)]

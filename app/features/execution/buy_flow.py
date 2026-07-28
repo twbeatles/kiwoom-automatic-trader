@@ -355,6 +355,11 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             return
 
         current_price = int(price) if int(price) > 0 else int(info.get("current", 0) or 0)
+        if current_price <= 0:
+            # 가격 미확정 상태에서는 잔액 검증이 무의미해지고(0원으로 통과)
+            # 시장가 주문이 의도치 않게 전송될 수 있으므로 주문 자체를 보류한다.
+            self.log(f"BUY skipped [{name}]: price unavailable (current_price=0)")
+            return
         available_cash = getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
         cfg = getattr(self, "config", None)
         policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))

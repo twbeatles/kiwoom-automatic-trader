@@ -61,7 +61,7 @@ class OrderSyncRealtimeMixin(TraderMixinBase):
             elif "매도" in order_type or "sell" in lower_type:
                 side = "sell"
 
-            if code and code in self._pending_order_state:
+            if code and code in self._pending_order_state and not bool(getattr(self, "_cleanup_polling", False)):
                 self._update_pending_from_order_event(code, order_no=order_no, order_qty=order_qty)
 
             if code and exec_qty > 0 and side:
@@ -81,6 +81,13 @@ class OrderSyncRealtimeMixin(TraderMixinBase):
                 token in status_lower for token in ["reject", "fail"]
             )
             cancel_like = cancelled or rejected_or_failed
+            # cleanup 폴링 중 processEvents() 재진입으로 pending state 가 변경되면
+            # cleanup 의 active 판단이 흐려지므로, pending mutation 경로는 폴링 종료 후까지 보류.
+            if cancel_like and bool(getattr(self, "_cleanup_polling", False)):
+                self.logger.info(
+                    f"[order-sync] pending mutation deferred during cleanup poll: {code} {order_status}"
+                )
+                cancel_like = False
             if code and cancel_like:
                 recorder = getattr(self, "_record_order_lifecycle_event", None)
                 if callable(recorder):

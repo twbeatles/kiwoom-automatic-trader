@@ -90,13 +90,12 @@ secret 저장은 keyring이 우선이다. 실전 모드에서 keyring 저장 실
 
 ## 6. 미체결 주문 조회
 
-현재 저장소에는 공식 Kiwoom REST 미체결 주문 조회 endpoint가 확정되어 있지 않다.
+미체결 주문 조회는 키움 REST TR `ka400008`(미체결주문조회) 기반 adapter로 구현되어 있다.
 
-- 내부 adapter: `KiwoomRESTClient.get_open_orders()`
-- 지원 여부 표시: `supports_open_orders = False`
-- 현재 동작: preflight에서 `unsupported`로 표시
-
-공식 endpoint가 확인되면 adapter 구현만 채워 넣고, UI와 preflight 표시는 유지한다.
+- 내부 adapter: `KiwoomRESTClient.get_open_orders(account_no)`
+- 지원 여부 표시: `supports_open_orders = True`
+- 현재 동작: preflight에서 `supported (ka400008; schema pending verification)`로 표시
+- 안전 장치: 공식 응답 스키마 교차 검증 전이므로 파싱 실패/빈 응담 시 예외를 전가하지 않고 빈 리스트를 반환한다. 실거래 전 키움 공식 가이드의 `ka400008` 응답 필드 매핑을 교차 확인할 것.
 
 ## 7. 실주문 전 운영 순서
 
@@ -121,7 +120,7 @@ pyinstaller --clean KiwoomTrader.spec
 
 2026-06-10 기준 검증 결과:
 
-- `tests/unit` 전체 144개 테스트 통과
+- `tests/unit` 전체 172개 테스트 통과
 - Python 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과

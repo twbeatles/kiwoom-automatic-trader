@@ -34,7 +34,10 @@ class TelegramNotifier:
                 if text is None:
                     break
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-                requests.post(url, data={'chat_id': self.chat_id, 'text': text, 'parse_mode': 'Markdown'}, timeout=5)
+                # parse_mode 를 사용하지 않는다: 종목명/손익 문자열에 '_', '*', '`' 등이
+                # 포함되면 Markdown 파싱이 실패해 메시지가 누락될 수 있기 때문이다.
+                # 모든 메시지는 순수 텍스트로 전송한다.
+                requests.post(url, data={'chat_id': self.chat_id, 'text': text}, timeout=5)
             except queue.Empty:
                 continue
             except requests.RequestException as e:

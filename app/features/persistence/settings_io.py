@@ -242,7 +242,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
 
         allow_plaintext = bool(settings.get("allow_plaintext_secret_fallback", False))
         is_mock = bool(settings.get("is_mock", False))
-        allow_secret_fallback = allow_plaintext or is_mock
+        # 모의투자 여부와 무관하게 평문 저장은 명시적 opt-in(`allow_plaintext_secret_fallback`)일 때만 허용.
+        # 과거에는 is_mock 이면 자동 허용했으나, 모의/실전 동일 키를 재사용하는 사용자 노출 경로가 된다.
+        allow_secret_fallback = allow_plaintext
 
         if KEYRING_AVAILABLE:
             for setting_name, _secret_name in self._secret_field_names():
@@ -255,7 +257,10 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 else:
                     settings.pop(setting_name, None)
             if any(secret_values.values()) and not allow_secret_fallback:
-                self.logger.warning("Keyring unavailable; plaintext secret fallback is disabled for live mode.")
+                mode_label = "mock" if is_mock else "live"
+                self.logger.warning(
+                    f"Keyring unavailable; plaintext secret fallback is disabled for {mode_label} mode."
+                )
         try:
             for setting_name, secret_name in self._secret_field_names():
                 value = secret_values.get(setting_name, "")
@@ -274,9 +279,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     except Exception as e:
                         self.logger.warning(f"Keyring {secret_name} 삭제 실패 (무시 가능): {e}")
 
-            Path(Config.SETTINGS_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(Config.SETTINGS_FILE, "w", encoding="utf-8") as file:
-                json.dump(settings, file, ensure_ascii=False, indent=2)
+            # atomic write: 저장 도중 크래시/강제 종료 시 기존 파일이 절단되지 않도록
+            # tmp 파일 작성 후 os.replace 로 교체한다(거래내역 저장과 동일 정책).
+            self._atomic_write_json(str(Config.SETTINGS_FILE), settings)
 
             self._set_auto_start(self.chk_auto_start.isChecked())
             if KEYRING_AVAILABLE:

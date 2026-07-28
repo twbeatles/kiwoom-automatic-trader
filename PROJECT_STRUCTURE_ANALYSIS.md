@@ -198,7 +198,7 @@ pyinstaller --clean KiwoomTrader.spec
 
 현재까지 확인 완료:
 
-- `tests/unit` 전체 144개 테스트 통과
+- `tests/unit` 전체 172개 테스트 통과
 - Python 문법 컴파일 검증 통과
 - refactor verification 통과
 - `python -m pyright .` 0 errors

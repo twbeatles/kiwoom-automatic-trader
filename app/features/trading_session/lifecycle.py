@@ -85,7 +85,10 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         )
         if execution_mode == "signal_only":
             self.log("[preflight] signal-only mode: broker order APIs will not be called.")
-        if not open_order_support:
+        if open_order_support:
+            # ka400008 기반이지만 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 동작함.
+            self.log("[preflight] open-order recovery enabled (ka400008; schema pending verification).")
+        else:
             self.log("[preflight] open-order recovery is unavailable until a verified Kiwoom REST endpoint is configured.")
     def start_trading(self, from_schedule: bool = False) -> bool:
         if self.is_running:
