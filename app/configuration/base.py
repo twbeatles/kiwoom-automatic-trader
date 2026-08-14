@@ -184,6 +184,8 @@ class TradingConfig:
     use_dynamic_sizing: bool = False
     use_atr_stop: bool = False
     atr_mult: float = 2.0
+    use_chandelier_exit: bool = False
+    chandelier_mult: float = 2.5
 
     use_liquidity: bool = False
     min_avg_value: int = 10  # 억 단위

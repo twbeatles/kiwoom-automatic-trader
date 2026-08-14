@@ -162,3 +162,78 @@ class DailyOHLC:
     close_price: int = 0         # 종가
     volume: int = 0              # 거래량
     volume_amount: int = 0       # 거래대금
+
+
+@dataclass
+class DepositDetail:
+    """예수금 상세 정보 (ka30002)"""
+    account_no: str              # 계좌번호
+    deposit: int = 0             # 예수금
+    d1_deposit: int = 0          # D+1 추정예수금
+    d2_deposit: int = 0          # D+2 추정예수금
+    withdrawable_amount: int = 0 # 출금가능금액
+    order_available_amount: int = 0  # 주문가능금액
+    receivable_amount: int = 0   # 미수금
+    collateral_amount: int = 0   # 대용금
+    stock_eval_amount: int = 0   # 유가평가금액
+    total_assets: int = 0        # 총자산
+
+
+@dataclass
+class ExecutedOrder:
+    """당일 체결 주문 정보 (ka10076)"""
+    exec_no: str                 # 체결번호
+    order_no: str                # 주문번호
+    code: str                    # 종목코드
+    name: str = ""               # 종목명
+    side: str = ""               # 매수/매도 구분 ('buy'/'sell')
+    order_type: str = ""         # 주문유형 (지정가/시장가)
+    quantity: int = 0            # 주문수량
+    exec_quantity: int = 0       # 체결수량
+    exec_price: int = 0          # 체결단가
+    exec_amount: int = 0         # 체결금액
+    exec_time: str = ""          # 체결시각 (HHMMSS)
+    fee: int = 0                 # 수수료
+    tax: int = 0                 # 제세금
+
+
+@dataclass
+class TickCandle:
+    """틱 차트 데이터 (ka10007)"""
+    time: str                    # 체결시각 (HHMMSS)
+    price: int = 0               # 체결가
+    volume: int = 0              # 체결량
+    change: int = 0              # 전일대비
+    change_rate: float = 0.0     # 등락률
+    side: str = ""               # 체결구분 (+1: 매수체결, -1: 매도체결)
+    cum_volume: int = 0          # 누적거래량
+
+
+@dataclass
+class SectorQuote:
+    """업종/시장 지수 시세 (ka20008/ka10010)"""
+    code: str                    # 업종/지수코드
+    name: str = ""               # 업종/지수명
+    current_price: float = 0.0   # 현재지수
+    change: float = 0.0          # 전일대비
+    change_rate: float = 0.0     # 등락률 (%)
+    open_price: float = 0.0      # 시가
+    high_price: float = 0.0      # 고가
+    low_price: float = 0.0       # 저가
+    volume: int = 0              # 거래량 (천주/주)
+    volume_amount: int = 0       # 거래대금 (백만원)
+
+
+@dataclass
+class VIEvent:
+    """변동성완화장치(VI) 발동/해제 이벤트 (ka20009)"""
+    code: str                    # 종목코드
+    name: str = ""               # 종목명
+    vi_type: str = ""            # VI 구분 ('동적', '정적', '동적+정적')
+    vi_status: str = ""          # 발동상태 ('발동', '해제')
+    trigger_time: str = ""       # 발동시각 (HHMMSS)
+    release_time: str = ""       # 해제시각 (HHMMSS)
+    trigger_price: int = 0       # 발동가격
+    base_price: int = 0          # 기준가격
+    deviance_rate: float = 0.0   # 괴리율 (%)
+

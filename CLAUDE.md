@@ -1,4 +1,4 @@
-﻿# Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
+# Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
@@ -165,7 +165,7 @@
   - 기본 `execution_mode`는 `signal_only`이며 주문 API를 호출하지 않고 `data/order_lifecycle_events.jsonl`에 감사 로그를 남깁니다.
   - 실제 주문은 `execution_mode = "live"`와 기존 실거래 보호 확인을 모두 통과해야 합니다.
   - `market_intelligence.source_policy.strict_entry_guard = false`가 기본이며, strict를 켜면 stale/missing/error 인텔리전스를 신규 진입 차단으로 처리합니다.
-  - 미체결 주문 조회는 `ka400008`(미체결주문조회) 기반 `get_open_orders()` adapter로 구현되어 preflight에서 `supported`로 표시합니다. 단, 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 동작합니다.
+  - 미체결 주문 조회는 `ka10075`(미체결요청) 기반 `get_open_orders()` adapter로 구현되어 preflight에서 `supported`로 표시합니다. 파싱 실패 시 빈 리스트로 안전하게 동작합니다.
 
 - 유니버스 표준 키:
   - `prev_high`, `prev_low`
@@ -343,7 +343,8 @@ python -m pytest -q tests/unit
 5. WebSocket/REST/미체결 adapter
 - WebSocket 콜백은 Qt main-thread dispatcher signal을 경유합니다.
 - REST 숫자 응답은 빈 값/콤마/부호/누락 필드를 안전 변환 helper로 처리합니다.
-- 미체결 주문 조회는 `ka400008` 기반 `get_open_orders()` adapter로 구현되어 `supports_open_orders=True` 입니다. 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 안전하게 동작합니다.
+- 모든 REST 요청 헤더에 `api-id`, `cont-yn`을 자동 주입하고 국내주식 주문 엔드포인트 `/api/dostk/ordr` 및 표준 TR 코드(`kt10000`~`kt10003`, `ka10075`)를 사용합니다.
+- 미체결 주문 조회는 `ka10075` 기반 `get_open_orders()` adapter로 구현되어 `supports_open_orders=True` 입니다.
 
 6. 백테스트 UI
 - 상세 설정의 백테스트 영역은 CSV bar 파일과 선택 JSONL 인텔리전스 이벤트를 Worker로 실행합니다.
@@ -360,12 +361,12 @@ python -m pytest tests\unit --override-ini addopts= --tb=short
 python -m pyright .
 python tools\refactor_verify.py
 ```
-- 현재 기준 `tests/unit` 전체 172개 테스트 통과 (PROJECT_AUDIT 기반 수정 + 신규 11개 테스트 파일 반영)
+- 현재 기준 `tests/unit` 전체 191개 테스트 통과 (Chandelier Stop 과거 고가 방어, 중앙화 호가 스프레드 가드, 세션 성과 리포트 테스트 포함)
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과
 
-9. PROJECT_AUDIT 기반 안정성 패치 (2026-07-28)
+9. PROJECT_AUDIT 기반 안정성 패치
 - `_execute_buy` 시장가 주문 가격 0 가드 추가(잔액 검증 우회 원천 차단).
 - `KiwoomAuth.get_token/_request_new_token/set_credentials/invalidate_token` 에 `threading.Lock` 기반 double-checked locking 적용(멀티스레드 토큰 갱신 경쟁 억제).
 - `_save_settings` 를 atomic write(`_atomic_write_json`)로 전환(저장 중 크래시 시 파일 절단 방지).
@@ -375,7 +376,7 @@ python tools\refactor_verify.py
 - `_add_trade` 매도 체결 누적 직후 `_check_daily_loss_limit()` 즉시 평가(다음 timer tick 전 진입 차단).
 - 수동 주문 `_validate_manual_order_request` 통과 시 `order["validated"]` 플래그 부여 + 실행 직전 방어막(choke point 회귀 차단).
 - `TelegramNotifier` 의 `parse_mode='Markdown'` 제거(특수문자 포함 메시지 누락 방지).
-- 미체결 주문 조회 `get_open_orders()` 를 `ka400008` 기반으로 실구현, `supports_open_orders=True` 전환. 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트 반환.
+- 키움 REST API 요청 헤더 `api-id` 주입 및 주문 엔드포인트 `/api/dostk/ordr`와 TR 코드(`kt10000`~`kt10003`, `ka10075`) 표준화.
 
 ---
 

@@ -357,7 +357,8 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 - 자동 매수(`_execute_buy`)는 현재가가 0(미확정)일 때 주문을 보류하여 잔액 검증 우회를 원천 차단합니다.
 - 매매 중지/긴급청산 cleanup 폴링 중에는 주문 동기화 콜백의 pending state 변경을 억제하여 cleanup 판단 정합성을 유지합니다.
 - 일일 손실 한도는 매도 체결 누적 직후 즉시 평가되어 다음 타이머 tick 전 진입을 차단합니다.
-- 미체결 주문 조회는 `ka400008` 기반 `get_open_orders()` adapter로 지원되며, preflight에서 `supported`로 표시됩니다(스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 안전 동작).
+- 미체결 주문 조회는 `ka10075` 기반 `get_open_orders()` adapter로 지원되며, preflight에서 `supported`로 표시됩니다.
+- 키움 REST API 요청에 필수 헤더(`api-id`, `cont-yn`)가 자동 주입되며, 공식 주문 엔드포인트 `/api/dostk/ordr`와 표준 TR 코드(`kt10000`~`kt10003`, `ka10075`)가 적용되었습니다.
 - REST 응답 숫자 파싱은 빈 값, 콤마, 부호, 누락 필드를 안전하게 처리합니다.
 - `requirements.txt`는 런타임 의존성만 담고, 개발/검증 도구는 `requirements-dev.txt`로 분리했습니다.
 - `KiwoomTrader.spec`는 `icon.png`를 실제 앱 아이콘으로 연결하고, 런타임 생성 JSON/JSONL 산출물은 번들에 포함하지 않습니다.
@@ -370,7 +371,7 @@ python tools\refactor_verify.py
 python -m pytest tests\unit --override-ini addopts= --tb=short
 ```
 
-- 결과: `tests/unit` 전체 172개 테스트 통과 (PROJECT_AUDIT 기반 안정성 패치 + 신규 11개 테스트 파일 반영)
+- 결과: `tests/unit` 전체 191개 테스트 통과 (Chandelier ATR 트레일링 스탑, 호가 스프레드 가드, 세션 성과 분석 테스트 반영)
 - 결과: Python 문법 컴파일 검증 통과
 - 결과: refactor verification 통과
 - 결과: `pyright .` 0 errors

@@ -191,4 +191,10 @@ class ExecutionGuardsMixin(TraderMixinBase):
             if avg_slip > max_slippage:
                 return False, "slippage_guard"
 
+        if bool(getattr(cfg, "use_spread", True)):
+            spread_pct = self._spread_pct(info)
+            max_spread = float(getattr(cfg, "max_spread", getattr(Config, "DEFAULT_MAX_SPREAD_PCT", 1.5)))
+            if spread_pct > max_spread:
+                return False, "wide_spread"
+
         return True, ""

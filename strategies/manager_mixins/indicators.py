@@ -46,6 +46,57 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         return False, stop_price
 
+    def calculate_chandelier_stop(self, code: str, multiplier: float = 2.5, period: int = 14) -> float:
+        """
+        Chandelier Exit (ATR 기반 동적 트레일링 스탑) 가격 계산
+        
+        최고가 - (ATR * multiplier)
+        """
+        info = self.trader.universe.get(code, {})
+        current_price = float(info.get("current", 0) or 0)
+        buy_price = float(info.get("buy_price", 0) or 0)
+
+        if current_price <= 0 or buy_price <= 0:
+            return 0.0
+
+        high_list = info.get("high_history", [])
+        low_list = info.get("low_history", [])
+        close_list = info.get("price_history", [])
+
+        atr = self.calculate_atr(high_list, low_list, close_list, period=period)
+        if atr <= 0:
+            return 0.0
+
+        # 진입 시점 이후의 최고가를 기준으로 추적 (과거 진입 전 고가로 인한 조기 손절 방지)
+        max_profit_rate = float(info.get("max_profit_rate", 0.0) or 0.0)
+        tracked_highest = buy_price * (1.0 + max(0.0, max_profit_rate) / 100.0)
+        highest_price = max(current_price, tracked_highest)
+
+        stop_price = highest_price - (atr * multiplier)
+        return max(0.0, stop_price)
+
+    def check_chandelier_exit(self, code: str) -> Tuple[bool, float]:
+        """Chandelier Exit 트리거 여부 확인"""
+        cfg = self.config
+        use_chandelier = bool(getattr(cfg, "use_chandelier_exit", False))
+        mult = float(getattr(cfg, "chandelier_mult", 2.5) or 2.5)
+
+        if not use_chandelier:
+            return False, 0.0
+
+        info = self.trader.universe.get(code, {})
+        current_price = float(info.get("current", 0) or 0)
+        stop_price = self.calculate_chandelier_stop(code, multiplier=mult)
+
+        if stop_price > 0 and current_price <= stop_price:
+            self.log(
+                f"[{info.get('name', code)}] Chandelier 동적 트레일링 스탑 발동: "
+                f"현재가 {current_price:,} <= 스탑가 {stop_price:,.0f}"
+            )
+            return True, stop_price
+
+        return False, stop_price
+
     def calculate_rsi(self, code, period=14):
         if code not in self.trader.universe:
             return 50

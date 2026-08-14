@@ -86,8 +86,8 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         if execution_mode == "signal_only":
             self.log("[preflight] signal-only mode: broker order APIs will not be called.")
         if open_order_support:
-            # ka400008 기반이지만 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 동작함.
-            self.log("[preflight] open-order recovery enabled (ka400008; schema pending verification).")
+            # ka10075 기반 미체결 주문 복구 활성화
+            self.log("[preflight] open-order recovery enabled (ka10075).")
         else:
             self.log("[preflight] open-order recovery is unavailable until a verified Kiwoom REST endpoint is configured.")
     def start_trading(self, from_schedule: bool = False) -> bool:
@@ -340,8 +340,60 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
 
         if was_running:
             self.log("매매 중지")
+            report = self._generate_session_summary_report()
+            summary_msg = (
+                f"📊 [세션 매매 성과 요약]\n"
+                f"- 총 매매 건수: {report['total_trades']}건 (청산: {report['sell_trades_count']}건)\n"
+                f"- 승/패: {report['win_count']}승 {report['loss_count']}패 (승률: {report['win_rate']:.1f}%)\n"
+                f"- 실현 손익: {report['total_realized_profit']:+,} 원\n"
+                f"- 손익비(PF): {report['profit_factor']:.2f}"
+            )
+            if report['best_trade']:
+                summary_msg += f"\n- 최고 수익: {report['best_trade'].get('name', '')} ({report['best_trade'].get('profit', 0):+,}원)"
+            if report['worst_trade']:
+                summary_msg += f"\n- 최대 손실: {report['worst_trade'].get('name', '')} ({report['worst_trade'].get('profit', 0):+,}원)"
+            
+            self.log(summary_msg)
             if self.telegram:
-                self.telegram.send("매매 중지")
+                self.telegram.send(f"매매 중지\n\n{summary_msg}")
+
+    def _generate_session_summary_report(self) -> Dict[str, Any]:
+        """당일 세션 매매 성과 지표(승률, 손익비, 실현손익 등) 산출."""
+        trades = getattr(self, "trade_history", []) or []
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
+        today_trades = [t for t in trades if str(t.get("time", "")).startswith(today_str) or not str(t.get("time", ""))]
+        if not today_trades:
+            today_trades = list(trades)
+
+        total_trades = len(today_trades)
+        sell_trades = [
+            t for t in today_trades 
+            if str(t.get("type", "")).upper().startswith("SELL") or "매도" in str(t.get("type", ""))
+        ]
+
+        total_realized_profit = sum(int(t.get("profit", 0) or 0) for t in sell_trades)
+        wins = [t for t in sell_trades if int(t.get("profit", 0) or 0) > 0]
+        losses = [t for t in sell_trades if int(t.get("profit", 0) or 0) < 0]
+
+        win_rate = (len(wins) / len(sell_trades) * 100.0) if sell_trades else 0.0
+        total_gains = sum(int(t.get("profit", 0) or 0) for t in wins)
+        total_losses = abs(sum(int(t.get("profit", 0) or 0) for t in losses))
+        profit_factor = (total_gains / total_losses) if total_losses > 0 else (float(total_gains) if total_gains > 0 else 1.0)
+
+        best_trade = max(sell_trades, key=lambda t: int(t.get("profit", 0) or 0)) if sell_trades else None
+        worst_trade = min(sell_trades, key=lambda t: int(t.get("profit", 0) or 0)) if sell_trades else None
+
+        return {
+            "total_trades": total_trades,
+            "sell_trades_count": len(sell_trades),
+            "win_count": len(wins),
+            "loss_count": len(losses),
+            "win_rate": win_rate,
+            "total_realized_profit": total_realized_profit,
+            "profit_factor": profit_factor,
+            "best_trade": best_trade,
+            "worst_trade": worst_trade,
+        }
     def _time_liquidate(self):
         """장마감 시간 청산."""
         liquidated_count = 0
@@ -362,16 +414,20 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         target_universe: Dict[str, Dict[str, Any]] = {}
         failed_codes: List[str] = []
         initialized_codes: List[str] = []
+        total_count = len(codes)
 
-        for code in codes:
+        for idx, code in enumerate(codes):
             try:
                 if not self.rest_client:
                     continue
                 quote = self.rest_client.get_stock_quote(code)
                 if not quote:
                     failed_codes.append(code)
-                    self.log(f"{code} 시세 조회 실패")
+                    self.log(f"[{idx + 1}/{total_count}] {code} 시세 조회 실패")
                     continue
+
+                if (idx + 1) % 5 == 0 or idx == 0 or (idx + 1) == total_count:
+                    self.log(f"유니버스 초기화 진행 중... [{idx + 1}/{total_count}] ({quote.name})")
 
                 price_history = []
                 daily_prices = []

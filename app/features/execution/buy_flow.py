@@ -157,6 +157,13 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 self._execute_sell(code, held, current_price, "ATR_STOP")
                 return
 
+            chandelier_checker = getattr(self.strategy, "check_chandelier_exit", None)
+            if callable(chandelier_checker):
+                res = chandelier_checker(code)
+                if isinstance(res, (tuple, list)) and len(res) >= 1 and bool(res[0]):
+                    self._execute_sell(code, held, current_price, "CHANDELIER_TS_STOP")
+                    return
+
             loss_limit = float(
                 cfg_value(
                     "loss_cut",

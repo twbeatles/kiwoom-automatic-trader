@@ -1,4 +1,4 @@
-﻿# Kiwoom Pro Algo-Trader - Gemini AI 가이드
+# Kiwoom Pro Algo-Trader - Gemini AI 가이드
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
@@ -192,7 +192,8 @@ pyinstaller --clean KiwoomTrader.spec
 - WebSocket callback은 Qt main-thread dispatcher signal을 경유합니다.
 - REST 숫자 파싱은 빈 문자열, 콤마 숫자, 부호, 누락 필드를 안전하게 처리합니다.
 - 거래 내역 저장과 설정 파일 저장은 모두 atomic write(`tmp` → `os.replace`)이며 실패 시 Worker error로 전파됩니다.
-- 미체결 주문 조회는 `ka400008` 기반 `get_open_orders()` adapter로 구현되어 `supported`로 동작합니다. 공식 응답 스키마 교차 검증 전이므로 파싱 실패 시 빈 리스트로 안전하게 처리합니다.
+- 미체결 주문 조회는 `ka10075` 기반 `get_open_orders()` adapter로 구현되어 `supported`로 동작합니다. 파싱 실패 시 빈 리스트로 안전하게 처리합니다.
+- 모든 REST 요청 헤더에 `api-id`, `cont-yn`을 자동 주입하고 국내주식 주문 엔드포인트 `/api/dostk/ordr` 및 표준 TR 코드(`kt10000`~`kt10003`, `ka10075`)를 사용합니다.
 
 4. 보안/의존성/패키징
 - keyring 실패 시 평문 secret fallback은 opt-in입니다(모의투자 포함). `allow_plaintext_secret_fallback=True`일 때만 평문 저장을 허용한다.
@@ -206,7 +207,7 @@ python -m pytest tests\unit --override-ini addopts= --tb=short
 python -m pyright .
 python tools\refactor_verify.py
 ```
-- 현재 기준 `tests/unit` 전체 172개 테스트 통과
+- 현재 기준 `tests/unit` 전체 191개 테스트 통과
 - 문법 컴파일 검증 통과
 - `pyright .` 0 errors
 - refactor verification 통과

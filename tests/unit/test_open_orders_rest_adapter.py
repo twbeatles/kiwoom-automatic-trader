@@ -26,8 +26,8 @@ class _Client(KiwoomRESTClient):
         self.raise_exc = raise_exc
         self.requested = []
 
-    def _request(self, method, endpoint, data=None, params=None):
-        self.requested.append((method, endpoint, data))
+    def _request(self, method, endpoint, tr_code=None, data=None, params=None, cont_yn="N", next_key=""):
+        self.requested.append((method, endpoint, tr_code, data))
         if self.raise_exc is not None:
             raise self.raise_exc
         return self.response
@@ -81,10 +81,11 @@ class TestOpenOrdersRestAdapter(unittest.TestCase):
         self.assertEqual(o2.remaining_qty, 5)
 
         # 올바른 TR/엔드포인트 사용
-        method, endpoint, data = client.requested[0]
+        method, endpoint, tr_code, data = client.requested[0]
         self.assertEqual(method, "POST")
         self.assertEqual(endpoint, "/api/dostk/ordunfilled")
-        self.assertEqual(data["tr_cd"], "ka400008")
+        self.assertEqual(tr_code, "ka10075")
+        self.assertEqual(data["tr_cd"], "ka10075")
         self.assertEqual(data["acnt_no"], "12345678")
 
     def test_non_zero_return_code_returns_empty(self):

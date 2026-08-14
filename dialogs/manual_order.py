@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 
@@ -26,14 +27,18 @@ class ManualOrderDialog(QDialog):
     def _init_ui(self):
         self.setWindowTitle("📝 수동 주문")
         self.setFixedSize(450, 420)
-        self.setStyleSheet("background-color: #0d1117; color: #e6edf3;")
+        parent = self.parent()
+        if isinstance(parent, QWidget) and parent.styleSheet():
+            self.setStyleSheet(parent.styleSheet())
+        else:
+            self.setStyleSheet("background-color: #0d1117; color: #e6edf3;")
 
         layout = QVBoxLayout(self)
         layout.setSpacing(20)
         layout.setContentsMargins(24, 24, 24, 24)
 
         header = QLabel("신규 주문")
-        header.setStyleSheet("font-size: 18px; font-weight: bold; color: #e6edf3; margin-bottom: 10px;")
+        header.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
         layout.addWidget(header)
 
         form = QFormLayout()

@@ -18,7 +18,8 @@ from .auth import KiwoomAuth
 from .endpoints import LIVE_REST_BASE_URL
 from .models import (
     StockQuote, OrderBook, AccountInfo, Position, 
-    OrderResult, DailyOHLC, OpenOrder, OrderType, PriceType
+    OrderResult, DailyOHLC, OpenOrder, OrderType, PriceType,
+    DepositDetail, ExecutedOrder, TickCandle, SectorQuote, VIEvent
 )
 
 
@@ -55,27 +56,40 @@ class KiwoomRESTClient:
     # TR 코드 정의
     TR_CODES = {
         # 시세 조회
-        "STOCK_CURRENT": "ka10001",      # 주식현재가
-        "STOCK_HOGA": "ka10004",         # 주식호가
+        "STOCK_CURRENT": "ka10001",      # 주식기본정보요청/현재가
+        "STOCK_HOGA": "ka10004",         # 주식호가요청
         "STOCK_DAILY": "ka10005",        # 일봉차트
         "STOCK_MINUTE": "ka10006",       # 분봉차트
         "STOCK_TICK": "ka10007",         # 틱차트
+        "STOCK_WEEKLY": "ka10008",       # 주봉/월봉차트
+        "SECTOR_INDEX": "ka10010",       # 업종지수차트/시세
         
         # 계좌 조회
         "ACCOUNT_BALANCE": "ka30001",    # 계좌평가잔고
         "ACCOUNT_DEPOSIT": "ka30002",    # 예수금상세
+        "ACCOUNT_LIST": "ka30003",       # 계좌목록조회
         
-        # 주문
-        "ORDER_STOCK": "ka40001",        # 주식주문
-        "ORDER_CANCEL": "ka40002",       # 주식주문취소
-        "ORDER_MODIFY": "ka40003",       # 주식주문정정
+        # 주문 (키움 REST 국내주식 주문 표준 api-id)
+        "ORDER_BUY": "kt10000",          # 주식매수주문
+        "ORDER_SELL": "kt10001",         # 주식매도주문
+        "ORDER_MODIFY": "kt10002",       # 주식정정주문
+        "ORDER_CANCEL": "kt10003",       # 주식취소주문
+        "ORDER_STOCK": "kt10000",        # 호환용 매수 alias
         
         # 순위/기타
         "RANK_VOLUME": "ka20001",        # 거래량상위
         "RANK_FLUCTUATION": "ka20002",   # 등락률상위
+        "CONDITION_LIST": "ka20003",     # 조건식목록
+        "CONDITION_SEARCH": "ka20004",   # 조건검색
+        "INVESTOR_TRADING": "ka20005",   # 투자자별매매동향
+        "PROGRAM_TRADING": "ka20006",    # 프로그램매매동향
+        "MARKET_STATUS": "ka20007",      # 시장운영정보
+        "INDEX_QUOTE": "ka20008",        # 지수현재가
+        "VI_STATUS": "ka20009",          # VI발동현황
 
-        # 미체결
-        "ORDER_OPEN": "ka400008",        # 미체결주문조회
+        # 미체결 / 체결
+        "ORDER_OPEN": "ka10075",         # 미체결주문조회
+        "ORDER_EXECUTED": "ka10076",     # 당일체결주문조회
     }
     
     def __init__(self, auth: KiwoomAuth, base_url: Optional[str] = None):
@@ -121,16 +135,22 @@ class KiwoomRESTClient:
             self._last_request_time = time.time()
     
     def _request(self, method: str, endpoint: str, 
+                 tr_code: Optional[str] = None,
                  data: Optional[Dict] = None,
-                 params: Optional[Dict] = None) -> Optional[Dict]:
+                 params: Optional[Dict] = None,
+                 cont_yn: str = "N",
+                 next_key: str = "") -> Optional[Dict]:
         """
-        API 요청 수행
+        API 요청 수행 (키움 필수 헤더 api-id 포함)
         
         Args:
             method: HTTP 메서드 (GET/POST)
             endpoint: API 엔드포인트 경로
+            tr_code: 키움 TR 코드 (헤더 api-id로 전송)
             data: POST 바디 데이터
             params: 쿼리 파라미터
+            cont_yn: 연속조회 여부 ('Y'/'N')
+            next_key: 연속조회 키
             
         Returns:
             응답 JSON 딕셔너리, 실패 시 None
@@ -139,9 +159,14 @@ class KiwoomRESTClient:
         
         url = f"{self.base_url}{endpoint}"
         headers = {
-            "Content-Type": "application/json",
-            **self.auth.get_auth_header()
+            "Content-Type": "application/json;charset=UTF-8",
+            **self.auth.get_auth_header(),
+            "cont-yn": str(cont_yn or "N"),
         }
+        if tr_code:
+            headers["api-id"] = str(tr_code)
+        if next_key:
+            headers["next-key"] = str(next_key)
         
         if not headers.get("Authorization"):
             self.logger.error("인증 토큰이 없습니다. 먼저 로그인해주세요.")
@@ -197,12 +222,13 @@ class KiwoomRESTClient:
         Returns:
             StockQuote 객체, 실패 시 None
         """
+        tr_code = self.TR_CODES["STOCK_CURRENT"]
         data = {
-            "tr_cd": self.TR_CODES["STOCK_CURRENT"],
+            "tr_cd": tr_code,
             "stk_cd": code
         }
         
-        result = self._request("POST", "/api/dostk/stkprice", data=data)
+        result = self._request("POST", "/api/dostk/stkprice", tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
@@ -237,12 +263,13 @@ class KiwoomRESTClient:
         Returns:
             OrderBook 객체, 실패 시 None
         """
+        tr_code = self.TR_CODES["STOCK_HOGA"]
         data = {
-            "tr_cd": self.TR_CODES["STOCK_HOGA"],
+            "tr_cd": tr_code,
             "stk_cd": code
         }
         
-        result = self._request("POST", "/api/dostk/stkhoga", data=data)
+        result = self._request("POST", "/api/dostk/stkhoga", tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
@@ -282,13 +309,14 @@ class KiwoomRESTClient:
         Returns:
             DailyOHLC 리스트 (최신순)
         """
+        tr_code = self.TR_CODES["STOCK_DAILY"]
         data = {
-            "tr_cd": self.TR_CODES["STOCK_DAILY"],
+            "tr_cd": tr_code,
             "stk_cd": code,
             "req_cnt": min(count, 100)
         }
         
-        result = self._request("POST", "/api/dostk/stkdaily", data=data)
+        result = self._request("POST", "/api/dostk/stkdaily", tr_code=tr_code, data=data)
         
         candles = []
         if result and result.get("return_code") == 0:
@@ -320,12 +348,13 @@ class KiwoomRESTClient:
         Returns:
             AccountInfo 객체, 실패 시 None
         """
+        tr_code = self.TR_CODES["ACCOUNT_BALANCE"]
         data = {
-            "tr_cd": self.TR_CODES["ACCOUNT_BALANCE"],
+            "tr_cd": tr_code,
             "acnt_no": account_no
         }
         
-        result = self._request("POST", "/api/dostk/acntbal", data=data)
+        result = self._request("POST", "/api/dostk/acntbal", tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
@@ -352,12 +381,13 @@ class KiwoomRESTClient:
         Returns:
             Position 리스트
         """
+        tr_code = self.TR_CODES["ACCOUNT_BALANCE"]
         data = {
-            "tr_cd": self.TR_CODES["ACCOUNT_BALANCE"],
+            "tr_cd": tr_code,
             "acnt_no": account_no
         }
         
-        result = self._request("POST", "/api/dostk/acntbal", data=data)
+        result = self._request("POST", "/api/dostk/acntbal", tr_code=tr_code, data=data)
         
         if not result:
             return None
@@ -390,18 +420,17 @@ class KiwoomRESTClient:
     def get_open_orders(self, account_no: str) -> List[OpenOrder]:
         """미체결 주문 조회.
 
-        키움 REST TR `ka400008`(미체결주문조회) 기반.
-        공식 응답 스키마 문서와의 교차 검증이 끝나지 않은 상태이므로, 파싱은
-        여러 필드명 후보를 허용하고 실패 시 빈 리스트를 반환하여 실거래에
-        안전하게 동작하도록 한다. 스키마 확정 후 필드 매핑을 다듬을 것.
+        키움 REST TR `ka10075`(미체결요청) 기반.
+        여러 필드명 후보를 허용하고 실패 시 빈 리스트를 반환하여 안전하게 동작하도록 한다.
         """
+        tr_code = self.TR_CODES["ORDER_OPEN"]
         data = {
-            "tr_cd": self.TR_CODES["ORDER_OPEN"],
+            "tr_cd": tr_code,
             "acnt_no": account_no,
         }
 
         try:
-            result = self._request("POST", "/api/dostk/ordunfilled", data=data)
+            result = self._request("POST", "/api/dostk/ordunfilled", tr_code=tr_code, data=data)
         except Exception as exc:
             self.logger.warning(f"미체결 주문 조회 예외: {exc}")
             return []
@@ -459,7 +488,7 @@ class KiwoomRESTClient:
                    price: int = 0,
                    price_type: PriceType = PriceType.LIMIT) -> OrderResult:
         """
-        주식 주문 전송
+        주식 주문 전송 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)
         
         Args:
             account_no: 계좌번호
@@ -472,8 +501,9 @@ class KiwoomRESTClient:
         Returns:
             OrderResult 객체
         """
+        tr_code = self.TR_CODES["ORDER_BUY"] if order_type == OrderType.BUY else self.TR_CODES["ORDER_SELL"]
         data = {
-            "tr_cd": self.TR_CODES["ORDER_STOCK"],
+            "tr_cd": tr_code,
             "acnt_no": account_no,
             "stk_cd": code,
             "ord_tp": order_type.value,
@@ -482,7 +512,7 @@ class KiwoomRESTClient:
             "prc_tp": price_type.value
         }
         
-        result = self._request("POST", "/api/dostk/order", data=data)
+        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
         
         if result:
             return_code = result.get("return_code", -1)
@@ -561,16 +591,17 @@ class KiwoomRESTClient:
         )
     
     def cancel_order(self, account_no: str, order_no: str, code: str, quantity: int) -> OrderResult:
-        """주문 취소"""
+        """주문 취소 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)"""
+        tr_code = self.TR_CODES["ORDER_CANCEL"]
         data = {
-            "tr_cd": self.TR_CODES["ORDER_CANCEL"],
+            "tr_cd": tr_code,
             "acnt_no": account_no,
             "org_ord_no": order_no,
             "stk_cd": code,
             "ord_qty": quantity
         }
         
-        result = self._request("POST", "/api/dostk/ordcancel", data=data)
+        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             return OrderResult(
@@ -587,6 +618,40 @@ class KiwoomRESTClient:
             message=result.get("return_msg", "취소 실패") if result else "네트워크 오류"
         )
     
+    def modify_order(self, account_no: str, order_no: str, code: str, quantity: int, price: int, price_type: PriceType = PriceType.LIMIT) -> OrderResult:
+        """주문 정정 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)"""
+        tr_code = self.TR_CODES["ORDER_MODIFY"]
+        data = {
+            "tr_cd": tr_code,
+            "acnt_no": account_no,
+            "org_ord_no": order_no,
+            "stk_cd": code,
+            "ord_qty": quantity,
+            "ord_prc": price,
+            "prc_tp": price_type.value
+        }
+        
+        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        
+        if result and result.get("return_code") == 0:
+            return OrderResult(
+                success=True,
+                order_no=order_no,
+                code=code,
+                quantity=quantity,
+                price=price,
+                message="주문 정정 성공"
+            )
+        
+        return OrderResult(
+            success=False,
+            order_no=order_no,
+            code=code,
+            quantity=quantity,
+            price=price,
+            message=result.get("return_msg", "정정 실패") if result else "네트워크 오류"
+        )
+    
     # =========================================================================
     # 유틸리티
     # =========================================================================
@@ -598,7 +663,8 @@ class KiwoomRESTClient:
         Returns:
             계좌번호 리스트
         """
-        result = self._request("POST", "/api/dostk/acntlist", data={})
+        tr_code = self.TR_CODES["ACCOUNT_LIST"]
+        result = self._request("POST", "/api/dostk/acntlist", tr_code=tr_code, data={})
         
         if result and result.get("return_code") == 0:
             return result.get("accounts", [])
@@ -626,14 +692,15 @@ class KiwoomRESTClient:
         Returns:
             DailyOHLC 리스트 (최신순)
         """
+        tr_code = self.TR_CODES["STOCK_MINUTE"]
         data = {
-            "tr_cd": self.TR_CODES["STOCK_MINUTE"],
+            "tr_cd": tr_code,
             "stk_cd": code,
             "interval": interval,
             "req_cnt": min(count, 100)
         }
         
-        result = self._request("POST", "/api/dostk/stkminute", data=data)
+        result = self._request("POST", "/api/dostk/stkminute", tr_code=tr_code, data=data)
         
         candles = []
         if result and result.get("return_code") == 0:
@@ -653,13 +720,14 @@ class KiwoomRESTClient:
     
     def get_weekly_chart(self, code: str, count: int = 52) -> List[DailyOHLC]:
         """주봉 차트 데이터 조회"""
+        tr_code = self.TR_CODES["STOCK_WEEKLY"]
         data = {
-            "tr_cd": "ka10008",  # 주봉차트
+            "tr_cd": tr_code,
             "stk_cd": code,
             "req_cnt": min(count, 100)
         }
         
-        result = self._request("POST", "/api/dostk/stkweekly", data=data)
+        result = self._request("POST", "/api/dostk/stkweekly", tr_code=tr_code, data=data)
         
         candles = []
         if result and result.get("return_code") == 0:
@@ -688,7 +756,8 @@ class KiwoomRESTClient:
         Returns:
             [{"index": 0, "name": "조건식명"}, ...]
         """
-        result = self._request("POST", "/api/dostk/condition/list", data={})
+        tr_code = self.TR_CODES["CONDITION_LIST"]
+        result = self._request("POST", "/api/dostk/condition/list", tr_code=tr_code, data={})
         
         conditions = []
         if result and result.get("return_code") == 0:
@@ -712,12 +781,13 @@ class KiwoomRESTClient:
         Returns:
             [{"code": "종목코드", "name": "종목명"}, ...]
         """
+        tr_code = self.TR_CODES["CONDITION_SEARCH"]
         data = {
             "cond_idx": condition_index,
             "cond_nm": condition_name
         }
         
-        result = self._request("POST", "/api/dostk/condition/search", data=data)
+        result = self._request("POST", "/api/dostk/condition/search", tr_code=tr_code, data=data)
         
         stocks = []
         if result and result.get("return_code") == 0:
@@ -748,13 +818,14 @@ class KiwoomRESTClient:
         Returns:
             거래량 순위 리스트
         """
+        tr_code = self.TR_CODES["RANK_VOLUME"]
         data = {
-            "tr_cd": self.TR_CODES["RANK_VOLUME"],
+            "tr_cd": tr_code,
             "mkt_tp": market,
             "req_cnt": min(count, 50)
         }
         
-        result = self._request("POST", "/api/dostk/ranking/volume", data=data)
+        result = self._request("POST", "/api/dostk/ranking/volume", tr_code=tr_code, data=data)
         
         rankings = []
         if result and result.get("return_code") == 0:
@@ -784,14 +855,15 @@ class KiwoomRESTClient:
         Returns:
             등락률 순위 리스트
         """
+        tr_code = self.TR_CODES["RANK_FLUCTUATION"]
         data = {
-            "tr_cd": self.TR_CODES["RANK_FLUCTUATION"],
+            "tr_cd": tr_code,
             "mkt_tp": market,
             "sort_tp": sort_type,
             "req_cnt": min(count, 50)
         }
         
-        result = self._request("POST", "/api/dostk/ranking/fluctuation", data=data)
+        result = self._request("POST", "/api/dostk/ranking/fluctuation", tr_code=tr_code, data=data)
         
         rankings = []
         if result and result.get("return_code") == 0:
@@ -819,12 +891,13 @@ class KiwoomRESTClient:
         Returns:
             투자자별 순매수량/금액
         """
+        tr_code = self.TR_CODES["INVESTOR_TRADING"]
         data = {
-            "tr_cd": "ka20010",
+            "tr_cd": tr_code,
             "stk_cd": code
         }
         
-        result = self._request("POST", "/api/dostk/investor", data=data)
+        result = self._request("POST", "/api/dostk/investor", tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
@@ -853,12 +926,13 @@ class KiwoomRESTClient:
         Returns:
             프로그램 순매수량/금액
         """
+        tr_code = self.TR_CODES["PROGRAM_TRADING"]
         data = {
-            "tr_cd": "ka20011",
+            "tr_cd": tr_code,
             "stk_cd": code
         }
         
-        result = self._request("POST", "/api/dostk/program", data=data)
+        result = self._request("POST", "/api/dostk/program", tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
@@ -881,7 +955,8 @@ class KiwoomRESTClient:
 
     def get_market_status(self) -> Dict[str, Any]:
         """시장 상태 조회 (지원 시). 지원되지 않으면 빈 dict 반환."""
-        result = self._request("POST", "/api/dostk/market/status", data={})
+        tr_code = self.TR_CODES["MARKET_STATUS"]
+        result = self._request("POST", "/api/dostk/market/status", tr_code=tr_code, data={})
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
             if isinstance(output, dict):
@@ -892,11 +967,207 @@ class KiwoomRESTClient:
         """지수 시세 조회 (지원 시). 지원되지 않으면 빈 dict 반환."""
         if not index_code:
             return {}
+        tr_code = self.TR_CODES["INDEX_QUOTE"]
         data = {"idx_cd": index_code}
-        result = self._request("POST", "/api/dostk/index/quote", data=data)
+        result = self._request("POST", "/api/dostk/index/quote", tr_code=tr_code, data=data)
         if result and result.get("return_code") == 0:
             output = result.get("output", {})
             if isinstance(output, dict):
                 return output
         return {}
+
+    def get_market_indexes(self) -> List[SectorQuote]:
+        """
+        주요 시장 지수 시세 조회 (코스피: 001, 코스닥: 101, 코스피200: 201)
+        
+        Returns:
+            SectorQuote 리스트
+        """
+        major_indexes = [
+            ("001", "코스피"),
+            ("101", "코스닥"),
+            ("201", "코스피200"),
+        ]
+        quotes: List[SectorQuote] = []
+        for idx_cd, name in major_indexes:
+            try:
+                res = self.get_index_quote(idx_cd)
+                if res:
+                    quotes.append(SectorQuote(
+                        code=idx_cd,
+                        name=res.get("idx_nm", name),
+                        current_price=_safe_float(res.get("cur_idx", 0.0)),
+                        change=_safe_float(res.get("chg_idx", 0.0)),
+                        change_rate=_safe_float(res.get("chg_rt", 0.0)),
+                        open_price=_safe_float(res.get("open_idx", 0.0)),
+                        high_price=_safe_float(res.get("high_idx", 0.0)),
+                        low_price=_safe_float(res.get("low_idx", 0.0)),
+                        volume=_safe_int(res.get("acc_vol", 0)),
+                        volume_amount=_safe_int(res.get("acc_trd_val", 0)),
+                    ))
+            except Exception as exc:
+                self.logger.warning(f"지수({idx_cd}) 조회 실패: {exc}")
+                continue
+        return quotes
+
+    def get_deposit_detail(self, account_no: str) -> Optional[DepositDetail]:
+        """
+        예수금 상세 정보 조회 (ka30002)
+        
+        Args:
+            account_no: 계좌번호
+            
+        Returns:
+            DepositDetail 객체, 실패 시 None
+        """
+        tr_code = self.TR_CODES["ACCOUNT_DEPOSIT"]
+        data = {
+            "tr_cd": tr_code,
+            "acnt_no": account_no
+        }
+        
+        result = self._request("POST", "/api/dostk/acntdeposit", tr_code=tr_code, data=data)
+        
+        if result and result.get("return_code") == 0:
+            output = result.get("output", {})
+            return DepositDetail(
+                account_no=account_no,
+                deposit=_safe_int(output.get("deposit", 0)),
+                d1_deposit=_safe_int(output.get("d1_deposit", output.get("d1_estm_dps", 0))),
+                d2_deposit=_safe_int(output.get("d2_deposit", output.get("d2_estm_dps", 0))),
+                withdrawable_amount=_safe_int(output.get("draw_psbl_amt", output.get("wdrw_psbl_amt", 0))),
+                order_available_amount=_safe_int(output.get("ord_psbl_amt", output.get("ord_psbl_cash", 0))),
+                receivable_amount=_safe_int(output.get("rcvbl_amt", 0)),
+                collateral_amount=_safe_int(output.get("subst_amt", 0)),
+                stock_eval_amount=_safe_int(output.get("tot_eval_amt", output.get("stk_eval_amt", 0))),
+                total_assets=_safe_int(output.get("tot_asst_amt", 0)),
+            )
+        return None
+
+    def get_executed_orders(self, account_no: str, date: str = "") -> List[ExecutedOrder]:
+        """
+        당일 체결 주문 목록 조회 (ka10076)
+        
+        Args:
+            account_no: 계좌번호
+            date: 조회일자 (YYYYMMDD, 기본값: 당일)
+            
+        Returns:
+            ExecutedOrder 리스트
+        """
+        tr_code = self.TR_CODES["ORDER_EXECUTED"]
+        data = {
+            "tr_cd": tr_code,
+            "acnt_no": account_no,
+            "inqr_dt": date or datetime.now().strftime("%Y%m%d"),
+        }
+        
+        try:
+            result = self._request("POST", "/api/dostk/ordexecuted", tr_code=tr_code, data=data)
+        except Exception as exc:
+            self.logger.warning(f"체결 주문 조회 예외: {exc}")
+            return []
+            
+        if not result or result.get("return_code") != 0:
+            return []
+            
+        rows = result.get("output", [])
+        if not isinstance(rows, list):
+            if isinstance(rows, dict):
+                rows = [rows]
+            else:
+                return []
+                
+        orders: List[ExecutedOrder] = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            raw_side = str(item.get("ord_tp") or item.get("bs_tp") or "").strip()
+            side = "buy" if raw_side == "1" else ("sell" if raw_side == "2" else raw_side)
+            orders.append(ExecutedOrder(
+                exec_no=str(item.get("exec_no") or item.get("cntr_no") or "").strip(),
+                order_no=str(item.get("ord_no") or "").strip(),
+                code=str(item.get("stk_cd") or "").strip(),
+                name=str(item.get("stk_nm") or "").strip(),
+                side=side,
+                order_type=str(item.get("prc_tp") or "").strip(),
+                quantity=_safe_int(item.get("ord_qty", 0)),
+                exec_quantity=_safe_int(item.get("exec_qty", item.get("cntr_qty", 0))),
+                exec_price=_safe_int(item.get("exec_prc", item.get("cntr_prc", 0)), absolute=True),
+                exec_amount=_safe_int(item.get("exec_amt", item.get("cntr_amt", 0))),
+                exec_time=str(item.get("exec_tm") or item.get("cntr_tm") or "").strip(),
+                fee=_safe_int(item.get("fee", 0)),
+                tax=_safe_int(item.get("tax", 0)),
+            ))
+        return orders
+
+    def get_tick_chart(self, code: str, count: int = 60) -> List[TickCandle]:
+        """
+        틱 차트 데이터 조회 (ka10007)
+        
+        Args:
+            code: 종목코드
+            count: 조회할 틱 개수 (최대 100)
+            
+        Returns:
+            TickCandle 리스트 (최신순)
+        """
+        tr_code = self.TR_CODES["STOCK_TICK"]
+        data = {
+            "tr_cd": tr_code,
+            "stk_cd": code,
+            "req_cnt": min(count, 100)
+        }
+        
+        result = self._request("POST", "/api/dostk/stktick", tr_code=tr_code, data=data)
+        
+        candles: List[TickCandle] = []
+        if result and result.get("return_code") == 0:
+            output_list = result.get("output", [])
+            for item in output_list:
+                candles.append(TickCandle(
+                    time=str(item.get("time") or item.get("stk_tm") or "").strip(),
+                    price=_safe_int(item.get("cur_prc", 0), absolute=True),
+                    volume=_safe_int(item.get("vol", item.get("cntr_qty", 0))),
+                    change=_safe_int(item.get("chg_amt", 0)),
+                    change_rate=_safe_float(item.get("chg_rt", 0.0)),
+                    side=str(item.get("cntr_tp") or "").strip(),
+                    cum_volume=_safe_int(item.get("acc_vol", 0)),
+                ))
+        return candles
+
+    def get_vi_status(self, market: str = "0") -> List[VIEvent]:
+        """
+        변동성완화장치(VI) 발동 현황 조회 (ka20009)
+        
+        Args:
+            market: "0"=전체, "1"=코스피, "2"=코스닥
+            
+        Returns:
+            VIEvent 리스트
+        """
+        tr_code = self.TR_CODES["VI_STATUS"]
+        data = {
+            "tr_cd": tr_code,
+            "mkt_tp": market,
+        }
+        
+        result = self._request("POST", "/api/dostk/vi/status", tr_code=tr_code, data=data)
+        
+        events: List[VIEvent] = []
+        if result and result.get("return_code") == 0:
+            output_list = result.get("output", [])
+            for item in output_list:
+                events.append(VIEvent(
+                    code=str(item.get("stk_cd") or "").strip(),
+                    name=str(item.get("stk_nm") or "").strip(),
+                    vi_type=str(item.get("vi_tp") or "").strip(),
+                    vi_status=str(item.get("vi_st") or "발동").strip(),
+                    trigger_time=str(item.get("trg_tm") or "").strip(),
+                    release_time=str(item.get("rls_tm") or "").strip(),
+                    trigger_price=_safe_int(item.get("trg_prc", 0), absolute=True),
+                    base_price=_safe_int(item.get("base_prc", 0), absolute=True),
+                    deviance_rate=_safe_float(item.get("dev_rt", 0.0)),
+                ))
+        return events
 

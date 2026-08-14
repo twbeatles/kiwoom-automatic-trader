@@ -197,8 +197,8 @@ class DialogsProfilesMixin(TraderMixinBase):
 
     def _load_favorites(self):
         """즐겨찾기 그룹 로드"""
+        fav_file = Path(Config.DATA_DIR) / "favorites.json"
         try:
-            fav_file = Path(Config.DATA_DIR) / "favorites.json"
             if fav_file.exists():
                 with open(fav_file, 'r', encoding='utf-8') as f:
                     self.favorites = json.load(f)
@@ -206,7 +206,16 @@ class DialogsProfilesMixin(TraderMixinBase):
                     self.combo_favorites.addItem(f"⭐ {name}")
             else:
                 self.favorites = {}
-        except Exception:
+        except Exception as exc:
+            self.logger.warning(f"즐겨찾기 파일 로드 실패 (기존 데이터 백업 시도): {exc}")
+            try:
+                if fav_file.exists():
+                    bak_file = fav_file.with_suffix(".json.bak")
+                    import shutil
+                    shutil.copy2(fav_file, bak_file)
+                    self.logger.info(f"손상 가능성이 있는 즐겨찾기 백업 저장: {bak_file}")
+            except Exception:
+                pass
             self.favorites = {}
 
     def _on_favorite_selected(self, index):

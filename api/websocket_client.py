@@ -79,6 +79,7 @@ class KiwoomWebSocketClient:
         "HOGA": "20",           # 주식 호가
         "ORDER_EXEC": "30",     # 주문 체결
         "INDEX": "40",          # 지수
+        "VI": "50",             # 변동성완화장치(VI)
     }
     
     def __init__(self, auth: KiwoomAuth, ws_url: Optional[str] = None):
@@ -108,6 +109,7 @@ class KiwoomWebSocketClient:
         self._on_hoga: Optional[Callable[[str, dict], None]] = None
         self._on_order_exec: Optional[Callable[[dict], None]] = None
         self._on_index: Optional[Callable[[IndexTick], None]] = None
+        self._on_vi: Optional[Callable[[dict], None]] = None
         self._on_connect: Optional[Callable[[], None]] = None
         self._on_disconnect: Optional[Callable[[], None]] = None
         self._on_error: Optional[Callable[[Exception], None]] = None
@@ -328,6 +330,36 @@ class KiwoomWebSocketClient:
                 self._loop,
             )
     
+    def subscribe_orderbook(self, codes: List[str], callback: Callable[[str, dict], None]):
+        """실시간 호가 데이터 구독 (subscribe_hoga 별칭)"""
+        self.subscribe_hoga(codes, callback)
+
+    def subscribe_vi_events(self, codes: List[str], callback: Callable[[dict], None]):
+        """
+        실시간 변동성완화장치(VI) 이벤트 구독
+        
+        Args:
+            codes: 종목코드 리스트
+            callback: VI 이벤트 수신 시 호출될 콜백 함수
+        """
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
+        self._on_vi = callback
+
+        for code in codes:
+            key = f"vi_{code}"
+            self._subscriptions[key] = SubscriptionInfo(
+                code=code,
+                data_type="vi",
+                callback=callback,
+            )
+            self._subscribed_codes.add(code)
+
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._send_subscribe(codes, self.REAL_TYPE["VI"]),
+                self._loop,
+            )
+    
     def subscribe_order_execution(self, callback: Callable[[dict], None]):
         """
         주문 체결 알림 구독
@@ -349,6 +381,7 @@ class KiwoomWebSocketClient:
         exec_codes: List[str] = []
         hoga_codes: List[str] = []
         index_codes: List[str] = []
+        vi_codes: List[str] = []
 
         for code in codes:
             self._subscribed_codes.discard(code)
@@ -358,6 +391,8 @@ class KiwoomWebSocketClient:
                 hoga_codes.append(code)
             if self._subscriptions.pop(f"index_{code}", None):
                 index_codes.append(code)
+            if self._subscriptions.pop(f"vi_{code}", None):
+                vi_codes.append(code)
         
         if self._connected and self._loop:
             if exec_codes:
@@ -375,6 +410,11 @@ class KiwoomWebSocketClient:
                     self._send_unsubscribe(index_codes, self.REAL_TYPE["INDEX"]),
                     self._loop
                 )
+            if vi_codes:
+                asyncio.run_coroutine_threadsafe(
+                    self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]),
+                    self._loop
+                )
     
     def unsubscribe_all(self):
         """모든 구독 해제"""
@@ -389,6 +429,10 @@ class KiwoomWebSocketClient:
         index_codes = [
             sub.code for sub in self._subscriptions.values()
             if sub.data_type == "index"
+        ]
+        vi_codes = [
+            sub.code for sub in self._subscriptions.values()
+            if sub.data_type == "vi"
         ]
 
         self._subscribed_codes.clear()
@@ -408,6 +452,11 @@ class KiwoomWebSocketClient:
             if index_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(index_codes, self.REAL_TYPE["INDEX"]),
+                    self._loop
+                )
+            if vi_codes:
+                asyncio.run_coroutine_threadsafe(
+                    self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]),
                     self._loop
                 )
     
@@ -477,6 +526,10 @@ class KiwoomWebSocketClient:
             sub.code for sub in self._subscriptions.values()
             if sub.data_type == "index"
         ]
+        vi_codes = [
+            sub.code for sub in self._subscriptions.values()
+            if sub.data_type == "vi"
+        ]
 
         if exec_codes:
             await self._send_subscribe(exec_codes, self.REAL_TYPE["EXECUTION"])
@@ -484,6 +537,8 @@ class KiwoomWebSocketClient:
             await self._send_subscribe(hoga_codes, self.REAL_TYPE["HOGA"])
         if index_codes:
             await self._send_subscribe(index_codes, self.REAL_TYPE["INDEX"])
+        if vi_codes:
+            await self._send_subscribe(vi_codes, self.REAL_TYPE["VI"])
         
         if self._on_order_exec:
             await self._send_subscribe_order()
@@ -509,6 +564,8 @@ class KiwoomWebSocketClient:
                 await self._handle_order_exec(body)
             elif real_type == self.REAL_TYPE["INDEX"]:
                 await self._handle_index(body)
+            elif real_type == self.REAL_TYPE["VI"]:
+                await self._handle_vi(body)
             else:
                 self.logger.debug(f"알 수 없는 실시간 타입: {real_type}")
                 
@@ -617,6 +674,12 @@ class KiwoomWebSocketClient:
             self._invoke_on_main_thread(self._on_index, tick)
         except Exception as exc:
             self.logger.warning(f"INDEX payload 파싱 실패(안전 폴백): {exc}")
+
+    async def _handle_vi(self, body: dict):
+        """VI 발동/해제 이벤트 데이터 처리"""
+        if not self._on_vi:
+            return
+        self._invoke_on_main_thread(self._on_vi, body)
     
     # =========================================================================
     # 이벤트 콜백 설정
@@ -641,3 +704,9 @@ class KiwoomWebSocketClient:
         """지수 데이터 콜백 설정"""
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_index = callback
+
+    def set_on_vi(self, callback: Callable[[dict], None]):
+        """VI 이벤트 데이터 콜백 설정"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
+        self._on_vi = callback
+
