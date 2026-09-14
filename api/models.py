@@ -166,7 +166,7 @@ class DailyOHLC:
 
 @dataclass
 class DepositDetail:
-    """예수금 상세 정보 (ka30002)"""
+    """예수금 상세 정보 (kt00001)"""
     account_no: str              # 계좌번호
     deposit: int = 0             # 예수금
     d1_deposit: int = 0          # D+1 추정예수금
@@ -199,7 +199,7 @@ class ExecutedOrder:
 
 @dataclass
 class TickCandle:
-    """틱 차트 데이터 (ka10007)"""
+    """틱 차트 데이터 (ka10079)"""
     time: str                    # 체결시각 (HHMMSS)
     price: int = 0               # 체결가
     volume: int = 0              # 체결량
@@ -211,7 +211,7 @@ class TickCandle:
 
 @dataclass
 class SectorQuote:
-    """업종/시장 지수 시세 (ka20008/ka10010)"""
+    """업종/시장 지수 시세 (ka20001)"""
     code: str                    # 업종/지수코드
     name: str = ""               # 업종/지수명
     current_price: float = 0.0   # 현재지수
@@ -226,7 +226,7 @@ class SectorQuote:
 
 @dataclass
 class VIEvent:
-    """변동성완화장치(VI) 발동/해제 이벤트 (ka20009)"""
+    """변동성완화장치(VI) 발동/해제 이벤트 (ka10054 / WebSocket 1h)"""
     code: str                    # 종목코드
     name: str = ""               # 종목명
     vi_type: str = ""            # VI 구분 ('동적', '정적', '동적+정적')

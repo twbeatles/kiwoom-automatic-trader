@@ -32,6 +32,13 @@ class TestRestApiHeadersAndTrParity(unittest.TestCase):
         self.assertEqual(headers.get("cont-yn"), "N")
 
     @patch("requests.Session.post")
+    def test_request_without_tr_code_does_not_call_network(self, mock_post):
+        result = self.client._request("POST", "/api/dostk/stkprice", data={"stk_cd": "005930"})
+
+        self.assertIsNone(result)
+        mock_post.assert_not_called()
+
+    @patch("requests.Session.post")
     def test_send_order_buy_uses_ordr_endpoint_and_kt10000(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -54,9 +61,12 @@ class TestRestApiHeadersAndTrParity(unittest.TestCase):
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(headers.get("api-id"), "kt10000")
         json_data = mock_post.call_args[1]["json"]
-        self.assertEqual(json_data["tr_cd"], "kt10000")
-        self.assertEqual(json_data["acnt_no"], "87654321")
         self.assertEqual(json_data["stk_cd"], "005930")
+        self.assertEqual(json_data["dmst_stex_tp"], "KRX")
+        self.assertEqual(json_data["ord_qty"], "10")
+        self.assertEqual(json_data["trde_tp"], "0")
+        self.assertEqual(json_data["ord_uv"], "70000")
+        self.assertNotIn("tr_cd", json_data)
 
     @patch("requests.Session.post")
     def test_send_order_sell_uses_ordr_endpoint_and_kt10001(self, mock_post):
@@ -78,7 +88,9 @@ class TestRestApiHeadersAndTrParity(unittest.TestCase):
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(headers.get("api-id"), "kt10001")
         json_data = mock_post.call_args[1]["json"]
-        self.assertEqual(json_data["tr_cd"], "kt10001")
+        self.assertEqual(json_data["trde_tp"], "3")
+        self.assertEqual(json_data["ord_uv"], "")
+        self.assertNotIn("tr_cd", json_data)
 
     @patch("requests.Session.post")
     def test_cancel_order_uses_ordr_endpoint_and_kt10003(self, mock_post):
@@ -100,7 +112,9 @@ class TestRestApiHeadersAndTrParity(unittest.TestCase):
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(headers.get("api-id"), "kt10003")
         json_data = mock_post.call_args[1]["json"]
-        self.assertEqual(json_data["tr_cd"], "kt10003")
+        self.assertEqual(json_data["orig_ord_no"], "B12345")
+        self.assertEqual(json_data["cncl_qty"], "10")
+        self.assertNotIn("tr_cd", json_data)
 
     @patch("requests.Session.post")
     def test_modify_order_uses_ordr_endpoint_and_kt10002(self, mock_post):
@@ -123,7 +137,10 @@ class TestRestApiHeadersAndTrParity(unittest.TestCase):
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(headers.get("api-id"), "kt10002")
         json_data = mock_post.call_args[1]["json"]
-        self.assertEqual(json_data["tr_cd"], "kt10002")
+        self.assertEqual(json_data["orig_ord_no"], "B12345")
+        self.assertEqual(json_data["mdfy_qty"], "10")
+        self.assertEqual(json_data["mdfy_uv"], "71000")
+        self.assertNotIn("tr_cd", json_data)
 
 
 if __name__ == "__main__":

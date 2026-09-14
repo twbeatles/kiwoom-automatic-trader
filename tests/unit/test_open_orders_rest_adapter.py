@@ -1,7 +1,7 @@
 """C3: 미체결 주문 REST adapter 검증.
 
 - supports_open_orders 가 True 를 반환한다.
-- get_open_orders 가 ka400008 응답을 OpenOrder 리스트로 파싱한다.
+- get_open_orders 가 ka10075 응답을 OpenOrder 리스트로 파싱한다.
 - 파싱 실패/빈 응답 시 예외를 전가하지 않고 빈 리스트를 반환한다.
 """
 import unittest
@@ -83,10 +83,12 @@ class TestOpenOrdersRestAdapter(unittest.TestCase):
         # 올바른 TR/엔드포인트 사용
         method, endpoint, tr_code, data = client.requested[0]
         self.assertEqual(method, "POST")
-        self.assertEqual(endpoint, "/api/dostk/ordunfilled")
+        self.assertEqual(endpoint, "/api/dostk/acnt")
         self.assertEqual(tr_code, "ka10075")
-        self.assertEqual(data["tr_cd"], "ka10075")
-        self.assertEqual(data["acnt_no"], "12345678")
+        self.assertEqual(data["all_stk_tp"], "0")
+        self.assertEqual(data["trde_tp"], "0")
+        self.assertEqual(data["stex_tp"], "0")
+        self.assertNotIn("tr_cd", data)
 
     def test_non_zero_return_code_returns_empty(self):
         client = _Client({"return_code": 1, "return_msg": "error"})

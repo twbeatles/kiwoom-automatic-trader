@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-06-10
+> **최종 업데이트**: 2026-09-14
 
 ---
 
@@ -377,6 +377,32 @@ python tools\refactor_verify.py
 - 수동 주문 `_validate_manual_order_request` 통과 시 `order["validated"]` 플래그 부여 + 실행 직전 방어막(choke point 회귀 차단).
 - `TelegramNotifier` 의 `parse_mode='Markdown'` 제거(특수문자 포함 메시지 누락 방지).
 - 키움 REST API 요청 헤더 `api-id` 주입 및 주문 엔드포인트 `/api/dostk/ordr`와 TR 코드(`kt10000`~`kt10003`, `ka10075`) 표준화.
+
+---
+
+## 2026-09-14 키움 공식 REST/WebSocket 계약 정렬
+
+공식 카탈로그는 [Kiwoom-Securities/Kiwoom-REST-API](https://github.com/Kiwoom-Securities/Kiwoom-REST-API) 예제를 기준으로 한다.
+
+1. 주문/계좌
+- 주문 body: `dmst_stex_tp`, `stk_cd`, `ord_qty`, `trde_tp`(0 지정가 / 3 시장가), `ord_uv`. `tr_cd`/`acnt_no`/`ord_tp`는 사용하지 않는다.
+- 취소 `kt10003`: `orig_ord_no`, `cncl_qty`. 정정 `kt10002`: `mdfy_qty`, `mdfy_uv`.
+- 미체결 `ka10075` `/api/dostk/acnt` (`all_stk_tp`/`trde_tp`/`stex_tp`, 리스트 키 `oso`).
+- 예수금 `kt00001`, 체결 `ka10076`, 틱차트 `ka10079`, VI `ka10054`.
+
+2. 순위/수급/업종
+- 당일거래량상위 `ka10030` `/api/dostk/rkinfo` (`tdy_trde_qty_upper`).
+- 전일대비등락률상위 `ka10027` `/api/dostk/rkinfo` (`pred_pre_flu_rt_upper`). UI 하락 정렬 `2`는 공식 `sort_tp=3`(하락률)로 매핑한다.
+- 종목별기관매매추이 `ka10045` `/api/dostk/mrkcond` (`stk_orgn_trde_trnsn`).
+- 종목일별프로그램매매추이 `ka90013` `/api/dostk/mrkcond` (`stk_daly_prm_trde_trnsn`).
+- 업종현재가 `ka20001` `/api/dostk/sect` (`mrkt_tp`, `inds_cd`).
+
+3. 조건검색/장상태
+- 조건검색은 REST가 아니라 WebSocket이다. 목록 `ka10171` `trnm=CNSRLST`, 검색 `ka10172` `trnm=CNSRREQ`.
+- 장시작시간 REST TR은 없다. `get_market_status()`는 빈 dict를 반환하고 가격/스프레드 프록시로 동작한다. 실시간은 WebSocket `0s`다.
+
+4. 검증
+- `python -m pytest tests\unit --override-ini addopts= --tb=short` : 217 passed (2026-09-14)
 
 ---
 

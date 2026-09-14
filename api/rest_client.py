@@ -8,7 +8,7 @@ import logging
 import time
 import threading
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -48,49 +48,105 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _pick(mapping: Dict[str, Any], *keys: str, default: Any = "") -> Any:
+    for key in keys:
+        if key in mapping and mapping.get(key) not in (None, ""):
+            return mapping[key]
+    return default
+
+
+def _as_records(value: Any) -> List[Dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict) and value:
+        return [value]
+    return []
+
+
+def _payload_dict(result: Optional[Dict[str, Any]], *keys: str) -> Dict[str, Any]:
+    if not isinstance(result, dict):
+        return {}
+    for key in keys:
+        candidate = result.get(key)
+        if isinstance(candidate, dict) and candidate:
+            return candidate
+    return result
+
+
+def _payload_records(result: Optional[Dict[str, Any]], *keys: str) -> List[Dict[str, Any]]:
+    if not isinstance(result, dict):
+        return []
+    for key in keys:
+        records = _as_records(result.get(key))
+        if records:
+            return records
+    return []
+
+
+def _trde_tp(price_type: PriceType) -> str:
+    mapping = {
+        PriceType.MARKET: "3",
+        PriceType.CONDITIONAL: "5",
+        PriceType.BEST: "6",
+        PriceType.PRIORITY: "7",
+        PriceType.AFTER_MARKET: "81",
+    }
+    return mapping.get(price_type, "0")
+
+
 class KiwoomRESTClient:
     """키움증권 REST API 클라이언트"""
     
     BASE_URL = LIVE_REST_BASE_URL
     
-    # TR 코드 정의
+    # TR 코드 정의 (키움 공식 REST api-id)
     TR_CODES = {
-        # 시세 조회
-        "STOCK_CURRENT": "ka10001",      # 주식기본정보요청/현재가
+        # 시세/종목
+        "STOCK_CURRENT": "ka10001",      # 주식기본정보요청
         "STOCK_HOGA": "ka10004",         # 주식호가요청
-        "STOCK_DAILY": "ka10005",        # 일봉차트
-        "STOCK_MINUTE": "ka10006",       # 분봉차트
-        "STOCK_TICK": "ka10007",         # 틱차트
-        "STOCK_WEEKLY": "ka10008",       # 주봉/월봉차트
-        "SECTOR_INDEX": "ka10010",       # 업종지수차트/시세
-        
-        # 계좌 조회
-        "ACCOUNT_BALANCE": "ka30001",    # 계좌평가잔고
-        "ACCOUNT_DEPOSIT": "ka30002",    # 예수금상세
-        "ACCOUNT_LIST": "ka30003",       # 계좌목록조회
-        
-        # 주문 (키움 REST 국내주식 주문 표준 api-id)
+        "STOCK_DAILY": "ka10081",        # 주식일봉차트조회요청
+        "STOCK_MINUTE": "ka10080",       # 주식분봉차트조회요청
+        "STOCK_TICK": "ka10079",         # 주식틱차트조회요청
+        "STOCK_WEEKLY": "ka10082",       # 주식주봉차트조회요청
+        "SECTOR_INDEX": "ka20001",       # 업종현재가 (호환)
+
+        # 계좌
+        "ACCOUNT_BALANCE": "kt00018",    # 계좌평가잔고내역요청
+        "ACCOUNT_DEPOSIT": "kt00001",    # 예수금상세현황요청
+        "ACCOUNT_LIST": "ka00001",       # 계좌번호조회
+
+        # 주문
         "ORDER_BUY": "kt10000",          # 주식매수주문
         "ORDER_SELL": "kt10001",         # 주식매도주문
         "ORDER_MODIFY": "kt10002",       # 주식정정주문
         "ORDER_CANCEL": "kt10003",       # 주식취소주문
         "ORDER_STOCK": "kt10000",        # 호환용 매수 alias
-        
-        # 순위/기타
-        "RANK_VOLUME": "ka20001",        # 거래량상위
-        "RANK_FLUCTUATION": "ka20002",   # 등락률상위
-        "CONDITION_LIST": "ka20003",     # 조건식목록
-        "CONDITION_SEARCH": "ka20004",   # 조건검색
-        "INVESTOR_TRADING": "ka20005",   # 투자자별매매동향
-        "PROGRAM_TRADING": "ka20006",    # 프로그램매매동향
-        "MARKET_STATUS": "ka20007",      # 시장운영정보
-        "INDEX_QUOTE": "ka20008",        # 지수현재가
-        "VI_STATUS": "ka20009",          # VI발동현황
+
+        # 순위/시세 확장 (Kiwoom-Securities/Kiwoom-REST-API 예제 기준)
+        "RANK_VOLUME": "ka10030",        # 당일거래량상위요청
+        "RANK_FLUCTUATION": "ka10027",   # 전일대비등락률상위요청
+        "CONDITION_LIST": "ka10171",     # 조건검색 목록조회 (WebSocket CNSRLST)
+        "CONDITION_SEARCH": "ka10172",   # 조건검색 요청 일반 (WebSocket CNSRREQ)
+        "INVESTOR_TRADING": "ka10045",   # 종목별기관매매추이요청
+        "PROGRAM_TRADING": "ka90013",    # 종목일별프로그램매매추이요청
+        "INDEX_QUOTE": "ka20001",        # 업종현재가요청
+        "VI_STATUS": "ka10054",          # 변동성완화장치발동종목요청
 
         # 미체결 / 체결
-        "ORDER_OPEN": "ka10075",         # 미체결주문조회
-        "ORDER_EXECUTED": "ka10076",     # 당일체결주문조회
+        "ORDER_OPEN": "ka10075",         # 미체결요청
+        "ORDER_EXECUTED": "ka10076",     # 체결요청
     }
+
+    PATHS = {
+        "stkinfo": "/api/dostk/stkinfo",
+        "mrkcond": "/api/dostk/mrkcond",
+        "chart": "/api/dostk/chart",
+        "acnt": "/api/dostk/acnt",
+        "ordr": "/api/dostk/ordr",
+        "rkinfo": "/api/dostk/rkinfo",
+        "sect": "/api/dostk/sect",
+    }
+    DEFAULT_EXCHANGE = "KRX"
     
     def __init__(self, auth: KiwoomAuth, base_url: Optional[str] = None):
         """
@@ -101,6 +157,7 @@ class KiwoomRESTClient:
         self.logger = logging.getLogger('KiwoomRESTClient')
         self.base_url = str(base_url or getattr(auth, "base_url", self.BASE_URL) or self.BASE_URL).rstrip("/")
         self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
+        self.ws_client = None
         
         # 요청 세션 설정 (재시도 로직 포함)
         self.session = self._create_session()
@@ -155,6 +212,10 @@ class KiwoomRESTClient:
         Returns:
             응답 JSON 딕셔너리, 실패 시 None
         """
+        if not tr_code:
+            self.logger.error("API 요청에 api-id(TR 코드)가 없습니다. 키움 REST는 api-id 누락 시 1501 오류가 납니다.")
+            return None
+
         self._rate_limit()
         
         url = f"{self.base_url}{endpoint}"
@@ -162,9 +223,8 @@ class KiwoomRESTClient:
             "Content-Type": "application/json;charset=UTF-8",
             **self.auth.get_auth_header(),
             "cont-yn": str(cont_yn or "N"),
+            "api-id": str(tr_code),
         }
-        if tr_code:
-            headers["api-id"] = str(tr_code)
         if next_key:
             headers["next-key"] = str(next_key)
         
@@ -208,6 +268,42 @@ class KiwoomRESTClient:
             return "KOSDAQ"
         return "unknown"
 
+    def _rank_market_tp(self, market: str) -> str:
+        mapping = {
+            "0": "000",
+            "1": "001",
+            "2": "101",
+            "000": "000",
+            "001": "001",
+            "101": "101",
+        }
+        return mapping.get(str(market or "").strip(), "000")
+
+    def _index_market_tp(self, index_code: str) -> str:
+        code = str(index_code or "").strip()
+        if code.startswith("101"):
+            return "1"
+        if code.startswith("201"):
+            return "2"
+        return "0"
+
+    def _stk_cd(self, value: Any) -> str:
+        text = str(value or "").strip()
+        if len(text) >= 7 and text[0] in {"A", "a"}:
+            return text[1:]
+        return text
+
+    def _condition_ws(self):
+        ws = getattr(self, "ws_client", None)
+        if ws is not None and hasattr(ws, "request_once"):
+            return ws
+        try:
+            from .websocket_client import KiwoomWebSocketClient
+            return KiwoomWebSocketClient(self.auth)
+        except Exception as exc:
+            self.logger.warning(f"조건검색 WebSocket 클라이언트를 만들 수 없습니다: {exc}")
+            return None
+
     # =========================================================================
     # 시세 조회 API
     # =========================================================================
@@ -223,32 +319,27 @@ class KiwoomRESTClient:
             StockQuote 객체, 실패 시 None
         """
         tr_code = self.TR_CODES["STOCK_CURRENT"]
-        data = {
-            "tr_cd": tr_code,
-            "stk_cd": code
-        }
-        
-        result = self._request("POST", "/api/dostk/stkprice", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["stkinfo"], tr_code=tr_code, data={"stk_cd": code})
         
         if result and result.get("return_code") == 0:
-            output = result.get("output", {})
+            output = _payload_dict(result, "output")
             
             return StockQuote(
                 code=code,
-                name=output.get("stk_nm", ""),
-                current_price=_safe_int(output.get("cur_prc", 0), absolute=True),
-                change=_safe_int(output.get("chg_amt", 0)),
-                change_rate=_safe_float(output.get("chg_rt", 0)),
-                open_price=_safe_int(output.get("open_prc", 0), absolute=True),
-                high_price=_safe_int(output.get("high_prc", 0), absolute=True),
-                low_price=_safe_int(output.get("low_prc", 0), absolute=True),
-                volume=_safe_int(output.get("acc_vol", 0)),
-                prev_close=_safe_int(output.get("yes_prc", 0), absolute=True),
-                ask_price=_safe_int(output.get("ask_prc", 0), absolute=True),
-                bid_price=_safe_int(output.get("bid_prc", 0), absolute=True),
-                timestamp=output.get("stk_tm", ""),
+                name=str(_pick(output, "stk_nm", default="")),
+                current_price=_safe_int(_pick(output, "cur_prc"), absolute=True),
+                change=_safe_int(_pick(output, "pred_pre", "chg_amt")),
+                change_rate=_safe_float(_pick(output, "flu_rt", "chg_rt")),
+                open_price=_safe_int(_pick(output, "open_pric", "open_prc"), absolute=True),
+                high_price=_safe_int(_pick(output, "high_pric", "high_prc"), absolute=True),
+                low_price=_safe_int(_pick(output, "low_pric", "low_prc"), absolute=True),
+                volume=_safe_int(_pick(output, "trde_qty", "acc_vol")),
+                prev_close=_safe_int(_pick(output, "base_pric", "yes_prc"), absolute=True),
+                ask_price=_safe_int(_pick(output, "ask_prc", "sel_fpr_bid"), absolute=True),
+                bid_price=_safe_int(_pick(output, "bid_prc", "buy_fpr_bid"), absolute=True),
+                timestamp=str(_pick(output, "stk_tm", default="")),
                 market_type=self._parse_market_type(output),
-                sector=output.get("sect_nm", "기타")  # sect_nm이 없으면 '기타'
+                sector=str(_pick(output, "sect_nm", default="기타") or "기타"),
             )
         
         return None
@@ -264,26 +355,28 @@ class KiwoomRESTClient:
             OrderBook 객체, 실패 시 None
         """
         tr_code = self.TR_CODES["STOCK_HOGA"]
-        data = {
-            "tr_cd": tr_code,
-            "stk_cd": code
-        }
-        
-        result = self._request("POST", "/api/dostk/stkhoga", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["mrkcond"], tr_code=tr_code, data={"stk_cd": code})
         
         if result and result.get("return_code") == 0:
-            output = result.get("output", {})
+            output = _payload_dict(result, "output")
+            ordinals = ("1th", "2th", "3th", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
             
             ask_prices = []
             ask_volumes = []
             bid_prices = []
             bid_volumes = []
             
-            for i in range(1, 11):
-                ask_prices.append(_safe_int(output.get(f"ask_prc{i}", 0), absolute=True))
-                ask_volumes.append(_safe_int(output.get(f"ask_vol{i}", 0)))
-                bid_prices.append(_safe_int(output.get(f"bid_prc{i}", 0), absolute=True))
-                bid_volumes.append(_safe_int(output.get(f"bid_vol{i}", 0)))
+            for i, ordinal in enumerate(ordinals, start=1):
+                if i == 1:
+                    ask_prices.append(_safe_int(_pick(output, "sel_fpr_bid", f"ask_prc{i}"), absolute=True))
+                    ask_volumes.append(_safe_int(_pick(output, "sel_fpr_req", f"ask_vol{i}")))
+                    bid_prices.append(_safe_int(_pick(output, "buy_fpr_bid", f"bid_prc{i}"), absolute=True))
+                    bid_volumes.append(_safe_int(_pick(output, "buy_fpr_req", f"bid_vol{i}")))
+                    continue
+                ask_prices.append(_safe_int(_pick(output, f"sel_{ordinal}_pre_bid", f"ask_prc{i}"), absolute=True))
+                ask_volumes.append(_safe_int(_pick(output, f"sel_{ordinal}_pre_req", f"ask_vol{i}")))
+                bid_prices.append(_safe_int(_pick(output, f"buy_{ordinal}_pre_bid", f"bid_prc{i}"), absolute=True))
+                bid_volumes.append(_safe_int(_pick(output, f"buy_{ordinal}_pre_req", f"bid_vol{i}")))
             
             return OrderBook(
                 code=code,
@@ -291,9 +384,9 @@ class KiwoomRESTClient:
                 ask_volumes=ask_volumes,
                 bid_prices=bid_prices,
                 bid_volumes=bid_volumes,
-                total_ask_volume=_safe_int(output.get("tot_ask_vol", 0)),
-                total_bid_volume=_safe_int(output.get("tot_bid_vol", 0)),
-                timestamp=output.get("stk_tm", "")
+                total_ask_volume=_safe_int(_pick(output, "tot_sel_req", "tot_ask_vol")),
+                total_bid_volume=_safe_int(_pick(output, "tot_buy_req", "tot_bid_vol")),
+                timestamp=str(_pick(output, "bid_req_base_tm", "stk_tm", default="")),
             )
         
         return None
@@ -311,25 +404,23 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["STOCK_DAILY"]
         data = {
-            "tr_cd": tr_code,
             "stk_cd": code,
-            "req_cnt": min(count, 100)
+            "base_dt": datetime.now().strftime("%Y%m%d"),
+            "upd_stkpc_tp": "1",
         }
-        
-        result = self._request("POST", "/api/dostk/stkdaily", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
         
         candles = []
         if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            
-            for item in output_list:
+            output_list = _payload_records(result, "stk_dt_pole_chart_qry", "output")
+            for item in output_list[: max(1, min(count, 100))]:
                 candles.append(DailyOHLC(
-                    date=item.get("date", ""),
-                    open_price=_safe_int(item.get("open_prc", 0), absolute=True),
-                    high_price=_safe_int(item.get("high_prc", 0), absolute=True),
-                    low_price=_safe_int(item.get("low_prc", 0), absolute=True),
-                    close_price=_safe_int(item.get("close_prc", 0), absolute=True),
-                    volume=_safe_int(item.get("vol", 0))
+                    date=str(_pick(item, "dt", "date", default="")),
+                    open_price=_safe_int(_pick(item, "open_pric", "open_prc"), absolute=True),
+                    high_price=_safe_int(_pick(item, "high_pric", "high_prc"), absolute=True),
+                    low_price=_safe_int(_pick(item, "low_pric", "low_prc"), absolute=True),
+                    close_price=_safe_int(_pick(item, "cur_prc", "close_prc"), absolute=True),
+                    volume=_safe_int(_pick(item, "trde_qty", "vol")),
                 ))
         
         return candles
@@ -350,23 +441,21 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["ACCOUNT_BALANCE"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no
+            "qry_tp": "1",
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
         }
-        
-        result = self._request("POST", "/api/dostk/acntbal", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["acnt"], tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            
+            output = _payload_dict(result, "output")
             return AccountInfo(
                 account_no=account_no,
-                deposit=_safe_int(output.get("deposit", 0)),
-                available_amount=_safe_int(output.get("ord_psbl_amt", 0)),
-                total_buy_amount=_safe_int(output.get("tot_buy_amt", 0)),
-                total_eval_amount=_safe_int(output.get("tot_eval_amt", 0)),
-                total_profit=_safe_int(output.get("tot_eval_pl", 0)),
-                total_profit_rate=_safe_float(output.get("tot_eval_pl_rt", 0))
+                deposit=_safe_int(_pick(output, "prsm_dpst_aset_amt", "deposit")),
+                available_amount=_safe_int(_pick(output, "ord_alow_amt", "ord_psbl_amt")),
+                total_buy_amount=_safe_int(_pick(output, "tot_pur_amt", "tot_buy_amt")),
+                total_eval_amount=_safe_int(_pick(output, "tot_evlt_amt", "tot_eval_amt")),
+                total_profit=_safe_int(_pick(output, "tot_evlt_pl", "tot_eval_pl")),
+                total_profit_rate=_safe_float(_pick(output, "tot_prft_rt", "tot_eval_pl_rt")),
             )
         
         return None
@@ -383,11 +472,10 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["ACCOUNT_BALANCE"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no
+            "qry_tp": "1",
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
         }
-        
-        result = self._request("POST", "/api/dostk/acntbal", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["acnt"], tr_code=tr_code, data=data)
         
         if not result:
             return None
@@ -395,20 +483,20 @@ class KiwoomRESTClient:
             return None
 
         positions = []
-        stocks = result.get("stocks", [])
+        stocks = _payload_records(result, "acnt_evlt_remn_indv_tot", "stocks", "output")
 
         for item in stocks:
             positions.append(Position(
-                code=item.get("stk_cd", ""),
-                name=item.get("stk_nm", ""),
-                quantity=_safe_int(item.get("hold_qty", 0)),
-                available_qty=_safe_int(item.get("sell_psbl_qty", 0)),
-                buy_price=_safe_int(item.get("buy_prc", 0)),
-                current_price=_safe_int(item.get("cur_prc", 0), absolute=True),
-                buy_amount=_safe_int(item.get("buy_amt", 0)),
-                eval_amount=_safe_int(item.get("eval_amt", 0)),
-                profit=_safe_int(item.get("eval_pl", 0)),
-                profit_rate=_safe_float(item.get("eval_pl_rt", 0))
+                code=str(_pick(item, "stk_cd", default="")),
+                name=str(_pick(item, "stk_nm", default="")),
+                quantity=_safe_int(_pick(item, "rmnd_qty", "hold_qty")),
+                available_qty=_safe_int(_pick(item, "trde_able_qty", "sell_psbl_qty")),
+                buy_price=_safe_int(_pick(item, "pur_pric", "buy_prc")),
+                current_price=_safe_int(_pick(item, "cur_prc"), absolute=True),
+                buy_amount=_safe_int(_pick(item, "pur_amt", "buy_amt")),
+                eval_amount=_safe_int(_pick(item, "evlt_amt", "eval_amt")),
+                profit=_safe_int(_pick(item, "evltv_prft", "eval_pl")),
+                profit_rate=_safe_float(_pick(item, "prft_rt", "eval_pl_rt")),
             ))
 
         return positions
@@ -425,12 +513,13 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["ORDER_OPEN"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
+            "all_stk_tp": "0",
+            "trde_tp": "0",
+            "stex_tp": "0",
         }
 
         try:
-            result = self._request("POST", "/api/dostk/ordunfilled", tr_code=tr_code, data=data)
+            result = self._request("POST", self.PATHS["acnt"], tr_code=tr_code, data=data)
         except Exception as exc:
             self.logger.warning(f"미체결 주문 조회 예외: {exc}")
             return []
@@ -438,13 +527,7 @@ class KiwoomRESTClient:
         if not result or result.get("return_code") != 0:
             return []
 
-        rows = result.get("output", [])
-        if not isinstance(rows, list):
-            # 단건 응답인 경우 단일 dict를 리스트로 정규화
-            if isinstance(rows, dict):
-                rows = [rows]
-            else:
-                return []
+        rows = _payload_records(result, "oso", "output")
 
         orders: List[OpenOrder] = []
         for item in rows:
@@ -455,19 +538,17 @@ class KiwoomRESTClient:
                 code = str(item.get("stk_cd") or "").strip()
                 if not order_no or not code:
                     continue
-                raw_side = str(item.get("ord_tp") or item.get("bs_tp") or "").strip()
-                side = "buy" if raw_side == "1" else ("sell" if raw_side == "2" else raw_side)
                 orders.append(
                     OpenOrder(
                         order_no=order_no,
                         code=code,
-                        side=side,
+                        side=self._parse_order_side(item),
                         quantity=_safe_int(item.get("ord_qty", 0)),
                         remaining_qty=_safe_int(
-                            item.get("unexec_qty", item.get("not_cncl_qty", item.get("rmn_qty", 0)))
+                            _pick(item, "oso_qty", "unexec_qty", "not_cncl_qty", "rmn_qty", default=0)
                         ),
-                        price=_safe_int(item.get("ord_prc", 0), absolute=True),
-                        status=str(item.get("ord_st") or item.get("cnf_tp") or "").strip(),
+                        price=_safe_int(_pick(item, "ord_pric", "ord_prc", default=0), absolute=True),
+                        status=str(item.get("ord_stt") or item.get("ord_st") or item.get("cnf_tp") or "").strip(),
                     )
                 )
             except Exception as exc:
@@ -475,6 +556,36 @@ class KiwoomRESTClient:
                 continue
 
         return orders
+
+    @staticmethod
+    def _parse_order_side(item: Dict[str, Any]) -> str:
+        label = str(item.get("io_tp_nm") or item.get("ord_stt") or "").strip()
+        if "매수" in label:
+            return "buy"
+        if "매도" in label:
+            return "sell"
+        raw_trde = str(item.get("trde_tp") or "").strip()
+        if raw_trde == "2":
+            return "buy"
+        if raw_trde == "1":
+            return "sell"
+        raw_side = str(item.get("ord_tp") or item.get("bs_tp") or "").strip()
+        if raw_side == "1":
+            return "buy"
+        if raw_side == "2":
+            return "sell"
+        return raw_side or raw_trde
+
+    @staticmethod
+    def _order_no_from_result(result: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(result, dict):
+            return ""
+        output = result.get("output")
+        if isinstance(output, dict):
+            value = output.get("ord_no")
+            if value:
+                return str(value)
+        return str(result.get("ord_no") or "")
     
     # =========================================================================
     # 주문 API
@@ -502,26 +613,25 @@ class KiwoomRESTClient:
             OrderResult 객체
         """
         tr_code = self.TR_CODES["ORDER_BUY"] if order_type == OrderType.BUY else self.TR_CODES["ORDER_SELL"]
+        trde_tp = _trde_tp(price_type)
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
             "stk_cd": code,
-            "ord_tp": order_type.value,
-            "ord_qty": quantity,
-            "ord_prc": price if price_type == PriceType.LIMIT else 0,
-            "prc_tp": price_type.value
+            "ord_qty": str(int(quantity)),
+            "trde_tp": trde_tp,
+            "ord_uv": "" if trde_tp == "3" else str(int(price or 0)),
+            "cond_uv": "",
         }
         
-        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["ordr"], tr_code=tr_code, data=data)
         
         if result:
             return_code = result.get("return_code", -1)
             
             if return_code == 0:
-                output = result.get("output", {})
                 return OrderResult(
                     success=True,
-                    order_no=output.get("ord_no", ""),
+                    order_no=self._order_no_from_result(result),
                     code=code,
                     order_type=order_type.value,
                     quantity=quantity,
@@ -594,14 +704,13 @@ class KiwoomRESTClient:
         """주문 취소 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)"""
         tr_code = self.TR_CODES["ORDER_CANCEL"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
-            "org_ord_no": order_no,
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
+            "orig_ord_no": str(order_no),
             "stk_cd": code,
-            "ord_qty": quantity
+            "cncl_qty": str(int(quantity)),
         }
         
-        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["ordr"], tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             return OrderResult(
@@ -622,16 +731,15 @@ class KiwoomRESTClient:
         """주문 정정 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)"""
         tr_code = self.TR_CODES["ORDER_MODIFY"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
-            "org_ord_no": order_no,
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
+            "orig_ord_no": str(order_no),
             "stk_cd": code,
-            "ord_qty": quantity,
-            "ord_prc": price,
-            "prc_tp": price_type.value
+            "mdfy_qty": str(int(quantity)),
+            "mdfy_uv": str(int(price or 0)),
+            "mdfy_cond_uv": "",
         }
         
-        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["ordr"], tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             return OrderResult(
@@ -664,10 +772,25 @@ class KiwoomRESTClient:
             계좌번호 리스트
         """
         tr_code = self.TR_CODES["ACCOUNT_LIST"]
-        result = self._request("POST", "/api/dostk/acntlist", tr_code=tr_code, data={})
+        result = self._request("POST", self.PATHS["acnt"], tr_code=tr_code, data={})
         
         if result and result.get("return_code") == 0:
-            return result.get("accounts", [])
+            accounts: List[str] = []
+            for key in ("acctNo", "accounts", "output", "acnt_no"):
+                value = result.get(key)
+                if isinstance(value, str) and value.strip():
+                    accounts.append(value.strip())
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, str) and item.strip():
+                            accounts.append(item.strip())
+                        elif isinstance(item, dict):
+                            text = str(item.get("acctNo") or item.get("acnt_no") or item.get("account") or "").strip()
+                            if text:
+                                accounts.append(text)
+                if accounts:
+                    break
+            return accounts
         
         return []
     
@@ -694,26 +817,24 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["STOCK_MINUTE"]
         data = {
-            "tr_cd": tr_code,
             "stk_cd": code,
-            "interval": interval,
-            "req_cnt": min(count, 100)
+            "tic_scope": str(interval),
+            "upd_stkpc_tp": "1",
+            "base_dt": datetime.now().strftime("%Y%m%d"),
         }
-        
-        result = self._request("POST", "/api/dostk/stkminute", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
         
         candles = []
         if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            
-            for item in output_list:
+            output_list = _payload_records(result, "stk_min_pole_chart_qry", "output")
+            for item in output_list[: max(1, min(count, 100))]:
                 candles.append(DailyOHLC(
-                    date=item.get("datetime", ""),
-                    open_price=_safe_int(item.get("open_prc", 0), absolute=True),
-                    high_price=_safe_int(item.get("high_prc", 0), absolute=True),
-                    low_price=_safe_int(item.get("low_prc", 0), absolute=True),
-                    close_price=_safe_int(item.get("close_prc", 0), absolute=True),
-                    volume=_safe_int(item.get("vol", 0))
+                    date=str(_pick(item, "cntr_tm", "datetime", "dt", default="")),
+                    open_price=_safe_int(_pick(item, "open_pric", "open_prc"), absolute=True),
+                    high_price=_safe_int(_pick(item, "high_pric", "high_prc"), absolute=True),
+                    low_price=_safe_int(_pick(item, "low_pric", "low_prc"), absolute=True),
+                    close_price=_safe_int(_pick(item, "cur_prc", "close_prc"), absolute=True),
+                    volume=_safe_int(_pick(item, "trde_qty", "vol")),
                 ))
         
         return candles
@@ -722,25 +843,23 @@ class KiwoomRESTClient:
         """주봉 차트 데이터 조회"""
         tr_code = self.TR_CODES["STOCK_WEEKLY"]
         data = {
-            "tr_cd": tr_code,
             "stk_cd": code,
-            "req_cnt": min(count, 100)
+            "base_dt": datetime.now().strftime("%Y%m%d"),
+            "upd_stkpc_tp": "1",
         }
-        
-        result = self._request("POST", "/api/dostk/stkweekly", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
         
         candles = []
         if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            
-            for item in output_list:
+            output_list = _payload_records(result, "stk_wk_pole_chart_qry", "output")
+            for item in output_list[: max(1, min(count, 100))]:
                 candles.append(DailyOHLC(
-                    date=item.get("date", ""),
-                    open_price=_safe_int(item.get("open_prc", 0), absolute=True),
-                    high_price=_safe_int(item.get("high_prc", 0), absolute=True),
-                    low_price=_safe_int(item.get("low_prc", 0), absolute=True),
-                    close_price=_safe_int(item.get("close_prc", 0), absolute=True),
-                    volume=_safe_int(item.get("vol", 0))
+                    date=str(_pick(item, "dt", "date", default="")),
+                    open_price=_safe_int(_pick(item, "open_pric", "open_prc"), absolute=True),
+                    high_price=_safe_int(_pick(item, "high_pric", "high_prc"), absolute=True),
+                    low_price=_safe_int(_pick(item, "low_pric", "low_prc"), absolute=True),
+                    close_price=_safe_int(_pick(item, "cur_prc", "close_prc"), absolute=True),
+                    volume=_safe_int(_pick(item, "trde_qty", "vol")),
                 ))
         
         return candles
@@ -750,58 +869,70 @@ class KiwoomRESTClient:
     # =========================================================================
     
     def get_condition_list(self) -> List[Dict[str, Any]]:
-        """
-        조건검색식 목록 조회
-        
-        Returns:
-            [{"index": 0, "name": "조건식명"}, ...]
-        """
-        tr_code = self.TR_CODES["CONDITION_LIST"]
-        result = self._request("POST", "/api/dostk/condition/list", tr_code=tr_code, data={})
-        
-        conditions = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for item in output_list:
+        """조건검색식 목록 조회 (WebSocket ka10171 / CNSRLST)."""
+        ws = self._condition_ws()
+        if ws is None:
+            return []
+        result = ws.request_once({"trnm": "CNSRLST"})
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 목록 조회 실패: WebSocket CNSRLST 응답이 없습니다.")
+            return []
+
+        conditions: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
                 conditions.append({
-                    "index": _safe_int(item.get("cond_idx", 0)),
-                    "name": item.get("cond_nm", "")
+                    "index": _safe_int(_pick(item, "seq", "index", "cond_idx")),
+                    "name": str(_pick(item, "name", "cond_nm", default="") or ""),
                 })
-        
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                conditions.append({
+                    "index": _safe_int(item[0]),
+                    "name": str(item[1] or ""),
+                })
         return conditions
-    
+
     def search_by_condition(self, condition_index: int, condition_name: str = "") -> List[Dict[str, Any]]:
-        """
-        조건검색 실행
-        
-        Args:
-            condition_index: 조건식 인덱스
-            condition_name: 조건식 이름 (옵션)
-            
-        Returns:
-            [{"code": "종목코드", "name": "종목명"}, ...]
-        """
-        tr_code = self.TR_CODES["CONDITION_SEARCH"]
-        data = {
-            "cond_idx": condition_index,
-            "cond_nm": condition_name
-        }
-        
-        result = self._request("POST", "/api/dostk/condition/search", tr_code=tr_code, data=data)
-        
-        stocks = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for item in output_list:
+        """조건검색 실행 (WebSocket ka10172 / CNSRREQ)."""
+        del condition_name  # 공식 CNSRREQ는 seq만 사용
+        ws = self._condition_ws()
+        if ws is None:
+            return []
+        result = ws.request_once({
+            "trnm": "CNSRREQ",
+            "seq": str(condition_index),
+            "search_type": "0",
+            "stex_tp": "K",
+        })
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 실행 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            return []
+
+        stocks: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
                 stocks.append({
-                    "code": item.get("stk_cd", ""),
-                    "name": item.get("stk_nm", ""),
-                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
-                    "change_rate": _safe_float(item.get("chg_rt", 0)),
-                    "volume": _safe_int(item.get("vol", 0))
+                    "code": self._stk_cd(_pick(item, "9001", "stk_cd", "code")),
+                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
+                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
+                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
+                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
                 })
-        
-        return stocks
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                stocks.append({
+                    "code": self._stk_cd(item[0]),
+                    "name": str(item[1] or ""),
+                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
+                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
+                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
+                })
+        return [row for row in stocks if row.get("code")]
     
     # =========================================================================
     # 순위 정보 API
@@ -820,27 +951,29 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["RANK_VOLUME"]
         data = {
-            "tr_cd": tr_code,
-            "mkt_tp": market,
-            "req_cnt": min(count, 50)
+            "mrkt_tp": self._rank_market_tp(market),
+            "sort_tp": "1",
+            "mang_stk_incls": "0",
+            "crd_tp": "0",
+            "trde_qty_tp": "0",
+            "pric_tp": "0",
+            "trde_prica_tp": "0",
+            "mrkt_open_tp": "0",
+            "stex_tp": "3",
         }
-        
-        result = self._request("POST", "/api/dostk/ranking/volume", tr_code=tr_code, data=data)
-        
+        result = self._request("POST", self.PATHS["rkinfo"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "tdy_trde_qty_upper", "output")
         rankings = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for i, item in enumerate(output_list):
-                rankings.append({
-                    "rank": i + 1,
-                    "code": item.get("stk_cd", ""),
-                    "name": item.get("stk_nm", ""),
-                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
-                    "change_rate": _safe_float(item.get("chg_rt", 0)),
-                    "volume": _safe_int(item.get("vol", 0)),
-                    "volume_rate": _safe_float(item.get("vol_rt", 0))
-                })
-        
+        for i, item in enumerate(records[: max(1, min(int(count or 30), 100))]):
+            rankings.append({
+                "rank": i + 1,
+                "code": self._stk_cd(_pick(item, "stk_cd")),
+                "name": str(_pick(item, "stk_nm", default="") or ""),
+                "current_price": _safe_int(_pick(item, "cur_prc"), absolute=True),
+                "change_rate": _safe_float(_pick(item, "flu_rt", "chg_rt")),
+                "volume": _safe_int(_pick(item, "trde_qty", "vol")),
+                "volume_rate": _safe_float(_pick(item, "trde_tern_rt", "vol_rt")),
+            })
         return rankings
     
     def get_fluctuation_ranking(self, market: str = "0", sort_type: str = "1", count: int = 30) -> List[Dict[str, Any]]:
@@ -856,29 +989,31 @@ class KiwoomRESTClient:
             등락률 순위 리스트
         """
         tr_code = self.TR_CODES["RANK_FLUCTUATION"]
+        official_sort = {"1": "1", "2": "3", "3": "3", "4": "4"}.get(str(sort_type), "1")
         data = {
-            "tr_cd": tr_code,
-            "mkt_tp": market,
-            "sort_tp": sort_type,
-            "req_cnt": min(count, 50)
+            "mrkt_tp": self._rank_market_tp(market),
+            "sort_tp": official_sort,
+            "trde_qty_cnd": "0000",
+            "stk_cnd": "0",
+            "crd_cnd": "0",
+            "updown_incls": "1",
+            "pric_cnd": "0",
+            "trde_prica_cnd": "0",
+            "stex_tp": "3",
         }
-        
-        result = self._request("POST", "/api/dostk/ranking/fluctuation", tr_code=tr_code, data=data)
-        
+        result = self._request("POST", self.PATHS["rkinfo"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "pred_pre_flu_rt_upper", "output")
         rankings = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for i, item in enumerate(output_list):
-                rankings.append({
-                    "rank": i + 1,
-                    "code": item.get("stk_cd", ""),
-                    "name": item.get("stk_nm", ""),
-                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
-                    "change": _safe_int(item.get("chg_amt", 0)),
-                    "change_rate": _safe_float(item.get("chg_rt", 0)),
-                    "volume": _safe_int(item.get("vol", 0))
-                })
-        
+        for i, item in enumerate(records[: max(1, min(int(count or 30), 100))]):
+            rankings.append({
+                "rank": i + 1,
+                "code": self._stk_cd(_pick(item, "stk_cd")),
+                "name": str(_pick(item, "stk_nm", default="") or ""),
+                "current_price": _safe_int(_pick(item, "cur_prc"), absolute=True),
+                "change": _safe_int(_pick(item, "pred_pre", "chg_amt")),
+                "change_rate": _safe_float(_pick(item, "flu_rt", "chg_rt")),
+                "volume": _safe_int(_pick(item, "now_trde_qty", "trde_qty", "vol")),
+            })
         return rankings
     
     def get_investor_trading(self, code: str) -> Dict[str, Any]:
@@ -892,29 +1027,35 @@ class KiwoomRESTClient:
             투자자별 순매수량/금액
         """
         tr_code = self.TR_CODES["INVESTOR_TRADING"]
+        end_dt = datetime.now().strftime("%Y%m%d")
+        strt_dt = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
         data = {
-            "tr_cd": tr_code,
-            "stk_cd": code
+            "stk_cd": code,
+            "strt_dt": strt_dt,
+            "end_dt": end_dt,
+            "orgn_prsm_unp_tp": "1",
+            "for_prsm_unp_tp": "1",
         }
-        
-        result = self._request("POST", "/api/dostk/investor", tr_code=tr_code, data=data)
-        
-        if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            return {
-                "code": code,
-                "individual_buy": _safe_int(output.get("indv_buy", 0)),
-                "individual_sell": _safe_int(output.get("indv_sell", 0)),
-                "foreign_buy": _safe_int(output.get("frgn_buy", 0)),
-                "foreign_sell": _safe_int(output.get("frgn_sell", 0)),
-                "institution_buy": _safe_int(output.get("inst_buy", 0)),
-                "institution_sell": _safe_int(output.get("inst_sell", 0)),
-                "individual_net": _safe_int(output.get("indv_net", 0)),
-                "foreign_net": _safe_int(output.get("frgn_net", 0)),
-                "institution_net": _safe_int(output.get("inst_net", 0))
-            }
-        
-        return {}
+        result = self._request("POST", self.PATHS["mrkcond"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "stk_orgn_trde_trnsn", "output")
+        if not records:
+            return {}
+        row = records[0]
+        institution_net = _safe_int(_pick(row, "orgn_daly_nettrde_qty", "inst_net"))
+        foreign_net = _safe_int(_pick(row, "for_daly_nettrde_qty", "frgn_net"))
+        individual_net = _safe_int(_pick(row, "indv_net"))
+        return {
+            "code": code,
+            "individual_buy": _safe_int(_pick(row, "indv_buy")),
+            "individual_sell": _safe_int(_pick(row, "indv_sell")),
+            "foreign_buy": _safe_int(_pick(row, "frgn_buy")),
+            "foreign_sell": _safe_int(_pick(row, "frgn_sell")),
+            "institution_buy": _safe_int(_pick(row, "inst_buy")),
+            "institution_sell": _safe_int(_pick(row, "inst_sell")),
+            "individual_net": individual_net,
+            "foreign_net": foreign_net,
+            "institution_net": institution_net,
+        }
     
     def get_program_trading(self, code: str) -> Dict[str, Any]:
         """
@@ -928,53 +1069,69 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["PROGRAM_TRADING"]
         data = {
-            "tr_cd": tr_code,
-            "stk_cd": code
+            "stk_cd": code,
+            "amt_qty_tp": "2",
+            "date": "",
         }
-        
-        result = self._request("POST", "/api/dostk/program", tr_code=tr_code, data=data)
-        
-        if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            return {
-                "code": code,
-                "arb_buy": _safe_int(output.get("arb_buy", 0)),
-                "arb_sell": _safe_int(output.get("arb_sell", 0)),
-                "nonarb_buy": _safe_int(output.get("nonarb_buy", 0)),
-                "nonarb_sell": _safe_int(output.get("nonarb_sell", 0)),
-                "total_buy": _safe_int(output.get("tot_buy", 0)),
-                "total_sell": _safe_int(output.get("tot_sell", 0)),
-                "net": _safe_int(output.get("net", 0))
-            }
-        
-        return {}
+        result = self._request("POST", self.PATHS["mrkcond"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "stk_daly_prm_trde_trnsn", "output")
+        if not records:
+            return {}
+        row = records[0]
+        buy_qty = _safe_int(_pick(row, "prm_buy_qty", "tot_buy"))
+        sell_qty = _safe_int(_pick(row, "prm_sell_qty", "tot_sell"))
+        net = _safe_int(_pick(row, "prm_netprps_qty", "net"), default=buy_qty - sell_qty)
+        return {
+            "code": code,
+            "arb_buy": _safe_int(_pick(row, "arb_buy")),
+            "arb_sell": _safe_int(_pick(row, "arb_sell")),
+            "nonarb_buy": _safe_int(_pick(row, "nonarb_buy")),
+            "nonarb_sell": _safe_int(_pick(row, "nonarb_sell")),
+            "total_buy": buy_qty,
+            "total_sell": sell_qty,
+            "net": net,
+        }
 
     # =========================================================================
     # 시장 상태/지수 API (v4 확장)
     # =========================================================================
 
     def get_market_status(self) -> Dict[str, Any]:
-        """시장 상태 조회 (지원 시). 지원되지 않으면 빈 dict 반환."""
-        tr_code = self.TR_CODES["MARKET_STATUS"]
-        result = self._request("POST", "/api/dostk/market/status", tr_code=tr_code, data={})
-        if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            if isinstance(output, dict):
-                return output
+        """장 상태는 공식 REST TR이 없고 WebSocket REAL `0s`(장시작시간)만 존재한다."""
         return {}
 
     def get_index_quote(self, index_code: str) -> Dict[str, Any]:
-        """지수 시세 조회 (지원 시). 지원되지 않으면 빈 dict 반환."""
+        """업종현재가 조회 (ka20001 /api/dostk/sect)."""
         if not index_code:
             return {}
         tr_code = self.TR_CODES["INDEX_QUOTE"]
-        data = {"idx_cd": index_code}
-        result = self._request("POST", "/api/dostk/index/quote", tr_code=tr_code, data=data)
-        if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            if isinstance(output, dict):
-                return output
-        return {}
+        data = {
+            "mrkt_tp": self._index_market_tp(index_code),
+            "inds_cd": str(index_code),
+        }
+        result = self._request("POST", self.PATHS["sect"], tr_code=tr_code, data=data)
+        if not result:
+            return {}
+        output = _payload_dict(result, "output")
+        current = _safe_float(_pick(output, "cur_prc", "cur_idx"))
+        change = _safe_float(_pick(output, "pred_pre", "chg_idx"))
+        change_rate = _safe_float(_pick(output, "flu_rt", "chg_rt"))
+        if current == 0.0 and change == 0.0 and change_rate == 0.0 and not _pick(output, "cur_prc", "cur_idx"):
+            return {}
+        return {
+            "idx_cd": str(index_code),
+            "idx_nm": str(_pick(output, "idx_nm", "inds_nm", default="") or ""),
+            "cur_idx": current,
+            "chg_idx": change,
+            "chg_rt": change_rate,
+            "open_idx": _safe_float(_pick(output, "open_pric", "open_idx")),
+            "high_idx": _safe_float(_pick(output, "high_pric", "high_idx")),
+            "low_idx": _safe_float(_pick(output, "low_pric", "low_idx")),
+            "acc_vol": _safe_int(_pick(output, "trde_qty", "acc_vol")),
+            "acc_trd_val": _safe_int(_pick(output, "trde_prica", "acc_trd_val")),
+            "cur_prc": current,
+            "flu_rt": change_rate,
+        }
 
     def get_market_indexes(self) -> List[SectorQuote]:
         """
@@ -995,15 +1152,15 @@ class KiwoomRESTClient:
                 if res:
                     quotes.append(SectorQuote(
                         code=idx_cd,
-                        name=res.get("idx_nm", name),
-                        current_price=_safe_float(res.get("cur_idx", 0.0)),
-                        change=_safe_float(res.get("chg_idx", 0.0)),
-                        change_rate=_safe_float(res.get("chg_rt", 0.0)),
-                        open_price=_safe_float(res.get("open_idx", 0.0)),
-                        high_price=_safe_float(res.get("high_idx", 0.0)),
-                        low_price=_safe_float(res.get("low_idx", 0.0)),
-                        volume=_safe_int(res.get("acc_vol", 0)),
-                        volume_amount=_safe_int(res.get("acc_trd_val", 0)),
+                        name=str(_pick(res, "idx_nm", default="") or name),
+                        current_price=_safe_float(_pick(res, "cur_idx", "cur_prc")),
+                        change=_safe_float(_pick(res, "chg_idx", "pred_pre")),
+                        change_rate=_safe_float(_pick(res, "chg_rt", "flu_rt")),
+                        open_price=_safe_float(_pick(res, "open_idx", "open_pric")),
+                        high_price=_safe_float(_pick(res, "high_idx", "high_pric")),
+                        low_price=_safe_float(_pick(res, "low_idx", "low_pric")),
+                        volume=_safe_int(_pick(res, "acc_vol", "trde_qty")),
+                        volume_amount=_safe_int(_pick(res, "acc_trd_val", "trde_prica")),
                     ))
             except Exception as exc:
                 self.logger.warning(f"지수({idx_cd}) 조회 실패: {exc}")
@@ -1012,7 +1169,7 @@ class KiwoomRESTClient:
 
     def get_deposit_detail(self, account_no: str) -> Optional[DepositDetail]:
         """
-        예수금 상세 정보 조회 (ka30002)
+        예수금 상세 정보 조회 (kt00001)
         
         Args:
             account_no: 계좌번호
@@ -1021,26 +1178,21 @@ class KiwoomRESTClient:
             DepositDetail 객체, 실패 시 None
         """
         tr_code = self.TR_CODES["ACCOUNT_DEPOSIT"]
-        data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no
-        }
-        
-        result = self._request("POST", "/api/dostk/acntdeposit", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["acnt"], tr_code=tr_code, data={"qry_tp": "3"})
         
         if result and result.get("return_code") == 0:
-            output = result.get("output", {})
+            output = _payload_dict(result, "output")
             return DepositDetail(
                 account_no=account_no,
-                deposit=_safe_int(output.get("deposit", 0)),
-                d1_deposit=_safe_int(output.get("d1_deposit", output.get("d1_estm_dps", 0))),
-                d2_deposit=_safe_int(output.get("d2_deposit", output.get("d2_estm_dps", 0))),
-                withdrawable_amount=_safe_int(output.get("draw_psbl_amt", output.get("wdrw_psbl_amt", 0))),
-                order_available_amount=_safe_int(output.get("ord_psbl_amt", output.get("ord_psbl_cash", 0))),
-                receivable_amount=_safe_int(output.get("rcvbl_amt", 0)),
-                collateral_amount=_safe_int(output.get("subst_amt", 0)),
-                stock_eval_amount=_safe_int(output.get("tot_eval_amt", output.get("stk_eval_amt", 0))),
-                total_assets=_safe_int(output.get("tot_asst_amt", 0)),
+                deposit=_safe_int(_pick(output, "entr", "deposit")),
+                d1_deposit=_safe_int(_pick(output, "d1_entra", "d1_deposit", "d1_estm_dps")),
+                d2_deposit=_safe_int(_pick(output, "d2_entra", "d2_deposit", "d2_estm_dps")),
+                withdrawable_amount=_safe_int(_pick(output, "pymn_alow_amt", "draw_psbl_amt", "wdrw_psbl_amt")),
+                order_available_amount=_safe_int(_pick(output, "ord_alow_amt", "ord_psbl_amt", "ord_psbl_cash")),
+                receivable_amount=_safe_int(_pick(output, "ch_uncla", "rcvbl_amt")),
+                collateral_amount=_safe_int(_pick(output, "repl_amt", "subst_amt")),
+                stock_eval_amount=_safe_int(_pick(output, "tot_eval_amt", "stk_eval_amt")),
+                total_assets=_safe_int(_pick(output, "tot_asst_amt", "prsm_dpst_aset_amt")),
             )
         return None
 
@@ -1057,13 +1209,13 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["ORDER_EXECUTED"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
-            "inqr_dt": date or datetime.now().strftime("%Y%m%d"),
+            "qry_tp": "0",
+            "sell_tp": "0",
+            "stex_tp": "0",
         }
         
         try:
-            result = self._request("POST", "/api/dostk/ordexecuted", tr_code=tr_code, data=data)
+            result = self._request("POST", self.PATHS["acnt"], tr_code=tr_code, data=data)
         except Exception as exc:
             self.logger.warning(f"체결 주문 조회 예외: {exc}")
             return []
@@ -1071,25 +1223,18 @@ class KiwoomRESTClient:
         if not result or result.get("return_code") != 0:
             return []
             
-        rows = result.get("output", [])
-        if not isinstance(rows, list):
-            if isinstance(rows, dict):
-                rows = [rows]
-            else:
-                return []
+        rows = _payload_records(result, "cntr", "output")
                 
         orders: List[ExecutedOrder] = []
         for item in rows:
             if not isinstance(item, dict):
                 continue
-            raw_side = str(item.get("ord_tp") or item.get("bs_tp") or "").strip()
-            side = "buy" if raw_side == "1" else ("sell" if raw_side == "2" else raw_side)
             orders.append(ExecutedOrder(
                 exec_no=str(item.get("exec_no") or item.get("cntr_no") or "").strip(),
                 order_no=str(item.get("ord_no") or "").strip(),
                 code=str(item.get("stk_cd") or "").strip(),
                 name=str(item.get("stk_nm") or "").strip(),
-                side=side,
+                side=self._parse_order_side(item),
                 order_type=str(item.get("prc_tp") or "").strip(),
                 quantity=_safe_int(item.get("ord_qty", 0)),
                 exec_quantity=_safe_int(item.get("exec_qty", item.get("cntr_qty", 0))),
@@ -1103,7 +1248,7 @@ class KiwoomRESTClient:
 
     def get_tick_chart(self, code: str, count: int = 60) -> List[TickCandle]:
         """
-        틱 차트 데이터 조회 (ka10007)
+        틱 차트 데이터 조회 (ka10079)
         
         Args:
             code: 종목코드
@@ -1114,16 +1259,15 @@ class KiwoomRESTClient:
         """
         tr_code = self.TR_CODES["STOCK_TICK"]
         data = {
-            "tr_cd": tr_code,
             "stk_cd": code,
-            "req_cnt": min(count, 100)
+            "tic_scope": "1",
+            "upd_stkpc_tp": "1",
         }
-        
-        result = self._request("POST", "/api/dostk/stktick", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
         
         candles: List[TickCandle] = []
         if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
+            output_list = _payload_records(result, "stk_tic_chart_qry", "output")[: max(1, min(count, 100))]
             for item in output_list:
                 candles.append(TickCandle(
                     time=str(item.get("time") or item.get("stk_tm") or "").strip(),
@@ -1138,7 +1282,7 @@ class KiwoomRESTClient:
 
     def get_vi_status(self, market: str = "0") -> List[VIEvent]:
         """
-        변동성완화장치(VI) 발동 현황 조회 (ka20009)
+        변동성완화장치(VI) 발동 현황 조회 (ka10054)
         
         Args:
             market: "0"=전체, "1"=코스피, "2"=코스닥
@@ -1147,27 +1291,38 @@ class KiwoomRESTClient:
             VIEvent 리스트
         """
         tr_code = self.TR_CODES["VI_STATUS"]
+        market_map = {"0": "000", "1": "001", "2": "101"}
         data = {
-            "tr_cd": tr_code,
-            "mkt_tp": market,
+            "mrkt_tp": market_map.get(str(market), "000"),
+            "bf_mkrt_tp": "0",
+            "motn_tp": "0",
+            "skip_stk": "000000000",
+            "trde_qty_tp": "0",
+            "min_trde_qty": "0",
+            "max_trde_qty": "0",
+            "trde_prica_tp": "0",
+            "min_trde_prica": "0",
+            "max_trde_prica": "0",
+            "motn_drc": "0",
+            "stex_tp": "3",
+            "stk_cd": "",
         }
-        
-        result = self._request("POST", "/api/dostk/vi/status", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["stkinfo"], tr_code=tr_code, data=data)
         
         events: List[VIEvent] = []
         if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
+            output_list = _payload_records(result, "motn_stk", "output")
             for item in output_list:
                 events.append(VIEvent(
                     code=str(item.get("stk_cd") or "").strip(),
                     name=str(item.get("stk_nm") or "").strip(),
-                    vi_type=str(item.get("vi_tp") or "").strip(),
+                    vi_type=str(item.get("viaplc_tp") or item.get("vi_tp") or "").strip(),
                     vi_status=str(item.get("vi_st") or "발동").strip(),
-                    trigger_time=str(item.get("trg_tm") or "").strip(),
-                    release_time=str(item.get("rls_tm") or "").strip(),
-                    trigger_price=_safe_int(item.get("trg_prc", 0), absolute=True),
-                    base_price=_safe_int(item.get("base_prc", 0), absolute=True),
-                    deviance_rate=_safe_float(item.get("dev_rt", 0.0)),
+                    trigger_time=str(item.get("trde_cntr_proc_time") or item.get("trg_tm") or "").strip(),
+                    release_time=str(item.get("virelis_time") or item.get("rls_tm") or "").strip(),
+                    trigger_price=_safe_int(_pick(item, "motn_pric", "trg_prc"), absolute=True),
+                    base_price=_safe_int(_pick(item, "static_stdpc", "dynm_stdpc", "base_prc"), absolute=True),
+                    deviance_rate=_safe_float(_pick(item, "static_dispty_rt", "dynm_dispty_rt", "dev_rt")),
                 ))
         return events
 

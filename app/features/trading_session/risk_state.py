@@ -185,6 +185,54 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
                 self._log_once("index_feed", f"[인덱스] 실시간 지수 구독 시작: {', '.join(index_codes)}")
         except Exception as exc:
             self._log_once("index_feed_fail", f"[인덱스] 구독 실패({exc}), 종목 프록시 기반 감지만 유지합니다.")
+    def _start_vi_feed(self, codes: List[str]):
+        ws_client = getattr(self, "ws_client", None)
+        if ws_client is None or not codes:
+            return
+        try:
+            subscribe_vi = getattr(ws_client, "subscribe_vi_events", None)
+            if callable(subscribe_vi):
+                subscribe_vi(list(codes), self._on_vi_event)
+                self._vi_feed_codes = list(codes)
+                self._log_once("vi_feed", f"[VI] 실시간 VI 구독 시작: {len(codes)}종목")
+        except Exception as exc:
+            self._log_once("vi_feed_fail", f"[VI] 구독 실패({exc}), 체결 틱/프록시 기반 감지만 유지합니다.")
+    def _stop_vi_feed(self):
+        ws_client = getattr(self, "ws_client", None)
+        vi_codes = list(getattr(self, "_vi_feed_codes", []))
+        if ws_client is not None and vi_codes:
+            try:
+                ws_client.unsubscribe(vi_codes)
+            except Exception:
+                pass
+        self._vi_feed_codes = []
+    def _on_vi_event(self, body: dict):
+        if not isinstance(body, dict):
+            return
+        code = str(body.get("stk_cd") or body.get("code") or "").strip()
+        if not code:
+            return
+        universe = getattr(self, "universe", None)
+        if not isinstance(universe, dict):
+            return
+        info = universe.get(code)
+        if not isinstance(info, dict):
+            return
+
+        status_text = str(body.get("vi_st") or body.get("vi_status") or body.get("status") or "")
+        status_upper = status_text.upper()
+        released = ("해제" in status_text) or any(
+            token in status_upper for token in ("OFF", "END", "RELEASE", "CLEAR")
+        )
+        triggered = ("발동" in status_text) or any(
+            token in status_upper for token in ("ON", "TRIGGER", "START", "ACTIVE", "VI")
+        )
+        now = datetime.datetime.now()
+        if released:
+            self._apply_market_state(info, "reopen_cooldown", now)
+            return
+        if triggered or not status_text.strip():
+            self._apply_market_state(info, "vi", now)
     def _stop_index_feed(self):
         ws_client = getattr(self, "ws_client", None)
         index_codes = list(getattr(self, "_index_feed_codes", []))

@@ -473,6 +473,7 @@ class TradingSessionPositionsMixin(TraderMixinBase):
         if callable(stop_market_intel):
             stop_market_intel()
         self._stop_index_feed()
+        self._stop_vi_feed()
         self._global_risk_mode = "normal"
         self._global_risk_until = None
         self._order_health_mode = "normal"

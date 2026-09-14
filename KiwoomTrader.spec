@@ -13,8 +13,9 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-04-29: 백테스트 UI runner(app.support.backtest_runner), 전략 mixin typing, API 계약 테스트 기준 동기화
 2026-05-17: signal_only/live 실행 모드, WebSocket dispatcher, 미체결 adapter, 보안 fallback UI는 기존 app/api 수집 규칙으로 포함됨
 2026-06-10: app.core/app.features/app.configuration 대규모 구조 분리와 strategies.manager canonical 경로 반영
-2026-07-28: PROJECT_AUDIT 안정성 패치 반영 — 미체결 adapter(ka400008) 실구현으로 인한 api.rest_client 의존성은 기존 수집 규칙으로 포함됨.
+2026-07-28: PROJECT_AUDIT 안정성 패치 반영 — 미체결 adapter(ka10075) 실구현으로 인한 api.rest_client 의존성은 기존 수집 규칙으로 포함됨.
             data.providers explicit 목록 정합성 보강(kiwoom_provider/csv_provider/stock_cache_provider 명시).
+2026-09-14: 키움 공식 REST/WebSocket 계약 정렬(주문 body, 순위 ka10030/ka10027, 조건검색 CNSRLST/CNSRREQ, 업종 ka20001).
 """
 
 from pathlib import Path

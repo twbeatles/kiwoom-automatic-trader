@@ -84,6 +84,7 @@ class APIAccountMixin(TraderMixinBase):
 
         rest_client = KiwoomRESTClient(auth)
         ws_client = KiwoomWebSocketClient(auth)
+        rest_client.ws_client = ws_client
         if hasattr(self, "log"):
             self.log(
                 f"API endpoint selected: mode={getattr(auth, 'mode', 'mock' if is_mock else 'live')}, "
@@ -142,7 +143,14 @@ class APIAccountMixin(TraderMixinBase):
         message = str(error)
         lower_message = message.lower()
 
-        if any(token in lower_message for token in ("401", "403", "invalid", "unauthorized", "forbidden", "auth")):
+        if "8030" in message or "투자구분" in message:
+            user_guide = (
+                "모의투자 체크 상태와 AppKey 발급 환경(실전/모의)이 일치하지 않습니다. "
+                "키움 개발자센터에서 발급한 환경에 맞춰 모의투자 체크를 맞춘 뒤 다시 연결하세요."
+            )
+        elif any(token in lower_message for token in ("1501", "api-id", "api id")):
+            user_guide = "REST 요청에 api-id(TR 코드)가 없습니다. 최신 버전은 모든 조회/주문 요청에 api-id를 자동 주입합니다."
+        elif any(token in lower_message for token in ("401", "403", "invalid", "unauthorized", "forbidden", "auth")):
             user_guide = "인증에 실패했습니다. App Key/Secret Key를 다시 확인해주세요."
         elif any(token in lower_message for token in ("계좌 목록", "accounts", "empty account")):
             user_guide = "계좌 목록을 가져오지 못했습니다. API 계좌 권한/상품 신청 상태를 확인해주세요."

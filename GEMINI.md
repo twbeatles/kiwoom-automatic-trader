@@ -194,6 +194,8 @@ pyinstaller --clean KiwoomTrader.spec
 - 거래 내역 저장과 설정 파일 저장은 모두 atomic write(`tmp` → `os.replace`)이며 실패 시 Worker error로 전파됩니다.
 - 미체결 주문 조회는 `ka10075` 기반 `get_open_orders()` adapter로 구현되어 `supported`로 동작합니다. 파싱 실패 시 빈 리스트로 안전하게 처리합니다.
 - 모든 REST 요청 헤더에 `api-id`, `cont-yn`을 자동 주입하고 국내주식 주문 엔드포인트 `/api/dostk/ordr` 및 표준 TR 코드(`kt10000`~`kt10003`, `ka10075`)를 사용합니다.
+- 순위는 `ka10030`/`ka10027` (`/api/dostk/rkinfo`), 기관/프로그램은 `ka10045`/`ka90013` (`/api/dostk/mrkcond`), 업종현재가는 `ka20001` (`/api/dostk/sect`)를 사용합니다.
+- 조건검색은 REST가 아니라 WebSocket `CNSRLST`(ka10171)/`CNSRREQ`(ka10172)입니다. 장시작시간 REST TR은 없습니다.
 
 4. 보안/의존성/패키징
 - keyring 실패 시 평문 secret fallback은 opt-in입니다(모의투자 포함). `allow_plaintext_secret_fallback=True`일 때만 평문 저장을 허용한다.
