@@ -1,5 +1,6 @@
 """키움 공식 REST/WebSocket 계약 (Kiwoom-Securities/Kiwoom-REST-API 예제 기준)."""
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from api.auth import KiwoomAuth
@@ -341,7 +342,7 @@ class TestKiwoomOfficialRestContract(unittest.TestCase):
         mock_post.assert_not_called()
 
     def test_condition_list_uses_websocket_cnsrlst(self):
-        ws = MagicMock()
+        ws: Any = MagicMock()
         ws.request_once.return_value = {
             "trnm": "CNSRLST",
             "data": [{"seq": "1", "name": "급등주"}, ["2", "거래량폭증"]],
@@ -356,7 +357,7 @@ class TestKiwoomOfficialRestContract(unittest.TestCase):
         self.assertEqual(body["trnm"], "CNSRLST")
 
     def test_condition_search_uses_websocket_cnsrreq(self):
-        ws = MagicMock()
+        ws: Any = MagicMock()
         ws.request_once.return_value = {
             "trnm": "CNSRREQ",
             "data": [{"9001": "A005930", "302": "삼성전자", "10": "70000", "12": "1.2", "13": "1000"}],

@@ -589,10 +589,11 @@ class KiwoomWebSocketClient:
             self.logger.debug(f"알 수 없는 실시간 타입: {real_type}")
 
     def _normalize_real_record(self, record: dict) -> dict:
-        values = record.get("values") if isinstance(record.get("values"), dict) else {}
+        raw_values = record.get("values")
+        values = raw_values if isinstance(raw_values, dict) else {}
         code = str(record.get("item") or record.get("stk_cd") or values.get("9001") or "")
         name = str(record.get("name") or record.get("stk_nm") or values.get("302") or "")
-        body = {
+        body: Dict[str, Any] = {
             "stk_cd": code,
             "stk_nm": name,
             "exec_tm": values.get("20") or values.get("exec_tm") or "",

@@ -1,5 +1,5 @@
 ﻿import unittest
-from typing import Literal, overload
+from typing import Any, Literal, overload
 from unittest.mock import MagicMock, patch
 
 from app.mixins.trading_session import BackgroundUniversePayload, TradingSessionMixin
@@ -23,6 +23,8 @@ class _DummyButton:
 
 
 class _Harness(TradingSessionMixin):
+    ws_client: Any
+
     def __init__(self, codes_text, init_result, connected=True):
         self.is_running = False
         self.is_connected = connected
@@ -130,7 +132,7 @@ class TestTradingSessionStateMachine(unittest.TestCase):
     @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
     def test_start_trading_subscribes_vi_events(self, _warning, _critical):
         trader = _Harness("005930", ["005930"])
-        ws = MagicMock()
+        ws: Any = MagicMock()
         trader.ws_client = ws
 
         trader.start_trading()

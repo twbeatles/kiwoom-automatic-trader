@@ -1,5 +1,6 @@
 ﻿import datetime
 import unittest
+from typing import Any
 from unittest.mock import MagicMock
 
 from api.models import ExecutionData
@@ -8,6 +9,8 @@ from config import TradingConfig
 
 
 class _Harness(TradingSessionMixin):
+    ws_client: Any
+
     def __init__(self):
         self.config = TradingConfig(use_vi_guard=True, vi_proxy_1m_pct=9.0, vi_proxy_spread_pct=9.0)
         self._recent_ticks_by_code = {}
@@ -60,7 +63,7 @@ class TestVIStateMachine(unittest.TestCase):
 
     def test_start_vi_feed_subscribes_universe_codes(self):
         trader = _Harness()
-        ws = MagicMock()
+        ws: Any = MagicMock()
         trader.ws_client = ws
 
         trader._start_vi_feed(["005930", "000660"])

@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -12,9 +12,14 @@ from urllib3.util.retry import Retry
 from .auth import KiwoomAuth
 from .endpoints import LIVE_REST_BASE_URL
 
+if TYPE_CHECKING:
+    from .websocket_client import KiwoomWebSocketClient
+
 
 class RestTransport:
     """Transport + TR-code table. Domain mixins build on this."""
+
+    ws_client: Optional["KiwoomWebSocketClient"]
 
     BASE_URL = LIVE_REST_BASE_URL
 

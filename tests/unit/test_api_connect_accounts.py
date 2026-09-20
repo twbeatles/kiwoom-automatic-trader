@@ -1,11 +1,16 @@
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from app.mixins.api_account import APIAccountMixin
 
 
 class _Harness(APIAccountMixin):
-    pass
+    btn_start: Any
+    btn_connect: Any
+    lbl_status: Any
+    logs: list
+    log: Any
 
 
 class TestAPIConnectAccounts(unittest.TestCase):
