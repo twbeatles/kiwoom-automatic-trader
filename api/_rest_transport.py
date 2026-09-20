@@ -1,9 +1,9 @@
-"""REST transport base (SRP: session/rate-limit/request/TR codes only)."""
+"""REST transport base (SRP: session/rate-limit/request/codes/paths only)."""
 
 import logging
 import threading
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -19,42 +19,53 @@ class RestTransport:
     BASE_URL = LIVE_REST_BASE_URL
 
     TR_CODES = {
-        # 시세 조회
-        "STOCK_CURRENT": "ka10001",      # 주식기본정보요청/현재가
+        # 시세/종목
+        "STOCK_CURRENT": "ka10001",      # 주식기본정보요청
         "STOCK_HOGA": "ka10004",         # 주식호가요청
-        "STOCK_DAILY": "ka10005",        # 일봉차트
-        "STOCK_MINUTE": "ka10006",       # 분봉차트
-        "STOCK_TICK": "ka10007",         # 틱차트
-        "STOCK_WEEKLY": "ka10008",       # 주봉/월봉차트
-        "SECTOR_INDEX": "ka10010",       # 업종지수차트/시세
-        
-        # 계좌 조회
-        "ACCOUNT_BALANCE": "ka30001",    # 계좌평가잔고
-        "ACCOUNT_DEPOSIT": "ka30002",    # 예수금상세
-        "ACCOUNT_LIST": "ka30003",       # 계좌목록조회
-        
-        # 주문 (키움 REST 국내주식 주문 표준 api-id)
+        "STOCK_DAILY": "ka10081",        # 주식일봉차트조회요청
+        "STOCK_MINUTE": "ka10080",       # 주식분봉차트조회요청
+        "STOCK_TICK": "ka10079",         # 주식틱차트조회요청
+        "STOCK_WEEKLY": "ka10082",       # 주식주봉차트조회요청
+        "SECTOR_INDEX": "ka20001",       # 업종현재가 (호환)
+
+        # 계좌
+        "ACCOUNT_BALANCE": "kt00018",    # 계좌평가잔고내역요청
+        "ACCOUNT_DEPOSIT": "kt00001",    # 예수금상세현황요청
+        "ACCOUNT_LIST": "ka00001",       # 계좌번호조회
+
+        # 주문
         "ORDER_BUY": "kt10000",          # 주식매수주문
         "ORDER_SELL": "kt10001",         # 주식매도주문
         "ORDER_MODIFY": "kt10002",       # 주식정정주문
         "ORDER_CANCEL": "kt10003",       # 주식취소주문
         "ORDER_STOCK": "kt10000",        # 호환용 매수 alias
-        
-        # 순위/기타
-        "RANK_VOLUME": "ka20001",        # 거래량상위
-        "RANK_FLUCTUATION": "ka20002",   # 등락률상위
-        "CONDITION_LIST": "ka20003",     # 조건식목록
-        "CONDITION_SEARCH": "ka20004",   # 조건검색
-        "INVESTOR_TRADING": "ka20005",   # 투자자별매매동향
-        "PROGRAM_TRADING": "ka20006",    # 프로그램매매동향
-        "MARKET_STATUS": "ka20007",      # 시장운영정보
-        "INDEX_QUOTE": "ka20008",        # 지수현재가
-        "VI_STATUS": "ka20009",          # VI발동현황
+
+        # 순위/시세 확장 (Kiwoom-Securities/Kiwoom-REST-API 예제 기준)
+        "RANK_VOLUME": "ka10030",        # 당일거래량상위요청
+        "RANK_FLUCTUATION": "ka10027",   # 전일대비등락률상위요청
+        "CONDITION_LIST": "ka10171",     # 조건검색 목록조회 (WebSocket CNSRLST)
+        "CONDITION_SEARCH": "ka10172",   # 조건검색 요청 일반 (WebSocket CNSRREQ)
+        "INVESTOR_TRADING": "ka10045",   # 종목별기관매매추이요청
+        "PROGRAM_TRADING": "ka90013",    # 종목일별프로그램매매추이요청
+        "INDEX_QUOTE": "ka20001",        # 업종현재가요청
+        "VI_STATUS": "ka10054",          # 변동성완화장치발동종목요청
 
         # 미체결 / 체결
-        "ORDER_OPEN": "ka10075",         # 미체결주문조회
-        "ORDER_EXECUTED": "ka10076",     # 당일체결주문조회
+        "ORDER_OPEN": "ka10075",         # 미체결요청
+        "ORDER_EXECUTED": "ka10076",     # 체결요청
     }
+
+    PATHS = {
+        "stkinfo": "/api/dostk/stkinfo",
+        "mrkcond": "/api/dostk/mrkcond",
+        "chart": "/api/dostk/chart",
+        "acnt": "/api/dostk/acnt",
+        "ordr": "/api/dostk/ordr",
+        "rkinfo": "/api/dostk/rkinfo",
+        "sect": "/api/dostk/sect",
+    }
+
+    DEFAULT_EXCHANGE = "KRX"
 
     def __init__(self, auth: KiwoomAuth, base_url: Optional[str] = None):
         """
@@ -65,6 +76,7 @@ class RestTransport:
         self.logger = logging.getLogger('KiwoomRESTClient')
         self.base_url = str(base_url or getattr(auth, "base_url", self.BASE_URL) or self.BASE_URL).rstrip("/")
         self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
+        self.ws_client = None
         
         # 요청 세션 설정 (재시도 로직 포함)
         self.session = self._create_session()
@@ -119,6 +131,10 @@ class RestTransport:
         Returns:
             응답 JSON 딕셔너리, 실패 시 None
         """
+        if not tr_code:
+            self.logger.error("API 요청에 api-id(TR 코드)가 없습니다. 키움 REST는 api-id 누락 시 1501 오류가 납니다.")
+            return None
+
         self._rate_limit()
         
         url = f"{self.base_url}{endpoint}"
@@ -126,9 +142,8 @@ class RestTransport:
             "Content-Type": "application/json;charset=UTF-8",
             **self.auth.get_auth_header(),
             "cont-yn": str(cont_yn or "N"),
+            "api-id": str(tr_code),
         }
-        if tr_code:
-            headers["api-id"] = str(tr_code)
         if next_key:
             headers["next-key"] = str(next_key)
         
@@ -171,3 +186,39 @@ class RestTransport:
         elif mkt_gb == "2":
             return "KOSDAQ"
         return "unknown"
+
+    def _rank_market_tp(self, market: str) -> str:
+        mapping = {
+            "0": "000",
+            "1": "001",
+            "2": "101",
+            "000": "000",
+            "001": "001",
+            "101": "101",
+        }
+        return mapping.get(str(market or "").strip(), "000")
+
+    def _index_market_tp(self, index_code: str) -> str:
+        code = str(index_code or "").strip()
+        if code.startswith("101"):
+            return "1"
+        if code.startswith("201"):
+            return "2"
+        return "0"
+
+    def _stk_cd(self, value: Any) -> str:
+        text = str(value or "").strip()
+        if len(text) >= 7 and text[0] in {"A", "a"}:
+            return text[1:]
+        return text
+
+    def _condition_ws(self):
+        ws = getattr(self, "ws_client", None)
+        if ws is not None and hasattr(ws, "request_once"):
+            return ws
+        try:
+            from .websocket_client import KiwoomWebSocketClient
+            return KiwoomWebSocketClient(self.auth)
+        except Exception as exc:
+            self.logger.warning(f"조건검색 WebSocket 클라이언트를 만들 수 없습니다: {exc}")
+            return None

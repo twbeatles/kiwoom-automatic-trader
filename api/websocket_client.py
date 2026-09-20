@@ -8,6 +8,7 @@ import json
 import logging
 import asyncio
 import threading
+import time
 from typing import Any, Optional, Callable, Dict, List, Set, cast
 from dataclasses import dataclass
 from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal
@@ -31,6 +32,16 @@ except ImportError:
 from .auth import KiwoomAuth
 from .endpoints import LIVE_WS_URL
 from .models import StockQuote, ExecutionData, IndexTick
+
+
+def _ws_int(value: Any, default: int = 0) -> int:
+    try:
+        text = str(value or "").strip().replace(",", "")
+        if text in {"", "-", "+", "--"}:
+            return default
+        return int(float(text))
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass
@@ -73,13 +84,13 @@ class KiwoomWebSocketClient:
     # WebSocket 엔드포인트
     WS_URL = LIVE_WS_URL
     
-    # 실시간 데이터 타입
+    # 실시간 데이터 타입 (키움 공식 WebSocket type)
     REAL_TYPE = {
-        "EXECUTION": "10",      # 주식 체결
-        "HOGA": "20",           # 주식 호가
-        "ORDER_EXEC": "30",     # 주문 체결
-        "INDEX": "40",          # 지수
-        "VI": "50",             # 변동성완화장치(VI)
+        "EXECUTION": "0B",      # 주식체결
+        "HOGA": "0D",           # 주식호가잔량
+        "ORDER_EXEC": "00",     # 주문체결
+        "INDEX": "0J",          # 업종지수
+        "VI": "1h",             # VI발동/해제
     }
     
     def __init__(self, auth: KiwoomAuth, ws_url: Optional[str] = None):
@@ -204,6 +215,7 @@ class KiwoomWebSocketClient:
                     retry_count = 0
                     
                     self.logger.info("WebSocket 연결 성공")
+                    await ws.send(json.dumps({"trnm": "LOGIN", "token": token}))
                     
                     if self._on_connect:
                         self._on_connect()
@@ -460,57 +472,38 @@ class KiwoomWebSocketClient:
                     self._loop
                 )
     
+    def _build_reg_payload(self, codes: List[str], real_type: str, register: bool = True) -> Dict[str, Any]:
+        items = [str(code) for code in codes if str(code).strip()]
+        return {
+            "trnm": "REG" if register else "REMOVE",
+            "grp_no": "1",
+            "refresh": "1" if register else "0",
+            "data": [{"item": items, "type": [str(real_type)]}],
+        }
+
     async def _send_subscribe(self, codes: List[str], real_type: str):
         """구독 요청 전송"""
         if not self._ws:
             return
-        
-        message = {
-            "header": {
-                "tr_type": "1",  # 등록
-                "real_type": real_type
-            },
-            "body": {
-                "stk_cds": ",".join(codes)
-            }
-        }
-        
+        message = self._build_reg_payload(codes, real_type, register=True)
         await self._ws.send(json.dumps(message))
-        self.logger.info(f"실시간 구독 요청: {codes}")
+        self.logger.info(f"실시간 구독 요청: type={real_type} codes={codes}")
     
     async def _send_subscribe_order(self):
         """주문 체결 구독 요청"""
         if not self._ws:
             return
-        
-        message = {
-            "header": {
-                "tr_type": "1",
-                "real_type": self.REAL_TYPE["ORDER_EXEC"]
-            },
-            "body": {}
-        }
-        
+        message = self._build_reg_payload([], self.REAL_TYPE["ORDER_EXEC"], register=True)
         await self._ws.send(json.dumps(message))
         self.logger.info("주문 체결 실시간 구독 요청")
     
     async def _send_unsubscribe(self, codes: List[str], real_type: str):
         """구독 해제 요청 전송"""
-        if not self._ws or not codes:
+        if not self._ws:
             return
-        
-        message = {
-            "header": {
-                "tr_type": "2",  # 해제
-                "real_type": real_type
-            },
-            "body": {
-                "stk_cds": ",".join(codes)
-            }
-        }
-        
+        message = self._build_reg_payload(codes, real_type, register=False)
         await self._ws.send(json.dumps(message))
-        self.logger.info(f"실시간 구독 해제: {codes}")
+        self.logger.info(f"실시간 구독 해제: type={real_type} codes={codes}")
     
     async def _restore_subscriptions(self):
         """재연결 시 기존 구독 복원"""
@@ -551,28 +544,74 @@ class KiwoomWebSocketClient:
         """수신된 메시지 처리"""
         try:
             data = json.loads(message)
-            
-            header = data.get("header", {})
-            body = data.get("body", {})
-            real_type = header.get("real_type", "")
-            
-            if real_type == self.REAL_TYPE["EXECUTION"]:
-                await self._handle_execution(body)
-            elif real_type == self.REAL_TYPE["HOGA"]:
-                await self._handle_hoga(body)
-            elif real_type == self.REAL_TYPE["ORDER_EXEC"]:
-                await self._handle_order_exec(body)
-            elif real_type == self.REAL_TYPE["INDEX"]:
-                await self._handle_index(body)
-            elif real_type == self.REAL_TYPE["VI"]:
-                await self._handle_vi(body)
-            else:
-                self.logger.debug(f"알 수 없는 실시간 타입: {real_type}")
+            if not isinstance(data, dict):
+                return
+
+            trnm = str(data.get("trnm") or data.get("header", {}).get("trnm") or "")
+            if trnm == "PING":
+                if self._ws:
+                    await self._ws.send(json.dumps({"trnm": "PING"}))
+                return
+            if trnm in {"LOGIN", "REG", "REMOVE"}:
+                return
+
+            if trnm == "REAL":
+                for record in data.get("data") or []:
+                    if isinstance(record, dict):
+                        await self._dispatch_real_type(
+                            str(record.get("type") or ""),
+                            self._normalize_real_record(record),
+                        )
+                return
+
+            header = data.get("header", {}) if isinstance(data.get("header"), dict) else {}
+            body = data.get("body", {}) if isinstance(data.get("body"), dict) else data
+            real_type = str(header.get("real_type") or data.get("type") or "")
+            await self._dispatch_real_type(real_type, body if isinstance(body, dict) else {})
                 
         except json.JSONDecodeError:
             self.logger.warning(f"JSON 파싱 실패: {message[:100]}")
         except Exception as e:
             self.logger.error(f"메시지 처리 오류: {e}")
+
+    async def _dispatch_real_type(self, real_type: str, body: dict):
+        if real_type == self.REAL_TYPE["EXECUTION"]:
+            await self._handle_execution(body)
+        elif real_type == self.REAL_TYPE["HOGA"]:
+            await self._handle_hoga(body)
+        elif real_type == self.REAL_TYPE["ORDER_EXEC"]:
+            await self._handle_order_exec(body)
+        elif real_type == self.REAL_TYPE["INDEX"]:
+            await self._handle_index(body)
+        elif real_type == self.REAL_TYPE["VI"]:
+            await self._handle_vi(body)
+        elif real_type:
+            self.logger.debug(f"알 수 없는 실시간 타입: {real_type}")
+
+    def _normalize_real_record(self, record: dict) -> dict:
+        values = record.get("values") if isinstance(record.get("values"), dict) else {}
+        code = str(record.get("item") or record.get("stk_cd") or values.get("9001") or "")
+        name = str(record.get("name") or record.get("stk_nm") or values.get("302") or "")
+        body = {
+            "stk_cd": code,
+            "stk_nm": name,
+            "exec_tm": values.get("20") or values.get("exec_tm") or "",
+            "exec_prc": values.get("10") or values.get("exec_prc") or 0,
+            "exec_vol": values.get("15") or values.get("exec_vol") or 0,
+            "chg_amt": values.get("11") or values.get("chg_amt") or 0,
+            "acc_vol": values.get("13") or values.get("acc_vol") or 0,
+            "ask_prc": values.get("27") or values.get("ask_prc") or 0,
+            "bid_prc": values.get("28") or values.get("bid_prc") or 0,
+            "idx_cd": code,
+            "idx_val": values.get("10") or values.get("idx_val") or 0,
+            "chg_rt": values.get("12") or values.get("chg_rt") or 0,
+            "tm": values.get("20") or "",
+            "vi_st": values.get("9068") or values.get("vi_st") or "",
+            "vi_status": values.get("1225") or values.get("vi_status") or "",
+        }
+        body.update(record)
+        body.update(values)
+        return body
     
     def _invoke_on_main_thread(self, callback: Callable, *args):
         """Run realtime callbacks on the Qt application thread when available."""
@@ -610,15 +649,15 @@ class KiwoomWebSocketClient:
             index_value = 0.0
         
         exec_data = ExecutionData(
-            code=body.get("stk_cd", ""),
-            name=body.get("stk_nm", ""),
-            exec_time=body.get("exec_tm", ""),
-            exec_price=abs(int(body.get("exec_prc", 0))),
-            exec_volume=int(body.get("exec_vol", 0)),
-            exec_change=int(body.get("chg_amt", 0)),
-            total_volume=int(body.get("acc_vol", 0)),
-            ask_price=abs(int(body.get("ask_prc", 0))),
-            bid_price=abs(int(body.get("bid_prc", 0))),
+            code=str(body.get("stk_cd", "") or ""),
+            name=str(body.get("stk_nm", "") or ""),
+            exec_time=str(body.get("exec_tm", "") or ""),
+            exec_price=abs(_ws_int(body.get("exec_prc"))),
+            exec_volume=_ws_int(body.get("exec_vol")),
+            exec_change=_ws_int(body.get("chg_amt")),
+            total_volume=_ws_int(body.get("acc_vol")),
+            ask_price=abs(_ws_int(body.get("ask_prc"))),
+            bid_price=abs(_ws_int(body.get("bid_prc"))),
             trading_status=trading_status,
             market_event=market_event,
             index_code=index_code,
@@ -709,4 +748,74 @@ class KiwoomWebSocketClient:
         """VI 이벤트 데이터 콜백 설정"""
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_vi = callback
+
+    def request_once(self, body: Dict[str, Any], timeout: float = 15.0) -> Optional[Dict[str, Any]]:
+        """조건검색 등 1회성 WebSocket 요청 (CNSRLST/CNSRREQ)."""
+        if not isinstance(body, dict) or not body.get("trnm"):
+            return None
+        try:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(self._request_once_async(body, timeout))
+            finally:
+                loop.close()
+        except Exception as exc:
+            self.logger.warning(f"WebSocket request_once 실패 ({body.get('trnm')}): {exc}")
+            return None
+
+    async def _request_once_async(self, body: Dict[str, Any], timeout: float) -> Optional[Dict[str, Any]]:
+        token = self.auth.get_token()
+        if not token:
+            self.logger.warning("WebSocket request_once: 토큰이 없습니다.")
+            return None
+        if ws_connect is None:
+            self.logger.warning("WebSocket request_once: websockets 연결 함수가 없습니다.")
+            return None
+
+        expected = str(body.get("trnm") or "")
+        headers = {"Authorization": f"bearer {token}"}
+        deadline = time.monotonic() + max(1.0, float(timeout or 15.0))
+        async with ws_connect(
+            self.ws_url,
+            extra_headers=headers,
+            ping_interval=None,
+            ping_timeout=None,
+            close_timeout=3,
+        ) as ws:
+            await ws.send(json.dumps({"trnm": "LOGIN", "token": token}))
+            await ws.send(json.dumps(body))
+            while time.monotonic() < deadline:
+                remaining = max(0.1, deadline - time.monotonic())
+                try:
+                    raw_message = await asyncio.wait_for(ws.recv(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    break
+                message = (
+                    raw_message.decode("utf-8", errors="ignore")
+                    if isinstance(raw_message, bytes)
+                    else str(raw_message)
+                )
+                try:
+                    data = json.loads(message)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                trnm = str(data.get("trnm") or "")
+                if trnm == "PING":
+                    await ws.send(json.dumps({"trnm": "PING"}))
+                    continue
+                if trnm == "LOGIN":
+                    if data.get("return_code") not in (None, 0, "0"):
+                        self.logger.warning(
+                            f"WebSocket LOGIN 실패: {data.get('return_msg') or data.get('return_code')}"
+                        )
+                        return None
+                    continue
+                if expected and trnm == expected:
+                    return data
+                if trnm not in {"REG", "REMOVE", ""}:
+                    return data
+        self.logger.warning(f"WebSocket request_once 응답 대기 시간 초과: {expected}")
+        return None
 

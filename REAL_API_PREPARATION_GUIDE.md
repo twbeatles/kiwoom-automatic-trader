@@ -97,6 +97,25 @@ secret 저장은 keyring이 우선이다. 실전 모드에서 keyring 저장 실
 - 현재 동작: preflight에서 `supported (ka10075)`로 표시
 - 안전 장치: 파싱 실패/빈 응답 시 예외를 전가하지 않고 빈 리스트를 반환하여 안전하게 동작한다.
 
+## 6.1 공식 REST/WebSocket 계약
+
+키움 공식 예제([Kiwoom-Securities/Kiwoom-REST-API](https://github.com/Kiwoom-Securities/Kiwoom-REST-API)) 기준이다. 발명된 경로(`/api/dostk/condition`, `/ranking`, `/investor`, `/program`, `/market/status`)는 사용하지 않는다.
+
+| 기능 | TR / 프로토콜 | 경로 |
+|------|----------------|------|
+| 매수/매도/정정/취소 | kt10000~kt10003 | `/api/dostk/ordr` |
+| 미체결 | ka10075 | `/api/dostk/acnt` |
+| 예수금 | kt00001 | `/api/dostk/acnt` |
+| 당일 거래량 상위 | ka10030 | `/api/dostk/rkinfo` |
+| 등락률 상위 | ka10027 | `/api/dostk/rkinfo` |
+| 기관/외인 추이 | ka10045 | `/api/dostk/mrkcond` |
+| 프로그램 매매 추이 | ka90013 | `/api/dostk/mrkcond` |
+| 업종현재가 | ka20001 | `/api/dostk/sect` |
+| 조건검색 목록/실행 | ka10171/ka10172 | WebSocket `CNSRLST`/`CNSRREQ` |
+| 장시작시간 | REAL `0s` | REST 없음. 가격 프록시 사용 |
+
+조건검색은 API 연결(토큰) 후 WebSocket 1회 요청으로 동작한다. 토큰이 없거나 WebSocket이 실패하면 빈 목록을 반환한다.
+
 ## 7. 실주문 전 운영 순서
 
 1. `pip install -r requirements.txt`로 런타임 의존성을 설치한다.

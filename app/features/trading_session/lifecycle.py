@@ -84,7 +84,11 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             f"open_orders={'supported' if open_order_support else 'unsupported'}"
         )
         if execution_mode == "signal_only":
-            self.log("[preflight] signal-only mode: broker order APIs will not be called.")
+            self.log(
+                "[preflight] 실행 모드가 signal_only 입니다. "
+                "주문 API는 호출하지 않고 감시/감사 로그만 남깁니다. "
+                "실주문을 원하면 상세 설정 > 주문/청산 > 실행 모드를 live로 바꾸세요."
+            )
         if open_order_support:
             # ka10075 기반 미체결 주문 복구 활성화
             self.log("[preflight] open-order recovery enabled (ka10075).")
@@ -232,6 +236,7 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                     self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
                     self.ws_client.subscribe_order_execution(self._on_order_realtime)
                     self._start_index_feed(initialized_codes)
+                    self._start_vi_feed(initialized_codes)
                 self.is_running = True
                 self.schedule_started = bool(getattr(self, "_scheduled_start_requested", False))
                 self._scheduled_start_requested = False
@@ -281,6 +286,7 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                         self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
                         self.ws_client.subscribe_order_execution(self._on_order_realtime)
                         self._start_index_feed(initialized_codes)
+                        self._start_vi_feed(initialized_codes)
 
                     self.is_running = True
                     self.schedule_started = bool(getattr(self, "_scheduled_start_requested", False))

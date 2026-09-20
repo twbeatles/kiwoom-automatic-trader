@@ -1,8 +1,9 @@
 """Discovery reads (SRP: conditions/rankings/flows/VI)."""
 
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from ._rest_helpers import _safe_float, _safe_int
+from ._rest_helpers import _as_records, _pick, _payload_dict, _payload_records, _safe_float, _safe_int
 from ._rest_transport import RestTransport
 from .models import VIEvent
 
@@ -11,58 +12,70 @@ class RestDiscoveryMixin(RestTransport):
     """Discovery reads (SRP: conditions/rankings/flows/VI)."""
 
     def get_condition_list(self) -> List[Dict[str, Any]]:
-        """
-        조건검색식 목록 조회
-        
-        Returns:
-            [{"index": 0, "name": "조건식명"}, ...]
-        """
-        tr_code = self.TR_CODES["CONDITION_LIST"]
-        result = self._request("POST", "/api/dostk/condition/list", tr_code=tr_code, data={})
-        
-        conditions = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for item in output_list:
+        """조건검색식 목록 조회 (WebSocket ka10171 / CNSRLST)."""
+        ws = self._condition_ws()
+        if ws is None:
+            return []
+        result = ws.request_once({"trnm": "CNSRLST"})
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 목록 조회 실패: WebSocket CNSRLST 응답이 없습니다.")
+            return []
+
+        conditions: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
                 conditions.append({
-                    "index": _safe_int(item.get("cond_idx", 0)),
-                    "name": item.get("cond_nm", "")
+                    "index": _safe_int(_pick(item, "seq", "index", "cond_idx")),
+                    "name": str(_pick(item, "name", "cond_nm", default="") or ""),
                 })
-        
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                conditions.append({
+                    "index": _safe_int(item[0]),
+                    "name": str(item[1] or ""),
+                })
         return conditions
 
     def search_by_condition(self, condition_index: int, condition_name: str = "") -> List[Dict[str, Any]]:
-        """
-        조건검색 실행
-        
-        Args:
-            condition_index: 조건식 인덱스
-            condition_name: 조건식 이름 (옵션)
-            
-        Returns:
-            [{"code": "종목코드", "name": "종목명"}, ...]
-        """
-        tr_code = self.TR_CODES["CONDITION_SEARCH"]
-        data = {
-            "cond_idx": condition_index,
-            "cond_nm": condition_name
-        }
-        
-        result = self._request("POST", "/api/dostk/condition/search", tr_code=tr_code, data=data)
-        
-        stocks = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for item in output_list:
+        """조건검색 실행 (WebSocket ka10172 / CNSRREQ)."""
+        del condition_name  # 공식 CNSRREQ는 seq만 사용
+        ws = self._condition_ws()
+        if ws is None:
+            return []
+        result = ws.request_once({
+            "trnm": "CNSRREQ",
+            "seq": str(condition_index),
+            "search_type": "0",
+            "stex_tp": "K",
+        })
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 실행 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            return []
+
+        stocks: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
                 stocks.append({
-                    "code": item.get("stk_cd", ""),
-                    "name": item.get("stk_nm", ""),
-                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
-                    "change_rate": _safe_float(item.get("chg_rt", 0)),
-                    "volume": _safe_int(item.get("vol", 0))
+                    "code": self._stk_cd(_pick(item, "9001", "stk_cd", "code")),
+                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
+                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
+                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
+                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
                 })
-        
-        return stocks
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                stocks.append({
+                    "code": self._stk_cd(item[0]),
+                    "name": str(item[1] or ""),
+                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
+                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
+                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
+                })
+        return [row for row in stocks if row.get("code")]
 
     def get_volume_ranking(self, market: str = "0", count: int = 30) -> List[Dict[str, Any]]:
         """
@@ -77,27 +90,29 @@ class RestDiscoveryMixin(RestTransport):
         """
         tr_code = self.TR_CODES["RANK_VOLUME"]
         data = {
-            "tr_cd": tr_code,
-            "mkt_tp": market,
-            "req_cnt": min(count, 50)
+            "mrkt_tp": self._rank_market_tp(market),
+            "sort_tp": "1",
+            "mang_stk_incls": "0",
+            "crd_tp": "0",
+            "trde_qty_tp": "0",
+            "pric_tp": "0",
+            "trde_prica_tp": "0",
+            "mrkt_open_tp": "0",
+            "stex_tp": "3",
         }
-        
-        result = self._request("POST", "/api/dostk/ranking/volume", tr_code=tr_code, data=data)
-        
+        result = self._request("POST", self.PATHS["rkinfo"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "tdy_trde_qty_upper", "output")
         rankings = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for i, item in enumerate(output_list):
-                rankings.append({
-                    "rank": i + 1,
-                    "code": item.get("stk_cd", ""),
-                    "name": item.get("stk_nm", ""),
-                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
-                    "change_rate": _safe_float(item.get("chg_rt", 0)),
-                    "volume": _safe_int(item.get("vol", 0)),
-                    "volume_rate": _safe_float(item.get("vol_rt", 0))
-                })
-        
+        for i, item in enumerate(records[: max(1, min(int(count or 30), 100))]):
+            rankings.append({
+                "rank": i + 1,
+                "code": self._stk_cd(_pick(item, "stk_cd")),
+                "name": str(_pick(item, "stk_nm", default="") or ""),
+                "current_price": _safe_int(_pick(item, "cur_prc"), absolute=True),
+                "change_rate": _safe_float(_pick(item, "flu_rt", "chg_rt")),
+                "volume": _safe_int(_pick(item, "trde_qty", "vol")),
+                "volume_rate": _safe_float(_pick(item, "trde_tern_rt", "vol_rt")),
+            })
         return rankings
 
     def get_fluctuation_ranking(self, market: str = "0", sort_type: str = "1", count: int = 30) -> List[Dict[str, Any]]:
@@ -113,29 +128,31 @@ class RestDiscoveryMixin(RestTransport):
             등락률 순위 리스트
         """
         tr_code = self.TR_CODES["RANK_FLUCTUATION"]
+        official_sort = {"1": "1", "2": "3", "3": "3", "4": "4"}.get(str(sort_type), "1")
         data = {
-            "tr_cd": tr_code,
-            "mkt_tp": market,
-            "sort_tp": sort_type,
-            "req_cnt": min(count, 50)
+            "mrkt_tp": self._rank_market_tp(market),
+            "sort_tp": official_sort,
+            "trde_qty_cnd": "0000",
+            "stk_cnd": "0",
+            "crd_cnd": "0",
+            "updown_incls": "1",
+            "pric_cnd": "0",
+            "trde_prica_cnd": "0",
+            "stex_tp": "3",
         }
-        
-        result = self._request("POST", "/api/dostk/ranking/fluctuation", tr_code=tr_code, data=data)
-        
+        result = self._request("POST", self.PATHS["rkinfo"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "pred_pre_flu_rt_upper", "output")
         rankings = []
-        if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
-            for i, item in enumerate(output_list):
-                rankings.append({
-                    "rank": i + 1,
-                    "code": item.get("stk_cd", ""),
-                    "name": item.get("stk_nm", ""),
-                    "current_price": _safe_int(item.get("cur_prc", 0), absolute=True),
-                    "change": _safe_int(item.get("chg_amt", 0)),
-                    "change_rate": _safe_float(item.get("chg_rt", 0)),
-                    "volume": _safe_int(item.get("vol", 0))
-                })
-        
+        for i, item in enumerate(records[: max(1, min(int(count or 30), 100))]):
+            rankings.append({
+                "rank": i + 1,
+                "code": self._stk_cd(_pick(item, "stk_cd")),
+                "name": str(_pick(item, "stk_nm", default="") or ""),
+                "current_price": _safe_int(_pick(item, "cur_prc"), absolute=True),
+                "change": _safe_int(_pick(item, "pred_pre", "chg_amt")),
+                "change_rate": _safe_float(_pick(item, "flu_rt", "chg_rt")),
+                "volume": _safe_int(_pick(item, "now_trde_qty", "trde_qty", "vol")),
+            })
         return rankings
 
     def get_investor_trading(self, code: str) -> Dict[str, Any]:
@@ -149,29 +166,35 @@ class RestDiscoveryMixin(RestTransport):
             투자자별 순매수량/금액
         """
         tr_code = self.TR_CODES["INVESTOR_TRADING"]
+        end_dt = datetime.now().strftime("%Y%m%d")
+        strt_dt = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
         data = {
-            "tr_cd": tr_code,
-            "stk_cd": code
+            "stk_cd": code,
+            "strt_dt": strt_dt,
+            "end_dt": end_dt,
+            "orgn_prsm_unp_tp": "1",
+            "for_prsm_unp_tp": "1",
         }
-        
-        result = self._request("POST", "/api/dostk/investor", tr_code=tr_code, data=data)
-        
-        if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            return {
-                "code": code,
-                "individual_buy": _safe_int(output.get("indv_buy", 0)),
-                "individual_sell": _safe_int(output.get("indv_sell", 0)),
-                "foreign_buy": _safe_int(output.get("frgn_buy", 0)),
-                "foreign_sell": _safe_int(output.get("frgn_sell", 0)),
-                "institution_buy": _safe_int(output.get("inst_buy", 0)),
-                "institution_sell": _safe_int(output.get("inst_sell", 0)),
-                "individual_net": _safe_int(output.get("indv_net", 0)),
-                "foreign_net": _safe_int(output.get("frgn_net", 0)),
-                "institution_net": _safe_int(output.get("inst_net", 0))
-            }
-        
-        return {}
+        result = self._request("POST", self.PATHS["mrkcond"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "stk_orgn_trde_trnsn", "output")
+        if not records:
+            return {}
+        row = records[0]
+        institution_net = _safe_int(_pick(row, "orgn_daly_nettrde_qty", "inst_net"))
+        foreign_net = _safe_int(_pick(row, "for_daly_nettrde_qty", "frgn_net"))
+        individual_net = _safe_int(_pick(row, "indv_net"))
+        return {
+            "code": code,
+            "individual_buy": _safe_int(_pick(row, "indv_buy")),
+            "individual_sell": _safe_int(_pick(row, "indv_sell")),
+            "foreign_buy": _safe_int(_pick(row, "frgn_buy")),
+            "foreign_sell": _safe_int(_pick(row, "frgn_sell")),
+            "institution_buy": _safe_int(_pick(row, "inst_buy")),
+            "institution_sell": _safe_int(_pick(row, "inst_sell")),
+            "individual_net": individual_net,
+            "foreign_net": foreign_net,
+            "institution_net": institution_net,
+        }
 
     def get_program_trading(self, code: str) -> Dict[str, Any]:
         """
@@ -185,30 +208,32 @@ class RestDiscoveryMixin(RestTransport):
         """
         tr_code = self.TR_CODES["PROGRAM_TRADING"]
         data = {
-            "tr_cd": tr_code,
-            "stk_cd": code
+            "stk_cd": code,
+            "amt_qty_tp": "2",
+            "date": "",
         }
-        
-        result = self._request("POST", "/api/dostk/program", tr_code=tr_code, data=data)
-        
-        if result and result.get("return_code") == 0:
-            output = result.get("output", {})
-            return {
-                "code": code,
-                "arb_buy": _safe_int(output.get("arb_buy", 0)),
-                "arb_sell": _safe_int(output.get("arb_sell", 0)),
-                "nonarb_buy": _safe_int(output.get("nonarb_buy", 0)),
-                "nonarb_sell": _safe_int(output.get("nonarb_sell", 0)),
-                "total_buy": _safe_int(output.get("tot_buy", 0)),
-                "total_sell": _safe_int(output.get("tot_sell", 0)),
-                "net": _safe_int(output.get("net", 0))
-            }
-        
-        return {}
+        result = self._request("POST", self.PATHS["mrkcond"], tr_code=tr_code, data=data)
+        records = _payload_records(result, "stk_daly_prm_trde_trnsn", "output")
+        if not records:
+            return {}
+        row = records[0]
+        buy_qty = _safe_int(_pick(row, "prm_buy_qty", "tot_buy"))
+        sell_qty = _safe_int(_pick(row, "prm_sell_qty", "tot_sell"))
+        net = _safe_int(_pick(row, "prm_netprps_qty", "net"), default=buy_qty - sell_qty)
+        return {
+            "code": code,
+            "arb_buy": _safe_int(_pick(row, "arb_buy")),
+            "arb_sell": _safe_int(_pick(row, "arb_sell")),
+            "nonarb_buy": _safe_int(_pick(row, "nonarb_buy")),
+            "nonarb_sell": _safe_int(_pick(row, "nonarb_sell")),
+            "total_buy": buy_qty,
+            "total_sell": sell_qty,
+            "net": net,
+        }
 
     def get_vi_status(self, market: str = "0") -> List[VIEvent]:
         """
-        변동성완화장치(VI) 발동 현황 조회 (ka20009)
+        변동성완화장치(VI) 발동 현황 조회 (ka10054)
         
         Args:
             market: "0"=전체, "1"=코스피, "2"=코스닥
@@ -217,26 +242,37 @@ class RestDiscoveryMixin(RestTransport):
             VIEvent 리스트
         """
         tr_code = self.TR_CODES["VI_STATUS"]
+        market_map = {"0": "000", "1": "001", "2": "101"}
         data = {
-            "tr_cd": tr_code,
-            "mkt_tp": market,
+            "mrkt_tp": market_map.get(str(market), "000"),
+            "bf_mkrt_tp": "0",
+            "motn_tp": "0",
+            "skip_stk": "000000000",
+            "trde_qty_tp": "0",
+            "min_trde_qty": "0",
+            "max_trde_qty": "0",
+            "trde_prica_tp": "0",
+            "min_trde_prica": "0",
+            "max_trde_prica": "0",
+            "motn_drc": "0",
+            "stex_tp": "3",
+            "stk_cd": "",
         }
-        
-        result = self._request("POST", "/api/dostk/vi/status", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["stkinfo"], tr_code=tr_code, data=data)
         
         events: List[VIEvent] = []
         if result and result.get("return_code") == 0:
-            output_list = result.get("output", [])
+            output_list = _payload_records(result, "motn_stk", "output")
             for item in output_list:
                 events.append(VIEvent(
                     code=str(item.get("stk_cd") or "").strip(),
                     name=str(item.get("stk_nm") or "").strip(),
-                    vi_type=str(item.get("vi_tp") or "").strip(),
+                    vi_type=str(item.get("viaplc_tp") or item.get("vi_tp") or "").strip(),
                     vi_status=str(item.get("vi_st") or "발동").strip(),
-                    trigger_time=str(item.get("trg_tm") or "").strip(),
-                    release_time=str(item.get("rls_tm") or "").strip(),
-                    trigger_price=_safe_int(item.get("trg_prc", 0), absolute=True),
-                    base_price=_safe_int(item.get("base_prc", 0), absolute=True),
-                    deviance_rate=_safe_float(item.get("dev_rt", 0.0)),
+                    trigger_time=str(item.get("trde_cntr_proc_time") or item.get("trg_tm") or "").strip(),
+                    release_time=str(item.get("virelis_time") or item.get("rls_tm") or "").strip(),
+                    trigger_price=_safe_int(_pick(item, "motn_pric", "trg_prc"), absolute=True),
+                    base_price=_safe_int(_pick(item, "static_stdpc", "dynm_stdpc", "base_prc"), absolute=True),
+                    deviance_rate=_safe_float(_pick(item, "static_dispty_rt", "dynm_dispty_rt", "dev_rt")),
                 ))
         return events

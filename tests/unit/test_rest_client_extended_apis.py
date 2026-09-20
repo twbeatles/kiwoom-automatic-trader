@@ -53,7 +53,7 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
 
         # 헤더와 TR 코드 검증
         headers = mock_post.call_args[1]["headers"]
-        self.assertEqual(headers.get("api-id"), "ka30002")
+        self.assertEqual(headers.get("api-id"), "kt00001")
 
     @patch("requests.Session.post")
     def test_get_executed_orders_parses_list(self, mock_post):
@@ -151,7 +151,7 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
         self.assertEqual(t.cum_volume, 500000)
 
         headers = mock_post.call_args[1]["headers"]
-        self.assertEqual(headers.get("api-id"), "ka10007")
+        self.assertEqual(headers.get("api-id"), "ka10079")
 
     @patch("requests.Session.post")
     def test_get_vi_status_parses_events(self, mock_post):
@@ -189,7 +189,7 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
         self.assertEqual(ev.deviance_rate, 7.14)
 
         headers = mock_post.call_args[1]["headers"]
-        self.assertEqual(headers.get("api-id"), "ka20009")
+        self.assertEqual(headers.get("api-id"), "ka10054")
 
     @patch("api.rest_client.KiwoomRESTClient.get_index_quote")
     def test_get_market_indexes_returns_major_quotes(self, mock_quote):

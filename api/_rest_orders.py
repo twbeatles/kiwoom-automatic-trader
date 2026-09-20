@@ -1,11 +1,27 @@
 """Order writes (SRP: send/modify/cancel + market/limit conveniences)."""
 
+from typing import Any, Dict, List, Optional
+
+from ._rest_helpers import (
+    _order_no_from_result, _parse_order_side,
+    _pick, _payload_dict, _safe_int, _trde_tp,
+)
 from ._rest_transport import RestTransport
 from .models import OrderResult, OrderType, PriceType
 
 
 class RestOrderMixin(RestTransport):
     """Order writes (SRP: send/modify/cancel + market/limit conveniences)."""
+
+    @staticmethod
+    def _parse_order_side(item: Dict[str, Any]) -> str:
+        """Backward-compat alias (canonical: `_rest_helpers._parse_order_side`)."""
+        return _parse_order_side(item)
+
+    @staticmethod
+    def _order_no_from_result(result: Optional[Dict[str, Any]]) -> str:
+        """Backward-compat alias (canonical: `_rest_helpers._order_no_from_result`)."""
+        return _order_no_from_result(result)
 
     def send_order(self, 
                    account_no: str,
@@ -29,26 +45,25 @@ class RestOrderMixin(RestTransport):
             OrderResult 객체
         """
         tr_code = self.TR_CODES["ORDER_BUY"] if order_type == OrderType.BUY else self.TR_CODES["ORDER_SELL"]
+        trde_tp = _trde_tp(price_type)
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
             "stk_cd": code,
-            "ord_tp": order_type.value,
-            "ord_qty": quantity,
-            "ord_prc": price if price_type == PriceType.LIMIT else 0,
-            "prc_tp": price_type.value
+            "ord_qty": str(int(quantity)),
+            "trde_tp": trde_tp,
+            "ord_uv": "" if trde_tp == "3" else str(int(price or 0)),
+            "cond_uv": "",
         }
         
-        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["ordr"], tr_code=tr_code, data=data)
         
         if result:
             return_code = result.get("return_code", -1)
             
             if return_code == 0:
-                output = result.get("output", {})
                 return OrderResult(
                     success=True,
-                    order_no=output.get("ord_no", ""),
+                    order_no=_order_no_from_result(result),
                     code=code,
                     order_type=order_type.value,
                     quantity=quantity,
@@ -121,14 +136,13 @@ class RestOrderMixin(RestTransport):
         """주문 취소 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)"""
         tr_code = self.TR_CODES["ORDER_CANCEL"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
-            "org_ord_no": order_no,
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
+            "orig_ord_no": str(order_no),
             "stk_cd": code,
-            "ord_qty": quantity
+            "cncl_qty": str(int(quantity)),
         }
         
-        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["ordr"], tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             return OrderResult(
@@ -149,16 +163,15 @@ class RestOrderMixin(RestTransport):
         """주문 정정 (키움 공식 주문 엔드포인트 POST /api/dostk/ordr)"""
         tr_code = self.TR_CODES["ORDER_MODIFY"]
         data = {
-            "tr_cd": tr_code,
-            "acnt_no": account_no,
-            "org_ord_no": order_no,
+            "dmst_stex_tp": self.DEFAULT_EXCHANGE,
+            "orig_ord_no": str(order_no),
             "stk_cd": code,
-            "ord_qty": quantity,
-            "ord_prc": price,
-            "prc_tp": price_type.value
+            "mdfy_qty": str(int(quantity)),
+            "mdfy_uv": str(int(price or 0)),
+            "mdfy_cond_uv": "",
         }
         
-        result = self._request("POST", "/api/dostk/ordr", tr_code=tr_code, data=data)
+        result = self._request("POST", self.PATHS["ordr"], tr_code=tr_code, data=data)
         
         if result and result.get("return_code") == 0:
             return OrderResult(

@@ -316,12 +316,12 @@ pyinstaller --clean KiwoomTrader.spec
 ## 2026-09-20 God-파일 SRP 분할 동기화 메모
 
 1. 분할 대상과 결과
-- `api/rest_client.py`(1140줄·36메서드) → `_rest_helpers/_rest_transport/_rest_market/_rest_account/_rest_orders/_rest_discovery` + facade. 도메인 믹스인은 `RestTransport`를 상속해 `self._request`/`TR_CODES` 의존을 명시합니다.
+- `api/rest_client.py`(원격 공식계약 개편본 1328줄·42메서드·7헬퍼 기준) → `_rest_helpers/_rest_transport/_rest_market/_rest_account/_rest_orders/_rest_discovery` + facade. 도메인 믹스인은 `RestTransport`를 상속해 `self._request`/`TR_CODES`/`PATHS` 의존을 명시합니다. 순수 파싱 staticmethod 2종(`_parse_order_side`, `_order_no_from_result`)은 `_rest_helpers`로 이동하고 facade에 별칭을 유지합니다.
 - `backtest/engine.py`(727줄·25메서드) → `models/_base/_metrics/_policy/_guards/_intel_events` + `run()` 오케스트레이터 facade. `Base <- Metrics <- Policy <- Guards <- Intel` 선형 체인으로 pyright 0 errors를 유지합니다.
 - `app/mixins/dialogs_profiles.py`(792줄·17메서드) → `app/features/dialogs/` 4종(`manual_orders/favorites/preset_profiles/settings_snapshot`) + composite facade. 기존 테스트의 patch seam(`app.mixins.dialogs_profiles.QMessageBox/ManualOrderDialog`)을 보존했습니다.
 
 2. 누락 방지
-- 메서드 집합 동등성(old vs HEAD): REST 35/35(`__init__` 제외), 백테스트 25/25, 다이얼로그 17/17 — MISSING/EXTRA 없음.
+- 메서드 집합 동등성(분할 후 vs 원격 monolith): REST 42/42(클래스 attr `BASE_URL/TR_CODES/PATHS/DEFAULT_EXCHANGE` 포함), 백테스트 25/25, 다이얼로그 17/17 — MISSING/EXTRA 없음.
 - 구/신 백테스트 엔진 동일 픽스처 실행 결과 완전 동일(10 trades).
 - AST 추출 시 `@property/@staticmethod/@classmethod/@dataclass` 데코레이터가 떨어지지 않도록 검증했습니다.
 
@@ -332,7 +332,8 @@ python tools\refactor_verify.py
 python -m pyright .
 python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
 ```
-- `tests/unit` 191개 통과, refactor verification 통과, `pyright .` 0 errors, 컴파일 통과.
+- `tests/unit` 217개 통과(원격 신규 공식계약 테스트 포함), refactor verification 통과, 컴파일 통과.
+- `pyright`는 분할 모듈 0 errors. 단, 원격 개편본의 `api/websocket_client.py`에 기존 타입 오류 27건이 있어 `pyright .` 전체 0 errors는 아님(원격 원본과 동일, 본 작업 범위 외 — 별도 보고).
 - `KiwoomTrader.spec` hiddenimports에 `api._rest_*`, `app.features.dialogs.*`를 추가했습니다(백테스트는 기존 `collect_submodules`로 포함).
 
 ---
@@ -420,6 +421,32 @@ python tools\refactor_verify.py
 - 수동 주문 `_validate_manual_order_request` 통과 시 `order["validated"]` 플래그 부여 + 실행 직전 방어막(choke point 회귀 차단).
 - `TelegramNotifier` 의 `parse_mode='Markdown'` 제거(특수문자 포함 메시지 누락 방지).
 - 키움 REST API 요청 헤더 `api-id` 주입 및 주문 엔드포인트 `/api/dostk/ordr`와 TR 코드(`kt10000`~`kt10003`, `ka10075`) 표준화.
+
+---
+
+## 2026-09-14 키움 공식 REST/WebSocket 계약 정렬
+
+공식 카탈로그는 [Kiwoom-Securities/Kiwoom-REST-API](https://github.com/Kiwoom-Securities/Kiwoom-REST-API) 예제를 기준으로 한다.
+
+1. 주문/계좌
+- 주문 body: `dmst_stex_tp`, `stk_cd`, `ord_qty`, `trde_tp`(0 지정가 / 3 시장가), `ord_uv`. `tr_cd`/`acnt_no`/`ord_tp`는 사용하지 않는다.
+- 취소 `kt10003`: `orig_ord_no`, `cncl_qty`. 정정 `kt10002`: `mdfy_qty`, `mdfy_uv`.
+- 미체결 `ka10075` `/api/dostk/acnt` (`all_stk_tp`/`trde_tp`/`stex_tp`, 리스트 키 `oso`).
+- 예수금 `kt00001`, 체결 `ka10076`, 틱차트 `ka10079`, VI `ka10054`.
+
+2. 순위/수급/업종
+- 당일거래량상위 `ka10030` `/api/dostk/rkinfo` (`tdy_trde_qty_upper`).
+- 전일대비등락률상위 `ka10027` `/api/dostk/rkinfo` (`pred_pre_flu_rt_upper`). UI 하락 정렬 `2`는 공식 `sort_tp=3`(하락률)로 매핑한다.
+- 종목별기관매매추이 `ka10045` `/api/dostk/mrkcond` (`stk_orgn_trde_trnsn`).
+- 종목일별프로그램매매추이 `ka90013` `/api/dostk/mrkcond` (`stk_daly_prm_trde_trnsn`).
+- 업종현재가 `ka20001` `/api/dostk/sect` (`mrkt_tp`, `inds_cd`).
+
+3. 조건검색/장상태
+- 조건검색은 REST가 아니라 WebSocket이다. 목록 `ka10171` `trnm=CNSRLST`, 검색 `ka10172` `trnm=CNSRREQ`.
+- 장시작시간 REST TR은 없다. `get_market_status()`는 빈 dict를 반환하고 가격/스프레드 프록시로 동작한다. 실시간은 WebSocket `0s`다.
+
+4. 검증
+- `python -m pytest tests\unit --override-ini addopts= --tb=short` : 217 passed (2026-09-14)
 
 ---
 

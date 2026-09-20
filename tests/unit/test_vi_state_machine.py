@@ -1,5 +1,6 @@
 ﻿import datetime
 import unittest
+from unittest.mock import MagicMock
 
 from api.models import ExecutionData
 from app.mixins.trading_session import TradingSessionMixin
@@ -44,6 +45,30 @@ class TestVIStateMachine(unittest.TestCase):
         )
         self.assertEqual(info["market_state"], "reopen_cooldown")
         self.assertIsNotNone(info.get("market_state_until"))
+
+    def test_on_vi_event_sets_vi_and_release_to_cooldown(self):
+        trader = _Harness()
+        trader.universe = {
+            "005930": {"current": 10000, "market_state": "normal", "market_state_until": None}
+        }
+
+        trader._on_vi_event({"stk_cd": "005930", "vi_st": "발동"})
+        self.assertEqual(trader.universe["005930"]["market_state"], "vi")
+
+        trader._on_vi_event({"stk_cd": "005930", "vi_st": "해제"})
+        self.assertEqual(trader.universe["005930"]["market_state"], "reopen_cooldown")
+
+    def test_start_vi_feed_subscribes_universe_codes(self):
+        trader = _Harness()
+        ws = MagicMock()
+        trader.ws_client = ws
+
+        trader._start_vi_feed(["005930", "000660"])
+
+        ws.subscribe_vi_events.assert_called_once()
+        args, _kwargs = ws.subscribe_vi_events.call_args
+        self.assertEqual(args[0], ["005930", "000660"])
+        self.assertEqual(args[1], trader._on_vi_event)
 
 
 if __name__ == "__main__":

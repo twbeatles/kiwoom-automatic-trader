@@ -1,6 +1,6 @@
 ﻿import unittest
 from typing import Literal, overload
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from app.mixins.trading_session import BackgroundUniversePayload, TradingSessionMixin
 from config import TradingConfig
@@ -67,6 +67,12 @@ class _Harness(TradingSessionMixin):
         self.snapshot_called_with = list(codes)
         return True, ""
 
+    def _on_realtime(self, data):
+        return None
+
+    def _on_order_realtime(self, data):
+        return None
+
 
 class TestTradingSessionStateMachine(unittest.TestCase):
     @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
@@ -110,6 +116,28 @@ class TestTradingSessionStateMachine(unittest.TestCase):
         self.assertTrue(warning.called)
         self.assertFalse(trader.is_running)
 
+    @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
+    def test_preflight_explains_signal_only_does_not_send_orders(self, _warning, _critical):
+        trader = _Harness("005930", ["005930"])
+        trader.config.execution_mode = "signal_only"
 
-if __name__ == "__main__":
-    unittest.main()
+        trader.start_trading()
+
+        self.assertTrue(any("signal_only" in msg and "주문" in msg for msg in trader.logs))
+
+    @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
+    @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
+    def test_start_trading_subscribes_vi_events(self, _warning, _critical):
+        trader = _Harness("005930", ["005930"])
+        ws = MagicMock()
+        trader.ws_client = ws
+
+        trader.start_trading()
+
+        ws.connect.assert_called()
+        ws.subscribe_execution.assert_called()
+        ws.subscribe_order_execution.assert_called()
+        ws.subscribe_vi_events.assert_called()
+        vi_codes = ws.subscribe_vi_events.call_args[0][0]
+        self.assertEqual(vi_codes, ["005930"])

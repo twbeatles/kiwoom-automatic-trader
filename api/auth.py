@@ -49,6 +49,7 @@ class KiwoomAuth:
         self._access_token: Optional[str] = None
         self._token_type: str = "bearer"
         self._expires_at: float = 0  # Unix timestamp
+        self._last_error: str = ""
 
         # 토큰 갱신 동시성 보호 (WebSocket/REST Worker/UI 스레드 동시 호출 대응)
         self._token_lock = threading.Lock()
@@ -104,10 +105,32 @@ class KiwoomAuth:
                 return self._access_token
             return self._request_new_token()
     
+    def _format_token_failure_message(self, error_msg: str) -> str:
+        """토큰 실패 메시지를 요청 모드와 함께 사용자 안내로 변환합니다."""
+        detail = str(error_msg or "").strip()
+        mode = str(getattr(self, "mode", "live") or "live")
+        base_url = str(getattr(self, "base_url", "") or "")
+        if "8030" in detail or "투자구분" in detail:
+            current_label = "모의투자" if mode == "mock" else "실전"
+            opposite_label = "실전" if mode == "mock" else "모의투자"
+            return (
+                f"토큰 발급 실패: {detail} "
+                f"현재 요청은 {current_label} 엔드포인트({base_url})입니다. "
+                f"{opposite_label}용 AppKey를 넣었거나 모의투자 체크 상태가 키 발급 환경과 다릅니다. "
+                f"모의투자 AppKey는 모의투자 체크, 실전 AppKey는 체크 해제 후 다시 연결하세요."
+            )
+        if not detail:
+            return "토큰 발급 실패 - App Key/Secret Key를 확인해주세요."
+        return f"토큰 발급 실패: {detail}"
+
+    def _fail_token_request(self, error_msg: str) -> None:
+        self._last_error = self._format_token_failure_message(error_msg)
+        self.logger.error(self._last_error)
+
     def _request_new_token(self) -> Optional[str]:
         """새 엑세스 토큰을 요청합니다."""
         if not self.app_key or not self.secret_key:
-            self.logger.error("App Key 또는 Secret Key가 설정되지 않았습니다.")
+            self._fail_token_request("App Key 또는 Secret Key가 설정되지 않았습니다.")
             return None
         
         try:
@@ -125,10 +148,15 @@ class KiwoomAuth:
             
             self.logger.info(f"토큰 발급 요청 중... (mode={self.mode}, endpoint={self.base_url})")
             response = requests.post(url, json=payload, headers=headers, timeout=10)
-            
+            data: Dict[str, Any] = {}
+            try:
+                parsed = response.json()
+                if isinstance(parsed, dict):
+                    data = parsed
+            except ValueError:
+                data = {}
+
             if response.status_code == 200:
-                data = response.json()
-                
                 # 응답 형식:
                 # {
                 #   "token": "...",
@@ -141,6 +169,7 @@ class KiwoomAuth:
                 if data.get("return_code") == 0:
                     self._access_token = data.get("token")
                     self._token_type = data.get("token_type", "bearer")
+                    self._last_error = ""
                     
                     # 만료 시간 파싱 (YYYYMMDDHHMMSS 형식)
                     expires_dt = data.get("expires_dt", "")
@@ -158,18 +187,18 @@ class KiwoomAuth:
                     self.logger.info(f"토큰 발급 성공 (만료: {expires_dt})")
                     return self._access_token
                 else:
-                    error_msg = data.get("return_msg", "알 수 없는 오류")
-                    self.logger.error(f"토큰 발급 실패: {error_msg}")
+                    self._fail_token_request(str(data.get("return_msg", "알 수 없는 오류")))
                     return None
             else:
-                self.logger.error(f"토큰 요청 HTTP 오류: {response.status_code}")
+                http_detail = str(data.get("return_msg") or f"HTTP {response.status_code}")
+                self._fail_token_request(http_detail)
                 return None
                 
         except requests.RequestException as e:
-            self.logger.error(f"토큰 요청 네트워크 오류: {e}")
+            self._fail_token_request(f"네트워크 오류: {e}")
             return None
         except Exception as e:
-            self.logger.error(f"토큰 요청 예외: {e}")
+            self._fail_token_request(f"예외: {e}")
             return None
     
     def get_auth_header(self) -> Dict[str, str]:
@@ -281,9 +310,8 @@ class KiwoomAuth:
                 "message": "토큰 발급 성공",
                 "token_expires": expires_str
             }
-        else:
-            return {
-                "success": False,
-                "message": "토큰 발급 실패 - App Key/Secret Key를 확인해주세요.",
-                "token_expires": None
-            }
+        return {
+            "success": False,
+            "message": self._last_error or "토큰 발급 실패 - App Key/Secret Key를 확인해주세요.",
+            "token_expires": None
+        }
