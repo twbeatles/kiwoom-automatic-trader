@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-06-10
+> **최종 업데이트**: 2026-09-20
 
 ---
 
@@ -14,7 +14,8 @@
 ├── app/
 │   ├── core/
 │   │   └── window.py          # KiwoomProTrader canonical 조립 클래스
-│   ├── features/              # UI/세션/실행/주문동기화/저장/인텔/진단 feature 패키지
+│   ├── features/              # UI/세션/실행/주문동기화/저장/인텔/진단/다이얼로그 feature 패키지
+│   │   └── dialogs/           # 수동주문/즐겨찾기/프리셋·프로필·예약/설정스냅샷 믹스인
 │   ├── configuration/         # Config/TradingConfig canonical 구현
 │   ├── main_window.py         # app.core.window 호환 re-export
 │   ├── mixins/                # 기존 import 경로 shim + 소형 mixin
@@ -26,9 +27,23 @@
 ├── api/
 │   ├── auth.py
 │   ├── endpoints.py
-│   ├── rest_client.py
+│   ├── rest_client.py         # KiwoomRESTClient facade (도메인 믹스인 조합)
+│   ├── _rest_transport.py     # 세션/재시도/속도제한/_request/TR 코드
+│   ├── _rest_helpers.py       # 응답 숫자 안전 변환
+│   ├── _rest_market.py        # 시세/차트/호가/지수 조회
+│   ├── _rest_account.py       # 계좌/보유/예수금/미체결·체결 조회
+│   ├── _rest_orders.py        # 주문 전송/정정/취소
+│   ├── _rest_discovery.py     # 조건검색/순위/수급/VI 조회
 │   ├── websocket_client.py
 │   └── models.py
+├── backtest/
+│   ├── engine.py              # EventDrivenBacktestEngine facade (run 오케스트레이션)
+│   ├── models.py              # BacktestBar/Config/Result 등 상태 스키마
+│   ├── _base.py               # 설정 홀더 (mixin chain root)
+│   ├── _intel_events.py       # 인텔리전스 sidecar 로드/병합/합성
+│   ├── _policy.py             # 정책 랭크/배분/비용/포지션 방어
+│   ├── _guards.py             # 진입 가드 (충격/VI/레짐/유동성/슬리피지/주문건전성)
+│   └── _metrics.py            # MTM/성과 지표
 ├── dialogs/
 │   ├── manual_order.py
 │   ├── preset.py
@@ -65,6 +80,9 @@
 - `Config`/`TradingConfig` 실제 구현은 `app/configuration/base.py`이며, 루트 `config.py`는 호환 facade입니다.
 - `StrategyManager`의 실제 구현은 `strategies/manager.py`이고 세부 책임은 `strategies/manager_mixins/`에 분산되어 있습니다. 루트 `strategy_manager.py`는 호환 facade입니다.
 - 다이얼로그 실제 구현은 `dialogs/`에 있고, `ui_dialogs.py`는 기존 import 호환용입니다.
+- `DialogsProfilesMixin`은 `app/features/dialogs/` 4종 믹스인 composite이며, `app/mixins/dialogs_profiles.py`는 import·patch seam 호환 facade입니다.
+- `KiwoomRESTClient`는 `api/_rest_*` 도메인 믹스인 조합 facade이며, 공개 import 경로(`api.rest_client`)가 그대로 유지됩니다.
+- `EventDrivenBacktestEngine`은 `backtest/models·_base·_intel_events·_policy·_guards·_metrics` 조합 facade이며, `backtest.engine` import 경로가 그대로 유지됩니다.
 - 정적 분석 시 믹스인은 `app/mixins/_typing.py`의 `TraderMixinBase`를 공통 베이스로 사용합니다.
 - 백테스트 UI 실행 adapter는 `app/support/backtest_runner.py`입니다.
 
@@ -97,7 +115,8 @@
 | `app/features/market_intelligence/` | 뉴스/공시/트렌드/매크로 수집, 브리핑, 경보, 인텔리전스 탭 |
 | `app/features/persistence/` | 내역/통계/설정 저장·복원 |
 | `app/features/diagnostics/` | 시스템 진단 테이블/상세 패널 |
-| `app/mixins/dialogs_profiles.py` | 프리셋/프로필/검색/수동주문/예약 |
+| `app/features/dialogs/` | 수동주문/즐겨찾기·코드/프리셋·프로필·예약/설정스냅샷 (SRP 4분할) |
+| `app/mixins/dialogs_profiles.py` | 위 4종 믹스인 composite facade (import·patch seam 호환) |
 
 ---
 
@@ -291,6 +310,30 @@ pyinstaller --clean KiwoomTrader.spec
 
 3. 실거래 가드 우회
 - `start_trading()`의 실거래 보호 흐름은 제거/우회 금지입니다.
+
+---
+
+## 2026-09-20 God-파일 SRP 분할 동기화 메모
+
+1. 분할 대상과 결과
+- `api/rest_client.py`(1140줄·36메서드) → `_rest_helpers/_rest_transport/_rest_market/_rest_account/_rest_orders/_rest_discovery` + facade. 도메인 믹스인은 `RestTransport`를 상속해 `self._request`/`TR_CODES` 의존을 명시합니다.
+- `backtest/engine.py`(727줄·25메서드) → `models/_base/_metrics/_policy/_guards/_intel_events` + `run()` 오케스트레이터 facade. `Base <- Metrics <- Policy <- Guards <- Intel` 선형 체인으로 pyright 0 errors를 유지합니다.
+- `app/mixins/dialogs_profiles.py`(792줄·17메서드) → `app/features/dialogs/` 4종(`manual_orders/favorites/preset_profiles/settings_snapshot`) + composite facade. 기존 테스트의 patch seam(`app.mixins.dialogs_profiles.QMessageBox/ManualOrderDialog`)을 보존했습니다.
+
+2. 누락 방지
+- 메서드 집합 동등성(old vs HEAD): REST 35/35(`__init__` 제외), 백테스트 25/25, 다이얼로그 17/17 — MISSING/EXTRA 없음.
+- 구/신 백테스트 엔진 동일 픽스처 실행 결과 완전 동일(10 trades).
+- AST 추출 시 `@property/@staticmethod/@classmethod/@dataclass` 데코레이터가 떨어지지 않도록 검증했습니다.
+
+3. 검증 결과
+```bash
+python -m pytest tests\unit --override-ini addopts= --tb=short
+python tools\refactor_verify.py
+python -m pyright .
+python -m compileall -q app api data backtest strategies portfolio dialogs ui_dialogs.py strategy_manager.py tests/unit
+```
+- `tests/unit` 191개 통과, refactor verification 통과, `pyright .` 0 errors, 컴파일 통과.
+- `KiwoomTrader.spec` hiddenimports에 `api._rest_*`, `app.features.dialogs.*`를 추가했습니다(백테스트는 기존 `collect_submodules`로 포함).
 
 ---
 

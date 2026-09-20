@@ -68,8 +68,11 @@ app/features/persistence/
 app/features/diagnostics/
   - 시스템 진단 테이블과 상세 패널
 
+app/features/dialogs/
+  - 수동주문/즐겨찾기/프리셋·프로필·예약/설정스냅샷 (SRP 4분할)
+
 app/mixins/dialogs_profiles.py
-  - 프리셋/프로필/수동주문/예약 다이얼로그
+  - 위 4종 믹스인 composite facade (import·patch seam 호환)
 
 app/mixins/_typing.py
   - pyright용 type-only Qt mixin 베이스

@@ -1,0 +1,392 @@
+"""Settings snapshot (SRP: widget <-> dict get/apply only)."""
+
+import copy
+from typing import Any, Dict
+
+from app.support.ui_text import combo_value, set_combo_value
+from app.mixins._typing import TraderMixinBase
+from config import Config
+from dark_theme import DARK_STYLESHEET
+from light_theme import LIGHT_STYLESHEET
+
+
+class SettingsSnapshotMixin(TraderMixinBase):
+    """Settings snapshot (SRP: widget <-> dict get/apply only)."""
+
+    def _get_current_settings(self):
+        """현재 설정 딕셔너리 반환"""
+        return {
+            "betting": self.spin_betting.value(),
+            "k_value": self.spin_k.value(),
+            "ts_start": self.spin_ts_start.value(),
+            "ts_stop": self.spin_ts_stop.value(),
+            "loss_cut": self.spin_loss.value(),
+            "max_holdings": self.spin_max_holdings.value(),
+            "max_loss": self.spin_max_loss.value(),
+            "max_daily_loss": self.spin_max_loss.value(),
+            "use_rsi": self.chk_use_rsi.isChecked(),
+            "rsi_upper": self.spin_rsi_upper.value(),
+            "rsi_period": self.spin_rsi_period.value(),
+            "use_macd": self.chk_use_macd.isChecked(),
+            "use_bb": self.chk_use_bb.isChecked(),
+            "bb_k": self.spin_bb_k.value(),
+            "use_dmi": self.chk_use_dmi.isChecked(),
+            "adx": self.spin_adx.value(),
+            "use_volume": self.chk_use_volume.isChecked(),
+            "volume_mult": self.spin_volume_mult.value(),
+            "use_risk": self.chk_use_risk.isChecked(),
+            "daily_loss_basis": combo_value(self.combo_daily_loss_basis, "total_equity") if hasattr(self, "combo_daily_loss_basis") else "total_equity",
+            "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked() if hasattr(self, "chk_sync_history_flush_on_exit") else True,
+            "allow_plaintext_secret_fallback": self.chk_allow_plaintext_secret_fallback.isChecked() if hasattr(self, "chk_allow_plaintext_secret_fallback") else False,
+            "codes": self.input_codes.text(),
+            "use_ma": self.chk_use_ma.isChecked(),
+            "ma_short": self.spin_ma_short.value(),
+            "ma_long": self.spin_ma_long.value(),
+            "use_time_strategy": self.chk_use_time_strategy.isChecked(),
+            "use_atr_sizing": self.chk_use_atr_sizing.isChecked(),
+            "risk_percent": self.spin_risk_percent.value(),
+            "use_split": self.chk_use_split.isChecked(),
+            "split_count": self.spin_split_count.value(),
+            "split_percent": self.spin_split_percent.value(),
+            "use_stoch_rsi": self.chk_use_stoch_rsi.isChecked(),
+            "stoch_upper": self.spin_stoch_upper.value(),
+            "stoch_lower": self.spin_stoch_lower.value(),
+            "use_mtf": self.chk_use_mtf.isChecked(),
+            "use_partial_profit": self.chk_use_partial_profit.isChecked(),
+            "use_gap": self.chk_use_gap.isChecked(),
+            "use_dynamic_sizing": self.chk_use_dynamic_sizing.isChecked(),
+            "use_market_limit": self.chk_use_market_limit.isChecked(),
+            "market_limit": self.spin_market_limit.value(),
+            "use_sector_limit": self.chk_use_sector_limit.isChecked(),
+            "sector_limit": self.spin_sector_limit.value(),
+            "use_atr_stop": self.chk_use_atr_stop.isChecked(),
+            "atr_mult": self.spin_atr_mult.value(),
+            "use_liquidity": self.chk_use_liquidity.isChecked(),
+            "min_value": self.spin_min_value.value(),
+            "use_spread": self.chk_use_spread.isChecked(),
+            "spread_max": self.spin_spread_max.value(),
+            "use_breakout_confirm": self.chk_use_breakout_confirm.isChecked(),
+            "breakout_ticks": self.spin_breakout_ticks.value(),
+            "use_cooldown": self.chk_use_cooldown.isChecked(),
+            "cooldown_min": self.spin_cooldown_min.value(),
+            "use_time_stop": self.chk_use_time_stop.isChecked(),
+            "time_stop_min": self.spin_time_stop_min.value(),
+            "use_entry_scoring": self.chk_use_entry_score.isChecked(),
+            "entry_score_threshold": self.spin_entry_score_threshold.value(),
+            "strategy_pack": dict(getattr(self.config, "strategy_pack", {})) if hasattr(self, "config") else {},
+            "strategy_params": dict(getattr(self.config, "strategy_params", {})) if hasattr(self, "config") else {},
+            "portfolio_mode": combo_value(self.combo_portfolio_mode, "single_strategy") if hasattr(self, "combo_portfolio_mode") else "single_strategy",
+            "short_enabled": self.chk_short_enabled.isChecked() if hasattr(self, "chk_short_enabled") else False,
+            "asset_scope": combo_value(self.combo_asset_scope, "kr_stock_live") if hasattr(self, "combo_asset_scope") else "kr_stock_live",
+            "execution_policy": combo_value(self.combo_execution_policy, "market") if hasattr(self, "combo_execution_policy") else "market",
+            "execution_mode": combo_value(self.combo_execution_mode, getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")) if hasattr(self, "combo_execution_mode") else getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+            "backtest_config": {
+                "timeframe": combo_value(self.combo_backtest_timeframe, "1d") if hasattr(self, "combo_backtest_timeframe") else "1d",
+                "lookback_days": self.spin_backtest_lookback.value() if hasattr(self, "spin_backtest_lookback") else 365,
+                "commission_bps": self.spin_backtest_commission.value() if hasattr(self, "spin_backtest_commission") else 5.0,
+                "slippage_bps": self.spin_backtest_slippage.value() if hasattr(self, "spin_backtest_slippage") else 3.0,
+            },
+            "feature_flags": {
+                "use_modular_strategy_pack": self.chk_feature_modular_pack.isChecked() if hasattr(self, "chk_feature_modular_pack") else True,
+                "enable_backtest": self.chk_feature_backtest.isChecked() if hasattr(self, "chk_feature_backtest") else True,
+                "enable_external_data": self.chk_feature_external_data.isChecked() if hasattr(self, "chk_feature_external_data") else True,
+            },
+            "market_intelligence": dict(getattr(self.config, "market_intelligence", {})) if hasattr(self, "config") else {},
+            "use_shock_guard": self.chk_use_shock_guard.isChecked() if hasattr(self, "chk_use_shock_guard") else True,
+            "shock_1m_pct": self.spin_shock_1m.value() if hasattr(self, "spin_shock_1m") else getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5),
+            "shock_5m_pct": self.spin_shock_5m.value() if hasattr(self, "spin_shock_5m") else getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8),
+            "shock_cooldown_min": self.spin_shock_cooldown.value() if hasattr(self, "spin_shock_cooldown") else getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10),
+            "use_vi_guard": self.chk_use_vi_guard.isChecked() if hasattr(self, "chk_use_vi_guard") else True,
+            "vi_cooldown_min": self.spin_vi_cooldown.value() if hasattr(self, "spin_vi_cooldown") else getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7),
+            "use_regime_sizing": self.chk_use_regime_sizing.isChecked() if hasattr(self, "chk_use_regime_sizing") else True,
+            "use_liquidity_stress_guard": self.chk_use_liquidity_stress_guard.isChecked() if hasattr(self, "chk_use_liquidity_stress_guard") else True,
+            "use_slippage_guard": self.chk_use_slippage_guard.isChecked() if hasattr(self, "chk_use_slippage_guard") else True,
+            "max_slippage_bps": self.spin_max_slippage_bps.value() if hasattr(self, "spin_max_slippage_bps") else getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0),
+            "use_order_health_guard": self.chk_use_order_health_guard.isChecked() if hasattr(self, "chk_use_order_health_guard") else True,
+            "schedule": dict(self.schedule),
+            "theme": self.current_theme,
+        }
+
+    def _apply_settings(self, settings):
+        """설정 딕셔너리 적용"""
+        if 'betting' in settings:
+            self.spin_betting.setValue(settings['betting'])
+        if 'k_value' in settings:
+            self.spin_k.setValue(settings['k_value'])
+        if 'ts_start' in settings:
+            self.spin_ts_start.setValue(settings['ts_start'])
+        if 'ts_stop' in settings:
+            self.spin_ts_stop.setValue(settings['ts_stop'])
+        if 'loss_cut' in settings:
+            self.spin_loss.setValue(settings['loss_cut'])
+        if 'max_holdings' in settings:
+            self.spin_max_holdings.setValue(settings['max_holdings'])
+        if 'max_loss' in settings:
+            self.spin_max_loss.setValue(settings['max_loss'])
+        elif 'max_daily_loss' in settings:
+            self.spin_max_loss.setValue(settings['max_daily_loss'])
+        if 'codes' in settings:
+            self.input_codes.setText(settings['codes'])
+        if 'use_rsi' in settings:
+            self.chk_use_rsi.setChecked(settings['use_rsi'])
+        if 'rsi_upper' in settings:
+            self.spin_rsi_upper.setValue(settings['rsi_upper'])
+        if 'rsi_period' in settings:
+            self.spin_rsi_period.setValue(settings['rsi_period'])
+        if 'use_macd' in settings:
+            self.chk_use_macd.setChecked(settings['use_macd'])
+        if 'use_bb' in settings:
+            self.chk_use_bb.setChecked(settings['use_bb'])
+        if 'bb_k' in settings:
+            self.spin_bb_k.setValue(settings['bb_k'])
+        if 'use_dmi' in settings:
+            self.chk_use_dmi.setChecked(settings['use_dmi'])
+        if 'adx' in settings:
+            self.spin_adx.setValue(settings['adx'])
+        if 'use_volume' in settings:
+            self.chk_use_volume.setChecked(settings['use_volume'])
+        if 'volume_mult' in settings:
+            self.spin_volume_mult.setValue(settings['volume_mult'])
+        if 'use_risk' in settings:
+            self.chk_use_risk.setChecked(settings['use_risk'])
+        if 'daily_loss_basis' in settings and hasattr(self, "combo_daily_loss_basis"):
+            set_combo_value(self.combo_daily_loss_basis, str(settings['daily_loss_basis']))
+        if 'sync_history_flush_on_exit' in settings and hasattr(self, "chk_sync_history_flush_on_exit"):
+            self.chk_sync_history_flush_on_exit.setChecked(bool(settings['sync_history_flush_on_exit']))
+        if 'allow_plaintext_secret_fallback' in settings and hasattr(self, "chk_allow_plaintext_secret_fallback"):
+            self.chk_allow_plaintext_secret_fallback.setChecked(bool(settings['allow_plaintext_secret_fallback']))
+        if 'use_ma' in settings:
+            self.chk_use_ma.setChecked(settings['use_ma'])
+        if 'ma_short' in settings:
+            self.spin_ma_short.setValue(settings['ma_short'])
+        if 'ma_long' in settings:
+            self.spin_ma_long.setValue(settings['ma_long'])
+        if 'use_time_strategy' in settings:
+            self.chk_use_time_strategy.setChecked(settings['use_time_strategy'])
+        if 'use_atr_sizing' in settings:
+            self.chk_use_atr_sizing.setChecked(settings['use_atr_sizing'])
+        if 'risk_percent' in settings:
+            self.spin_risk_percent.setValue(settings['risk_percent'])
+        if 'use_split' in settings:
+            self.chk_use_split.setChecked(settings['use_split'])
+        if 'split_count' in settings:
+            self.spin_split_count.setValue(settings['split_count'])
+        if 'split_percent' in settings:
+            self.spin_split_percent.setValue(settings['split_percent'])
+        if 'use_stoch_rsi' in settings:
+            self.chk_use_stoch_rsi.setChecked(settings['use_stoch_rsi'])
+        if 'stoch_upper' in settings:
+            self.spin_stoch_upper.setValue(settings['stoch_upper'])
+        if 'stoch_lower' in settings:
+            self.spin_stoch_lower.setValue(settings['stoch_lower'])
+        if 'use_mtf' in settings:
+            self.chk_use_mtf.setChecked(settings['use_mtf'])
+        if 'use_partial_profit' in settings:
+            self.chk_use_partial_profit.setChecked(settings['use_partial_profit'])
+        if 'use_gap' in settings:
+            self.chk_use_gap.setChecked(settings['use_gap'])
+        if 'use_dynamic_sizing' in settings:
+            self.chk_use_dynamic_sizing.setChecked(settings['use_dynamic_sizing'])
+        if 'use_market_limit' in settings:
+            self.chk_use_market_limit.setChecked(settings['use_market_limit'])
+        if 'market_limit' in settings:
+            self.spin_market_limit.setValue(settings['market_limit'])
+        if 'use_sector_limit' in settings:
+            self.chk_use_sector_limit.setChecked(settings['use_sector_limit'])
+        if 'sector_limit' in settings:
+            self.spin_sector_limit.setValue(settings['sector_limit'])
+        if 'use_atr_stop' in settings:
+            self.chk_use_atr_stop.setChecked(settings['use_atr_stop'])
+        if 'atr_mult' in settings:
+            self.spin_atr_mult.setValue(settings['atr_mult'])
+        if 'use_liquidity' in settings:
+            self.chk_use_liquidity.setChecked(settings['use_liquidity'])
+        if 'min_value' in settings:
+            self.spin_min_value.setValue(settings['min_value'])
+        if 'use_spread' in settings:
+            self.chk_use_spread.setChecked(settings['use_spread'])
+        if 'spread_max' in settings:
+            self.spin_spread_max.setValue(settings['spread_max'])
+        if 'use_breakout_confirm' in settings:
+            self.chk_use_breakout_confirm.setChecked(settings['use_breakout_confirm'])
+        if 'breakout_ticks' in settings:
+            self.spin_breakout_ticks.setValue(settings['breakout_ticks'])
+        if 'use_cooldown' in settings:
+            self.chk_use_cooldown.setChecked(settings['use_cooldown'])
+        if 'cooldown_min' in settings:
+            self.spin_cooldown_min.setValue(settings['cooldown_min'])
+        if 'use_time_stop' in settings:
+            self.chk_use_time_stop.setChecked(settings['use_time_stop'])
+        if 'time_stop_min' in settings:
+            self.spin_time_stop_min.setValue(settings['time_stop_min'])
+        if 'use_entry_scoring' in settings:
+            self.chk_use_entry_score.setChecked(settings['use_entry_scoring'])
+        if 'entry_score_threshold' in settings:
+            self.spin_entry_score_threshold.setValue(settings['entry_score_threshold'])
+        if 'use_shock_guard' in settings and hasattr(self, "chk_use_shock_guard"):
+            self.chk_use_shock_guard.setChecked(bool(settings['use_shock_guard']))
+        if 'shock_1m_pct' in settings and hasattr(self, "spin_shock_1m"):
+            self.spin_shock_1m.setValue(float(settings['shock_1m_pct']))
+        if 'shock_5m_pct' in settings and hasattr(self, "spin_shock_5m"):
+            self.spin_shock_5m.setValue(float(settings['shock_5m_pct']))
+        if 'shock_cooldown_min' in settings and hasattr(self, "spin_shock_cooldown"):
+            self.spin_shock_cooldown.setValue(int(settings['shock_cooldown_min']))
+        if 'use_vi_guard' in settings and hasattr(self, "chk_use_vi_guard"):
+            self.chk_use_vi_guard.setChecked(bool(settings['use_vi_guard']))
+        if 'vi_cooldown_min' in settings and hasattr(self, "spin_vi_cooldown"):
+            self.spin_vi_cooldown.setValue(int(settings['vi_cooldown_min']))
+        if 'use_regime_sizing' in settings and hasattr(self, "chk_use_regime_sizing"):
+            self.chk_use_regime_sizing.setChecked(bool(settings['use_regime_sizing']))
+        if 'use_liquidity_stress_guard' in settings and hasattr(self, "chk_use_liquidity_stress_guard"):
+            self.chk_use_liquidity_stress_guard.setChecked(bool(settings['use_liquidity_stress_guard']))
+        if 'use_slippage_guard' in settings and hasattr(self, "chk_use_slippage_guard"):
+            self.chk_use_slippage_guard.setChecked(bool(settings['use_slippage_guard']))
+        if 'max_slippage_bps' in settings and hasattr(self, "spin_max_slippage_bps"):
+            self.spin_max_slippage_bps.setValue(float(settings['max_slippage_bps']))
+        if 'use_order_health_guard' in settings and hasattr(self, "chk_use_order_health_guard"):
+            self.chk_use_order_health_guard.setChecked(bool(settings['use_order_health_guard']))
+        if 'portfolio_mode' in settings and hasattr(self, "combo_portfolio_mode"):
+            set_combo_value(self.combo_portfolio_mode, str(settings['portfolio_mode']))
+        if 'short_enabled' in settings and hasattr(self, "chk_short_enabled"):
+            self.chk_short_enabled.setChecked(bool(settings['short_enabled']))
+        if 'asset_scope' in settings and hasattr(self, "combo_asset_scope"):
+            set_combo_value(self.combo_asset_scope, str(settings['asset_scope']))
+        if 'execution_policy' in settings and hasattr(self, "combo_execution_policy"):
+            set_combo_value(self.combo_execution_policy, str(settings['execution_policy']))
+        if 'execution_mode' in settings and hasattr(self, "combo_execution_mode"):
+            set_combo_value(self.combo_execution_mode, str(settings['execution_mode']))
+        strategy_pack_settings = settings.get('strategy_pack')
+        if isinstance(strategy_pack_settings, dict):
+            default_pack_raw = getattr(Config, "DEFAULT_STRATEGY_PACK", {})
+            default_pack: Dict[str, Any] = copy.deepcopy(default_pack_raw) if isinstance(default_pack_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_pack = merge_fn(default_pack, strategy_pack_settings)
+                strategy_pack: Dict[str, Any] = dict(merged_pack) if isinstance(merged_pack, dict) else default_pack
+            else:
+                strategy_pack = default_pack
+                strategy_pack.update(strategy_pack_settings)
+            if hasattr(self, "combo_strategy_pack"):
+                set_combo_value(self.combo_strategy_pack, str(strategy_pack.get('primary_strategy', 'volatility_breakout')))
+            if hasattr(self, "config"):
+                self.config.strategy_pack = dict(strategy_pack)
+        strategy_params_settings = settings.get('strategy_params')
+        if isinstance(strategy_params_settings, dict) and hasattr(self, "config"):
+            self.config.strategy_params = dict(strategy_params_settings)
+        backtest_settings = settings.get('backtest_config')
+        if isinstance(backtest_settings, dict):
+            default_bt_raw = getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})
+            default_bt: Dict[str, Any] = copy.deepcopy(default_bt_raw) if isinstance(default_bt_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_bt = merge_fn(default_bt, backtest_settings)
+                bt: Dict[str, Any] = dict(merged_bt) if isinstance(merged_bt, dict) else default_bt
+            else:
+                bt = default_bt
+                bt.update(backtest_settings)
+            if hasattr(self, "combo_backtest_timeframe"):
+                set_combo_value(self.combo_backtest_timeframe, str(bt.get('timeframe', '1d')))
+            if hasattr(self, "spin_backtest_lookback"):
+                self.spin_backtest_lookback.setValue(int(bt.get('lookback_days', 365)))
+            if hasattr(self, "spin_backtest_commission"):
+                self.spin_backtest_commission.setValue(float(bt.get('commission_bps', 5.0)))
+            if hasattr(self, "spin_backtest_slippage"):
+                self.spin_backtest_slippage.setValue(float(bt.get('slippage_bps', 3.0)))
+            if hasattr(self, "config"):
+                self.config.backtest_config = dict(bt)
+        feature_flag_settings = settings.get('feature_flags')
+        if isinstance(feature_flag_settings, dict):
+            default_flags_raw = getattr(Config, "FEATURE_FLAGS", {})
+            default_flags: Dict[str, Any] = copy.deepcopy(default_flags_raw) if isinstance(default_flags_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_flags = merge_fn(default_flags, feature_flag_settings)
+                flags: Dict[str, Any] = dict(merged_flags) if isinstance(merged_flags, dict) else default_flags
+            else:
+                flags = default_flags
+                flags.update(feature_flag_settings)
+            if hasattr(self, "chk_feature_modular_pack"):
+                self.chk_feature_modular_pack.setChecked(bool(flags.get('use_modular_strategy_pack', True)))
+            if hasattr(self, "chk_feature_backtest"):
+                self.chk_feature_backtest.setChecked(bool(flags.get('enable_backtest', True)))
+            if hasattr(self, "chk_feature_external_data"):
+                self.chk_feature_external_data.setChecked(bool(flags.get('enable_external_data', True)))
+            if hasattr(self, "config"):
+                self.config.feature_flags = dict(flags)
+        market_intel_settings = settings.get('market_intelligence')
+        if isinstance(market_intel_settings, dict):
+            default_mi_raw = getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})
+            default_mi: Dict[str, Any] = copy.deepcopy(default_mi_raw) if isinstance(default_mi_raw, dict) else {}
+            merge_fn = getattr(self, "_deep_merge_dict", None)
+            if callable(merge_fn):
+                merged_mi = merge_fn(default_mi, market_intel_settings)
+                mi: Dict[str, Any] = dict(merged_mi) if isinstance(merged_mi, dict) else default_mi
+            else:
+                mi = default_mi
+                mi.update(market_intel_settings)
+            if hasattr(self, "config"):
+                self.config.market_intelligence = dict(mi)
+            if hasattr(self, "chk_market_intel_enabled"):
+                self.chk_market_intel_enabled.setChecked(bool(mi.get('enabled', True)))
+            source_policy = mi.get('source_policy', {}) if isinstance(mi.get('source_policy'), dict) else {}
+            if hasattr(self, "chk_market_intel_strict_guard"):
+                self.chk_market_intel_strict_guard.setChecked(bool(source_policy.get('strict_entry_guard', False)))
+            providers = mi.get('providers', {}) if isinstance(mi.get('providers'), dict) else {}
+            if hasattr(self, "chk_market_news"):
+                self.chk_market_news.setChecked(bool(providers.get('news', True)))
+            if hasattr(self, "chk_market_dart"):
+                self.chk_market_dart.setChecked(bool(providers.get('dart', True)))
+            if hasattr(self, "chk_market_datalab"):
+                self.chk_market_datalab.setChecked(bool(providers.get('datalab', True)))
+            if hasattr(self, "chk_market_macro"):
+                self.chk_market_macro.setChecked(bool(providers.get('macro', True)))
+            refresh_sec = mi.get('refresh_sec', {}) if isinstance(mi.get('refresh_sec'), dict) else {}
+            if hasattr(self, "spin_market_news_refresh"):
+                self.spin_market_news_refresh.setValue(int(refresh_sec.get('news', 60)))
+            if hasattr(self, "spin_market_macro_refresh"):
+                self.spin_market_macro_refresh.setValue(int(refresh_sec.get('macro', 300)))
+            scoring = mi.get('scoring', {}) if isinstance(mi.get('scoring'), dict) else {}
+            if hasattr(self, "spin_market_news_block"):
+                self.spin_market_news_block.setValue(abs(int(scoring.get('news_block_threshold', -60))))
+            if hasattr(self, "spin_market_news_boost"):
+                self.spin_market_news_boost.setValue(abs(int(scoring.get('news_boost_threshold', 60))))
+            ai_cfg = mi.get('ai', {}) if isinstance(mi.get('ai'), dict) else {}
+            if hasattr(self, "chk_market_ai_enabled"):
+                self.chk_market_ai_enabled.setChecked(bool(ai_cfg.get('enabled', False)))
+            if hasattr(self, "combo_market_ai_provider"):
+                set_combo_value(self.combo_market_ai_provider, str(ai_cfg.get('provider', 'gemini')))
+            if hasattr(self, "input_market_ai_model"):
+                self.input_market_ai_model.setText(str(ai_cfg.get('model', 'gemini-2.5-flash-lite')))
+            if hasattr(self, "spin_market_ai_daily_calls"):
+                self.spin_market_ai_daily_calls.setValue(int(ai_cfg.get('max_calls_per_day', 30)))
+            if hasattr(self, "spin_market_ai_symbol_calls"):
+                self.spin_market_ai_symbol_calls.setValue(int(ai_cfg.get('max_calls_per_symbol', 3)))
+            if hasattr(self, "spin_market_ai_budget"):
+                self.spin_market_ai_budget.setValue(int(ai_cfg.get('daily_budget_krw', 1000)))
+            sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+            if callable(sync_market_intel):
+                sync_market_intel()
+        if hasattr(self, "config"):
+            for key in (
+                "use_shock_guard",
+                "shock_1m_pct",
+                "shock_5m_pct",
+                "shock_cooldown_min",
+                "use_vi_guard",
+                "vi_cooldown_min",
+                "use_regime_sizing",
+                "use_liquidity_stress_guard",
+                "use_slippage_guard",
+                "max_slippage_bps",
+                "use_order_health_guard",
+                "execution_mode",
+                "allow_plaintext_secret_fallback",
+            ):
+                if key in settings:
+                    setattr(self.config, key, settings[key])
+        if 'schedule' in settings and isinstance(settings['schedule'], dict):
+            self.schedule = settings['schedule']
+        if settings.get('theme') in ('dark', 'light'):
+            if settings['theme'] != self.current_theme:
+                self.current_theme = settings['theme']
+                self.setStyleSheet(LIGHT_STYLESHEET if self.current_theme == 'light' else DARK_STYLESHEET)

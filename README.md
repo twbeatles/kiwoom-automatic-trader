@@ -187,13 +187,14 @@ python-dateutil>=2.8.0 # 날짜/시간 처리
 ```text
 kiwoom-automatic-trader/
 ├── api/                     # REST/WS 모델, 인증, live/mock 엔드포인트 라우팅, 클라이언트
+│   └── _rest_transport/helpers/market/account/orders/discovery  # REST SRP 분할 모듈 + rest_client facade
 ├── app/
 │   ├── core/window.py       # KiwoomProTrader canonical 조립 클래스
-│   ├── features/            # UI/세션/인텔리전스/실행/동기화/저장/진단 feature 패키지
+│   ├── features/            # UI/세션/인텔리전스/실행/동기화/저장/진단/다이얼로그 feature 패키지
 │   ├── configuration/       # Config/TradingConfig canonical 구현과 카테고리별 export
 │   ├── mixins/              # 기존 import 경로 호환 shim + 소형 mixin
 │   └── support/             # worker/widgets/execution_policy/ui_text/backtest_runner
-├── backtest/                # 이벤트 드리븐 백테스트 엔진
+├── backtest/                # 이벤트 드리븐 백테스트 엔진(models/_base/_intel_events/_policy/_guards/_metrics + engine facade)
 ├── dialogs/                 # 프리셋/검색/주문/프로필/예약 다이얼로그 구현
 ├── strategies/              # StrategyManager canonical 구현 + 전략팩 + helper mixins
 │   └── manager_mixins/      # 전략 평가/지표/리스크/인텔 책임 분리
@@ -223,6 +224,9 @@ kiwoom-automatic-trader/
 | `app/features/persistence/` | 1,050 | 설정 스키마, 거래 내역, keyring/설정 저장·복원 |
 | `app/features/diagnostics/` | 300 | 시스템 진단 테이블과 상세 패널 |
 | `app/mixins/*.py` | shim/소형 모듈 | 기존 import 경로 호환 + API/시스템/다이얼로그 등 소형 mixin |
+| `api/_rest_*.py` | 6모듈 | 전송/파싱/시세/계좌/주문/탐색 SRP 분할 (`rest_client.py` facade 유지) |
+| `backtest/*.py` | 7모듈 | 상태/베이스/지표/정책/가드/인텔 + `engine.py` facade 유지 |
+| `app/features/dialogs/` | 4모듈 | 수동주문/즐겨찾기/프리셋·프로필·예약/설정스냅샷 (`dialogs_profiles.py` composite 유지) |
 | `strategies/manager.py` | 32 | `StrategyManager` canonical orchestration 레이어 |
 | `strategies/manager_mixins/*.py` | 1,797 | 전략 평가, 지표 계산, 포지션/리스크, 인텔 가드 |
 | `config.py` | 3 | `Config`, `TradingConfig` 호환 facade |
@@ -257,6 +261,24 @@ kiwoom-automatic-trader/
 - `python -m pytest tests\unit --override-ini addopts= --tb=short` 통과(144개)
 - `python -m pyright .` 0 errors
 - `pyinstaller --clean KiwoomTrader.spec` 성공, `dist/KiwoomTrader_v4.5.exe` 생성
+
+## 🔄 2026-09-20 God-파일 SRP 분할 업데이트
+
+이번 업데이트는 동작 변경 없이 가장 크고 책임이 섞여 있던 파일 3개를 SOLID 책임 경계에 맞춰 나눈 구조 정리입니다.
+
+### 반영된 핵심 변경
+
+- `api/rest_client.py` → `api/_rest_helpers/_transport/_market/_account/_orders/_discovery` + `KiwoomRESTClient` facade (공개 import 경로 유지).
+- `backtest/engine.py` → `backtest/models/_base/_metrics/_policy/_guards/_intel_events` + `EventDrivenBacktestEngine` facade (`backtest.engine` import 경로 유지).
+- `app/mixins/dialogs_profiles.py` → `app/features/dialogs/` 4종 믹스인 + composite facade (기존 테스트의 patch seam 보존).
+- `KiwoomTrader.spec` hiddenimports에 신규 모듈을 반영했습니다.
+
+### 검증 결과
+
+- `python -m pytest tests\unit --override-ini addopts= --tb=short` 통과(191개, 기존 테스트 무수정)
+- `python tools\refactor_verify.py` 통과
+- `python -m pyright .` 0 errors
+- 구/신 백테스트 엔진 동일 픽스처 실행 결과 완전 동일
 
 ## 🔄 2026-04-08 구조 분리/패키징 동기화 업데이트
 
