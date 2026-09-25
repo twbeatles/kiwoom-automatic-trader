@@ -9,15 +9,31 @@ Tokenized dark/light QSS with WCAG 2.1 AA support:
 
 Qt-free: pure string building + duck-typed host access, so unit tests
 run without PyQt6.
+
+HiDPI notes: font sizes are emitted in ``pt`` (not ``px``) so OS text
+scaling applies, and content paddings grow with ``ui_font_scale`` and
+``ui_density`` (``compact``/``comfortable``) to keep menu touch targets
+usable on high-ratio displays.
 """
 
 from __future__ import annotations
+
+import re
+
+from app.support.ui_scale import DEFAULT_DENSITY, DENSITY_NAMES, clamp_density
 
 THEME_NAMES = ("dark", "light")
 
 FONT_SCALE_MIN = 0.85
 FONT_SCALE_MAX = 1.5
 DEFAULT_FONT_SCALE = 1.0
+
+# 1pt = 1/72in; 1px = 1/96in at the CSS reference DPI.
+PX_PER_PT = 96.0 / 72.0
+
+# Padding multiplier per density at font scale 1.0. Compact preserves the
+# historical metrics; comfortable opens menus/tabs/buttons for HiDPI.
+DENSITY_PAD_SCALE = {"compact": 1.0, "comfortable": 1.3}
 
 DARK_TOKENS = {
     "bg": "#0d1117",
@@ -141,10 +157,47 @@ def clamp_font_scale(value) -> float:
 
 
 def scaled_sizes(theme: str, font_scale: float = 1.0) -> dict:
-    """Return px font sizes for *theme* scaled by *font_scale*."""
+    """Return px font sizes for *theme* scaled by *font_scale*.
+
+    Kept in px design units (96dpi reference); QSS emission converts to
+    pt via :func:`px_to_pt` so OS text scaling applies on HiDPI screens.
+    """
     base = DARK_BASE_FONT_SIZES if theme == "dark" else LIGHT_BASE_FONT_SIZES
     scale = clamp_font_scale(font_scale)
     return {key: max(9, int(round(px * scale))) for key, px in base.items()}
+
+
+def px_to_pt(px) -> float:
+    """Convert px design units to pt (1pt = 96/72px)."""
+    try:
+        value = float(px)
+    except (TypeError, ValueError):
+        value = 14.0
+    return max(6.5, round(value / PX_PER_PT, 1))
+
+
+def layout_scale(font_scale: float = 1.0, density: str = DEFAULT_DENSITY) -> float:
+    """Combined padding scale from font scale and density name."""
+    return clamp_font_scale(font_scale) * DENSITY_PAD_SCALE.get(
+        clamp_density(density), 1.0
+    )
+
+
+def _pad(px: int, scale: float) -> int:
+    """Scale a padding/margin px value, keeping a 1px floor."""
+    return max(1, int(round(px * scale)))
+
+
+_FONT_SIZE_PX_RE = re.compile(r"font-size:\s*(\d+(?:\.\d+)?)px")
+
+
+def _px_fonts_to_pt(qss: str) -> str:
+    """Rewrite ``font-size: Npx`` declarations to pt for HiDPI correctness."""
+
+    def _convert(match: "re.Match[str]") -> str:
+        return f"font-size: {px_to_pt(float(match.group(1)))}pt"
+
+    return _FONT_SIZE_PX_RE.sub(_convert, qss)
 
 
 def _relative_luminance(hex_color: str) -> float:
@@ -177,15 +230,21 @@ def check_theme_contrast(theme: str) -> dict:
     return report
 
 
-def build_stylesheet(theme: str = "dark", font_scale: float = 1.0) -> str:
-    """Build the full QSS for *theme* with font sizes scaled."""
+def build_stylesheet(
+    theme: str = "dark",
+    font_scale: float = 1.0,
+    density: str = DEFAULT_DENSITY,
+) -> str:
+    """Build the full QSS for *theme* with fonts/density scaled."""
     if theme not in TOKENS:
         theme = "dark"
+    scale = clamp_font_scale(font_scale)
+    density = clamp_density(density)
     t = TOKENS[theme]
-    fs = scaled_sizes(theme, font_scale)
+    fs = scaled_sizes(theme, scale)
     if theme == "dark":
-        return _build_dark(t, fs)
-    return _build_light(t, fs)
+        return _build_dark(t, fs, scale, density)
+    return _build_light(t, fs, scale, density)
 
 
 def _focus_block(selectors: str, ring: str) -> str:
@@ -197,12 +256,16 @@ def _focus_block(selectors: str, ring: str) -> str:
     )
 
 
-def _build_dark(t: dict, fs: dict) -> str:
+def _build_dark(
+    t: dict, fs: dict, font_scale: float = 1.0, density: str = DEFAULT_DENSITY
+) -> str:
+    ls = layout_scale(font_scale, density)
     focus_inputs = (
         "QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,\n"
         "QPushButton:focus, QTableWidget:focus, QListWidget:focus, QTextEdit:focus"
     )
-    return f"""\
+    return _px_fonts_to_pt(
+        f"""\
 /* Kiwoom Pro Algo-Trader v4.5 Dark Theme (tokenized: app/support/theme.py) */
 QMainWindow, QWidget {{
     background-color: {t['bg']};
@@ -216,8 +279,8 @@ QGroupBox {{
     background-color: {t['surface']};
     border: 1px solid {t['border']};
     border-radius: 12px;
-    margin-top: 24px;
-    padding: 24px 16px 16px 16px;
+    margin-top: {_pad(24, ls)}px;
+    padding: {_pad(24, ls)}px {_pad(16, ls)}px {_pad(16, ls)}px {_pad(16, ls)}px;
     font-weight: 600;
     color: {t['accent']};
 }}
@@ -225,7 +288,7 @@ QGroupBox::title {{
     subcontrol-origin: margin;
     subcontrol-position: top left;
     left: 16px;
-    padding: 4px 12px;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
     background-color: {t['bg']};
     border: 1px solid {t['border']};
     border-radius: 6px;
@@ -241,7 +304,7 @@ QPushButton {{
     border: 1px solid rgba(240, 246, 252, 0.1);
     border-radius: 8px;
     color: {t['text']};
-    padding: 10px 20px;
+    padding: {_pad(10, ls)}px {_pad(20, ls)}px;
     font-weight: 600;
     font-size: {fs['button']}px;
 }}
@@ -263,7 +326,7 @@ QPushButton#connectBtn {{
     color: {t['on_accent']};
     border: none;
     font-size: {fs['base']}px;
-    padding: 12px 24px;
+    padding: {_pad(12, ls)}px {_pad(24, ls)}px;
 }}
 QPushButton#connectBtn:hover {{ background-color: {t['accent_hover']}; }}
 QPushButton#connectBtn:pressed {{ background-color: {t['accent_pressed']}; }}
@@ -271,7 +334,7 @@ QPushButton#startBtn {{
     background-color: {t['danger_solid']};
     color: {t['on_danger']};
     font-size: {fs['button_large']}px;
-    padding: 12px 30px;
+    padding: {_pad(12, ls)}px {_pad(30, ls)}px;
     border-radius: 10px;
 }}
 QPushButton#startBtn:hover {{ background-color: {t['danger_hover']}; }}
@@ -293,7 +356,7 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {t['input_bg']};
     border: 1px solid {t['border']};
     border-radius: 6px;
-    padding: 8px 12px;
+    padding: {_pad(8, ls)}px {_pad(12, ls)}px;
     color: {t['text']};
     font-size: {fs['widget']}px;
 }}
@@ -321,7 +384,7 @@ QTableWidget {{
     outline: none;
 }}
 QTableWidget::item {{
-    padding: 12px 8px;
+    padding: {_pad(12, ls)}px {_pad(8, ls)}px;
     border-bottom: 1px solid {t['surface_2']};
 }}
 QTableWidget::item:hover {{ background-color: rgba(88, 166, 255, 0.08); }}
@@ -331,7 +394,7 @@ QTableWidget::item:selected {{
 }}
 QHeaderView::section {{
     background-color: {t['surface']};
-    padding: 12px;
+    padding: {_pad(12, ls)}px;
     border: none;
     border-bottom: 2px solid {t['border']};
     color: {t['text_muted']};
@@ -341,12 +404,12 @@ QHeaderView::section {{
 }}
 QCheckBox {{
     color: {t['text']};
-    spacing: 10px;
+    spacing: {_pad(10, ls)}px;
     font-size: {fs['widget']}px;
 }}
 QCheckBox::indicator {{
-    width: 20px;
-    height: 20px;
+    width: {max(16, _pad(20, ls))}px;
+    height: {max(16, _pad(20, ls))}px;
     border-radius: 6px;
     border: 2px solid {t['border']};
     background-color: {t['bg']};
@@ -367,7 +430,7 @@ QLabel#depositCard {{
     color: {t['text_bright']};
     font-weight: bold;
     font-size: {fs['title']}px;
-    padding: 10px 15px;
+    padding: {_pad(10, ls)}px {_pad(15, ls)}px;
     border-radius: 8px;
     background: rgba(56, 139, 253, 0.1);
     border: 1px solid rgba(56, 139, 253, 0.2);
@@ -376,7 +439,7 @@ QLabel#profitCard {{
     color: {t['text_bright']};
     font-weight: bold;
     font-size: {fs['title']}px;
-    padding: 10px 15px;
+    padding: {_pad(10, ls)}px {_pad(15, ls)}px;
     border-radius: 8px;
     background: rgba(139, 148, 158, 0.1);
     border: 1px solid rgba(139, 148, 158, 0.2);
@@ -384,26 +447,26 @@ QLabel#profitCard {{
 QLabel#statusConnected {{
     color: {t['success']};
     background-color: rgba(63, 185, 80, 0.1);
-    padding: 4px 12px;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
     border-radius: 12px;
     border: 1px solid rgba(63, 185, 80, 0.2);
 }}
 QLabel#statusDisconnected {{
     color: {t['danger']};
     background-color: rgba(248, 81, 73, 0.1);
-    padding: 4px 12px;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
     border-radius: 12px;
     border: 1px solid rgba(248, 81, 73, 0.2);
 }}
 QScrollBar:vertical {{
     border: none;
     background: {t['bg']};
-    width: 8px;
+    width: {max(8, _pad(8, ls))}px;
     margin: 0px;
 }}
 QScrollBar::handle:vertical {{
     background: {t['border']};
-    min-height: 30px;
+    min-height: {max(30, _pad(30, ls))}px;
     border-radius: 4px;
 }}
 QScrollBar::handle:vertical:hover {{ background: {t['accent']}; }}
@@ -418,7 +481,7 @@ QTabBar::tab {{
     background: {t['bg']};
     border: 1px solid transparent;
     color: {t['text_muted']};
-    padding: 10px 20px;
+    padding: {_pad(10, ls)}px {_pad(20, ls)}px;
     font-weight: 600;
 }}
 QTabBar::tab:selected {{
@@ -432,9 +495,9 @@ QTabBar::tab:hover {{
 QTabBar::tab:focus {{ border: 2px solid {t['focus_ring']}; }}
 QSplitter::handle {{
     background-color: {t['border']};
-    height: 6px;
+    height: {max(6, _pad(6, ls))}px;
     border-radius: 3px;
-    margin: 2px 40px;
+    margin: {_pad(2, ls)}px {_pad(40, ls)}px;
 }}
 QSplitter::handle:hover {{ background-color: {t['accent']}; }}
 QToolTip {{
@@ -442,18 +505,18 @@ QToolTip {{
     color: {t['text_bright']};
     border: 1px solid {t['border']};
     border-radius: 8px;
-    padding: 10px 14px;
+    padding: {_pad(10, ls)}px {_pad(14, ls)}px;
     font-size: {fs['small']}px;
 }}
 QMenuBar {{
     background-color: {t['bg']};
     color: {t['text']};
-    padding: 6px 8px;
+    padding: {_pad(6, ls)}px {_pad(8, ls)}px;
     border-bottom: 1px solid {t['surface_2']};
     font-size: {fs['widget']}px;
 }}
 QMenuBar::item {{
-    padding: 8px 14px;
+    padding: {_pad(8, ls)}px {_pad(14, ls)}px;
     border-radius: 8px;
 }}
 QMenuBar::item:selected {{ background-color: rgba(88, 166, 255, 0.1); }}
@@ -463,12 +526,13 @@ QMenu {{
     color: {t['text']};
     border: 1px solid {t['border']};
     border-radius: 10px;
-    padding: 8px;
+    padding: {_pad(8, ls)}px;
+    min-width: {_pad(220, ls)}px;
 }}
 QMenu::item {{
-    padding: 10px 28px 10px 16px;
+    padding: {_pad(10, ls)}px {_pad(28, ls)}px {_pad(10, ls)}px {_pad(16, ls)}px;
     border-radius: 6px;
-    margin: 2px 4px;
+    margin: {_pad(2, ls)}px {_pad(4, ls)}px;
 }}
 QMenu::item:selected {{
     background-color: {t['accent_solid']};
@@ -477,21 +541,21 @@ QMenu::item:selected {{
 QMenu::separator {{
     height: 1px;
     background-color: {t['surface_2']};
-    margin: 8px 12px;
+    margin: {_pad(8, ls)}px {_pad(12, ls)}px;
 }}
 QStatusBar {{
     background-color: {t['bg']};
     color: {t['text_muted']};
     border-top: 1px solid {t['surface_2']};
-    padding: 8px 16px;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
     font-size: {fs['small']}px;
 }}
 QProgressBar {{
     background-color: {t['surface_2']};
     border-radius: 8px;
-    height: 10px;
+    height: {max(10, _pad(10, ls))}px;
     text-align: center;
-    font-size: 10px;
+    font-size: {fs['small']}px;
     color: {t['text']};
 }}
 QProgressBar::chunk {{
@@ -503,13 +567,13 @@ QListWidget {{
     background-color: {t['bg']};
     border: 1px solid {t['border']};
     border-radius: 10px;
-    padding: 8px;
+    padding: {_pad(8, ls)}px;
     color: {t['text']};
 }}
 QListWidget::item {{
-    padding: 10px 14px;
+    padding: {_pad(10, ls)}px {_pad(14, ls)}px;
     border-radius: 6px;
-    margin: 2px 0;
+    margin: {_pad(2, ls)}px 0;
 }}
 QListWidget::item:hover {{ background-color: rgba(88, 166, 255, 0.08); }}
 QListWidget::item:selected {{
@@ -527,8 +591,8 @@ QMessageBox QLabel {{
     font-size: {fs['widget']}px;
 }}
 QMessageBox QPushButton {{
-    min-width: 80px;
-    padding: 10px 20px;
+    min-width: {_pad(80, ls)}px;
+    padding: {_pad(10, ls)}px {_pad(20, ls)}px;
 }}
 .profit {{ color: {t['success']}; }}
 .loss {{ color: {t['danger']}; }}
@@ -541,14 +605,19 @@ QTextEdit {{
     line-height: 1.5;
 }}
 """
+    )
 
 
-def _build_light(t: dict, fs: dict) -> str:
+def _build_light(
+    t: dict, fs: dict, font_scale: float = 1.0, density: str = DEFAULT_DENSITY
+) -> str:
+    ls = layout_scale(font_scale, density)
     focus_inputs = (
         "QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,\n"
         "QPushButton:focus, QTableWidget:focus, QListWidget:focus, QTextEdit:focus"
     )
-    return f"""\
+    return _px_fonts_to_pt(
+        f"""\
 /* Kiwoom Pro Algo-Trader v4.5 Light Theme (tokenized: app/support/theme.py) */
 QMainWindow, QWidget {{
     background-color: {t['bg']};
@@ -560,15 +629,15 @@ QGroupBox {{
     background-color: {t['surface']};
     border: 1px solid {t['border_soft']};
     border-radius: 12px;
-    margin-top: 20px;
-    padding: 24px 18px 18px 18px;
+    margin-top: {_pad(20, ls)}px;
+    padding: {_pad(24, ls)}px {_pad(18, ls)}px {_pad(18, ls)}px {_pad(18, ls)}px;
     font-weight: bold;
     color: {t['accent']};
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
     left: 24px;
-    padding: 4px 14px;
+    padding: {_pad(4, ls)}px {_pad(14, ls)}px;
     background: {t['bg']};
     border: 1px solid {t['border_soft']};
     border-radius: 8px;
@@ -586,7 +655,7 @@ QPushButton {{
     color: {t['on_accent']};
     border: none;
     border-radius: 10px;
-    padding: 12px 28px;
+    padding: {_pad(12, ls)}px {_pad(28, ls)}px;
     font-weight: bold;
     font-size: {fs['button']}px;
     min-height: 20px;
@@ -600,14 +669,14 @@ QPushButton:disabled {{
 QPushButton#connectBtn {{
     background-color: {t['accent_solid']};
     border-radius: 12px;
-    padding: 14px 32px;
+    padding: {_pad(14, ls)}px {_pad(32, ls)}px;
     font-size: {fs['base']}px;
 }}
 QPushButton#connectBtn:hover {{ background-color: {t['accent_hover']}; }}
 QPushButton#startBtn {{
     background-color: {t['danger']};
     font-size: {fs['button_large']}px;
-    padding: 14px 36px;
+    padding: {_pad(14, ls)}px {_pad(36, ls)}px;
     border-radius: 14px;
 }}
 QPushButton#startBtn:hover {{ background-color: {t['danger_dark']}; }}
@@ -621,7 +690,7 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {t['input_bg']};
     border: 1px solid {t['border']};
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: {_pad(10, ls)}px {_pad(12, ls)}px;
     color: {t['text']};
     selection-background-color: {t['selection_bg']};
     font-size: {fs['widget']}px;
@@ -653,7 +722,7 @@ QTableWidget {{
     font-size: {fs['widget']}px;
 }}
 QTableWidget::item {{
-    padding: 10px 8px;
+    padding: {_pad(10, ls)}px {_pad(8, ls)}px;
     border-bottom: 1px solid {t['surface_2']};
 }}
 QTableWidget::item:hover {{ background-color: rgba(13, 110, 253, 0.08); }}
@@ -664,7 +733,7 @@ QTableWidget::item:selected {{
 QHeaderView::section {{
     background-color: {t['surface_2']};
     color: {t['accent']};
-    padding: 12px 10px;
+    padding: {_pad(12, ls)}px {_pad(10, ls)}px;
     border: none;
     border-bottom: 2px solid {t['accent_solid']};
     font-weight: bold;
@@ -677,7 +746,7 @@ QTextEdit {{
     color: {t['log_fg']};
     font-family: {t['mono_family']};
     font-size: {fs['log']}px;
-    padding: 12px;
+    padding: {_pad(12, ls)}px;
     selection-background-color: rgba(13, 110, 253, 0.3);
 }}
 QLabel {{
@@ -687,7 +756,7 @@ QLabel {{
 QLabel#statusConnected {{
     color: {t['success']};
     font-weight: bold;
-    padding: 6px 14px;
+    padding: {_pad(6, ls)}px {_pad(14, ls)}px;
     border-radius: 12px;
     background: rgba(25, 135, 84, 0.1);
     border: 1px solid rgba(25, 135, 84, 0.3);
@@ -695,7 +764,7 @@ QLabel#statusConnected {{
 QLabel#statusDisconnected {{
     color: {t['danger']};
     font-weight: bold;
-    padding: 6px 14px;
+    padding: {_pad(6, ls)}px {_pad(14, ls)}px;
     border-radius: 12px;
     background: rgba(220, 53, 69, 0.1);
     border: 1px solid rgba(220, 53, 69, 0.3);
@@ -703,19 +772,19 @@ QLabel#statusDisconnected {{
 QLabel#statusPending {{
     color: {t['pending']};
     font-weight: bold;
-    padding: 6px 14px;
+    padding: {_pad(6, ls)}px {_pad(14, ls)}px;
     border-radius: 12px;
     background: rgba(253, 126, 20, 0.1);
     border: 1px solid rgba(253, 126, 20, 0.3);
 }}
 QCheckBox {{
     color: {t['text']};
-    spacing: 10px;
+    spacing: {_pad(10, ls)}px;
     font-size: {fs['widget']}px;
 }}
 QCheckBox::indicator {{
-    width: 20px;
-    height: 20px;
+    width: {max(16, _pad(20, ls))}px;
+    height: {max(16, _pad(20, ls))}px;
     border-radius: 6px;
     border: 2px solid {t['border']};
     background-color: {t['surface']};
@@ -732,7 +801,7 @@ QStatusBar {{
     background-color: {t['surface_2']};
     color: {t['text_muted']};
     border-top: 1px solid {t['border_soft']};
-    padding: 8px 16px;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
     font-size: {fs['small']}px;
 }}
 QTabWidget::pane {{
@@ -745,7 +814,7 @@ QTabWidget::pane {{
 QTabBar::tab {{
     background-color: transparent;
     color: {t['text_muted']};
-    padding: 12px 22px;
+    padding: {_pad(12, ls)}px {_pad(22, ls)}px;
     margin-right: 4px;
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
@@ -768,12 +837,12 @@ QTabBar::tab:focus {{ border: 2px solid {t['focus_ring']}; }}
 QMenuBar {{
     background-color: {t['surface']};
     color: {t['text']};
-    padding: 6px 8px;
+    padding: {_pad(6, ls)}px {_pad(8, ls)}px;
     border-bottom: 1px solid {t['border_soft']};
     font-size: {fs['widget']}px;
 }}
 QMenuBar::item {{
-    padding: 8px 14px;
+    padding: {_pad(8, ls)}px {_pad(14, ls)}px;
     border-radius: 8px;
 }}
 QMenuBar::item:selected {{ background-color: rgba(13, 110, 253, 0.1); }}
@@ -783,12 +852,13 @@ QMenu {{
     color: {t['text']};
     border: 1px solid {t['border_soft']};
     border-radius: 10px;
-    padding: 8px;
+    padding: {_pad(8, ls)}px;
+    min-width: {_pad(220, ls)}px;
 }}
 QMenu::item {{
-    padding: 10px 28px 10px 16px;
+    padding: {_pad(10, ls)}px {_pad(28, ls)}px {_pad(10, ls)}px {_pad(16, ls)}px;
     border-radius: 6px;
-    margin: 2px 4px;
+    margin: {_pad(2, ls)}px {_pad(4, ls)}px;
 }}
 QMenu::item:selected {{
     background-color: {t['accent_solid']};
@@ -797,26 +867,26 @@ QMenu::item:selected {{
 QMenu::separator {{
     height: 1px;
     background-color: {t['border_soft']};
-    margin: 8px 12px;
+    margin: {_pad(8, ls)}px {_pad(12, ls)}px;
 }}
 QScrollBar:vertical {{
     background-color: {t['bg']};
-    width: 10px;
+    width: {max(10, _pad(10, ls))}px;
     border-radius: 5px;
-    margin: 4px 2px;
+    margin: {_pad(4, ls)}px {_pad(2, ls)}px;
 }}
 QScrollBar::handle:vertical {{
     background-color: {t['border']};
     border-radius: 5px;
-    min-height: 40px;
+    min-height: {max(40, _pad(40, ls))}px;
 }}
 QScrollBar::handle:vertical:hover {{ background-color: {t['text_muted']}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
 QSplitter::handle {{
     background-color: {t['border_soft']};
-    height: 6px;
+    height: {max(6, _pad(6, ls))}px;
     border-radius: 3px;
-    margin: 2px 40px;
+    margin: {_pad(2, ls)}px {_pad(40, ls)}px;
 }}
 QSplitter::handle:hover {{ background-color: {t['accent_solid']}; }}
 QToolTip {{
@@ -824,15 +894,15 @@ QToolTip {{
     color: {t['bg']};
     border: none;
     border-radius: 8px;
-    padding: 10px 14px;
+    padding: {_pad(10, ls)}px {_pad(14, ls)}px;
     font-size: {fs['small']}px;
 }}
 QProgressBar {{
     background-color: {t['surface_2']};
     border-radius: 8px;
-    height: 10px;
+    height: {max(10, _pad(10, ls))}px;
     text-align: center;
-    font-size: 10px;
+    font-size: {fs['small']}px;
     color: {t['text']};
 }}
 QProgressBar::chunk {{
@@ -844,13 +914,13 @@ QListWidget {{
     background-color: {t['surface']};
     border: 1px solid {t['border_soft']};
     border-radius: 10px;
-    padding: 8px;
+    padding: {_pad(8, ls)}px;
     color: {t['text']};
 }}
 QListWidget::item {{
-    padding: 10px 14px;
+    padding: {_pad(10, ls)}px {_pad(14, ls)}px;
     border-radius: 6px;
-    margin: 2px 0;
+    margin: {_pad(2, ls)}px 0;
 }}
 QListWidget::item:hover {{ background-color: rgba(13, 110, 253, 0.08); }}
 QListWidget::item:selected {{
@@ -868,10 +938,11 @@ QMessageBox QLabel {{
     font-size: {fs['widget']}px;
 }}
 QMessageBox QPushButton {{
-    min-width: 80px;
-    padding: 10px 20px;
+    min-width: {_pad(80, ls)}px;
+    padding: {_pad(10, ls)}px {_pad(20, ls)}px;
 }}
 """
+    )
 
 
 # Legacy single-scale stylesheets (import compat; scale 1.0).
@@ -896,42 +967,60 @@ ACCESSIBLE_CONTROLS: tuple = (
 
 def current_settings(host) -> tuple:
     """Return (theme, font_scale) from a duck-typed host."""
+    theme, scale, _ = current_ui_settings(host)
+    return theme, scale
+
+
+def current_ui_settings(host) -> tuple:
+    """Return (theme, font_scale, density) from a duck-typed host."""
     theme = getattr(host, "current_theme", "dark")
     if theme not in TOKENS:
         theme = "dark"
     try:
         from config import Config as _Config  # local import: avoid cycle
 
-        default = getattr(_Config, "DEFAULT_UI_FONT_SCALE", DEFAULT_FONT_SCALE)
+        default_scale = getattr(_Config, "DEFAULT_UI_FONT_SCALE", DEFAULT_FONT_SCALE)
+        default_density = getattr(_Config, "DEFAULT_UI_DENSITY", DEFAULT_DENSITY)
     except Exception:
-        default = DEFAULT_FONT_SCALE
-    scale = clamp_font_scale(getattr(host, "ui_font_scale", default))
-    return theme, scale
+        default_scale = DEFAULT_FONT_SCALE
+        default_density = DEFAULT_DENSITY
+    scale = clamp_font_scale(getattr(host, "ui_font_scale", default_scale))
+    density = clamp_density(getattr(host, "ui_density", default_density))
+    return theme, scale, density
 
 
-def apply_theme(host, theme=None, font_scale=None) -> str:
+def apply_theme(host, theme=None, font_scale=None, density=None) -> str:
     """Apply a tokenized stylesheet to *host*; return the theme name."""
+    current_theme, current_scale, current_density = current_ui_settings(host)
     if theme is None:
-        theme, _ = current_settings(host)
+        theme = current_theme
     if theme not in TOKENS:
         theme = "dark"
-    if font_scale is None:
-        _, font_scale = current_settings(host)
-    scale = clamp_font_scale(font_scale)
+    scale = clamp_font_scale(current_scale if font_scale is None else font_scale)
+    density = clamp_density(current_density if density is None else density)
     host.current_theme = theme
     host.ui_font_scale = scale
+    host.ui_density = density
     setter = getattr(host, "setStyleSheet", None)
     if callable(setter):
-        setter(build_stylesheet(theme, scale))
+        setter(build_stylesheet(theme, scale, density))
     return theme
 
 
 def set_ui_font_scale(host, scale) -> float:
     """Set font scale on *host* and re-apply the current theme."""
     clamped = clamp_font_scale(scale)
-    theme = getattr(host, "current_theme", "dark")
-    apply_theme(host, theme, clamped)
+    theme, _, density = current_ui_settings(host)
+    apply_theme(host, theme, clamped, density)
     return clamped
+
+
+def set_ui_density(host, density) -> str:
+    """Set menu/content density on *host* and re-apply the current theme."""
+    theme, scale, _ = current_ui_settings(host)
+    normalized = clamp_density(density)
+    apply_theme(host, theme, scale, normalized)
+    return normalized
 
 
 def apply_accessibility_names(host) -> int:

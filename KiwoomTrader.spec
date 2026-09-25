@@ -108,6 +108,7 @@ hiddenimports = [
     'app.support.ui_text',
     'app.support.backtest_runner',
     'app.support.theme',
+    'app.support.ui_scale',
     'app.support.intel_timeline',
     'app.support.portfolio_summary',
     'app.features.ui_build.workspaces',

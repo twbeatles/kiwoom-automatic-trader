@@ -585,6 +585,10 @@ class Config:
     DEFAULT_UI_FONT_SCALE = 1.0  # Accessibility font scaling (WCAG 1.4.4)
     UI_FONT_SCALE_MIN = 0.85
     UI_FONT_SCALE_MAX = 1.5
+    # Menu/content density: 'compact' (legacy metrics) or 'comfortable'
+    # (roomier touch targets for HiDPI/high-scale displays).
+    DEFAULT_UI_DENSITY = 'compact'
+    UI_DENSITIES = ('compact', 'comfortable')
 
     # =========================================================================
     # 키보드 단축키 설정 (v4.3 신규)
@@ -602,6 +606,8 @@ class Config:
         'show_help': 'F1',
         'search_stock': 'Ctrl+F',
         'manual_order': 'Ctrl+O',
+        'ui_zoom_in': 'Ctrl+=',
+        'ui_zoom_out': 'Ctrl+-',
     }
 
     # =========================================================================

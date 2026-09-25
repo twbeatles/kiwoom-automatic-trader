@@ -6,9 +6,13 @@ import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from app.core.window import KiwoomProTrader
+from app.support.ui_scale import configure_high_dpi_scaling
 
 
 def main():
+    # Fractional OS scales (125%/150%/175%) must be honoured before the
+    # QApplication exists; otherwise HiDPI displays render a tiny/dense UI.
+    configure_high_dpi_scaling()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 

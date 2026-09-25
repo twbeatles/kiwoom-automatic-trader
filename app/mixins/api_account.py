@@ -235,7 +235,7 @@ class APIAccountMixin(TraderMixinBase):
                 """
                 color: #3fb950;
                 font-weight: bold;
-                font-size: 13px;
+                /* font-size: theme-governed */
                 padding: 8px 16px;
                 background: rgba(63, 185, 80, 0.15);
                 border-radius: 14px;
@@ -251,7 +251,7 @@ class APIAccountMixin(TraderMixinBase):
                 """
                 color: #f85149;
                 font-weight: bold;
-                font-size: 13px;
+                /* font-size: theme-governed */
                 padding: 8px 16px;
                 background: rgba(248, 81, 73, 0.15);
                 border-radius: 14px;
@@ -360,7 +360,7 @@ class APIAccountMixin(TraderMixinBase):
                 """
                 color: #3fb950;
                 font-weight: bold;
-                font-size: 14px;
+                /* font-size: theme-governed */
                 padding: 8px 16px;
                 background: rgba(63, 185, 80, 0.15);
                 border-radius: 10px;
@@ -372,7 +372,7 @@ class APIAccountMixin(TraderMixinBase):
                 """
                 color: #f85149;
                 font-weight: bold;
-                font-size: 14px;
+                /* font-size: theme-governed */
                 padding: 8px 16px;
                 background: rgba(248, 81, 73, 0.15);
                 border-radius: 10px;
@@ -384,7 +384,7 @@ class APIAccountMixin(TraderMixinBase):
                 """
                 color: #e6edf3;
                 font-weight: bold;
-                font-size: 14px;
+                /* font-size: theme-governed */
                 padding: 8px 16px;
                 background: rgba(139, 148, 158, 0.1);
                 border-radius: 10px;

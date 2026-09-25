@@ -578,7 +578,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             "백테스트는 CSV 가격 데이터와 선택적 인텔리전스 JSONL을 사용하며 실거래 API를 호출하지 않습니다."
         )
         lbl_pack_note.setWordWrap(True)
-        lbl_pack_note.setStyleSheet("color: #8b949e; font-size: 11px;")
+        lbl_pack_note.setStyleSheet("color: #8b949e;")
         g5.addWidget(lbl_pack_note, 10, 0, 1, 6)
 
         grp_v5.setLayout(g5)
@@ -713,6 +713,17 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_ui_font_scale.setAccessibleName("UI 글자 크기 배율")
         self.spin_ui_font_scale.valueChanged.connect(self._on_font_scale_changed)
         g6.addWidget(self.spin_ui_font_scale, 3, 3)
+
+        lbl_density = QLabel("UI 밀도")
+        lbl_density.setToolTip("comfortable: 메뉴/버튼 간격을 넓혀 고배율에서 고르기 쉽습니다.")
+        g6.addWidget(lbl_density, 4, 0)
+        self.combo_ui_density = NoScrollComboBox()
+        self.combo_ui_density.addItems(["compact", "comfortable"])
+        self.combo_ui_density.setToolTip("UI 밀도 선택")
+        self.combo_ui_density.setAccessibleName("UI 밀도 선택")
+        self.combo_ui_density.setCurrentText(str(getattr(Config, "DEFAULT_UI_DENSITY", "compact")))
+        self.combo_ui_density.currentTextChanged.connect(self._on_density_changed)
+        g6.addWidget(self.combo_ui_density, 4, 1)
 
         grp_sys.setLayout(g6)
         system_layout.addWidget(grp_sys)

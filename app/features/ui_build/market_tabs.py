@@ -122,7 +122,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
 
         # 총 잔량 표시
         self.hoga_info = QLabel("총 매도잔량: - | 총 매수잔량: -")
-        self.hoga_info.setStyleSheet("font-weight: bold; padding: 10px; font-size: 14px;")
+        self.hoga_info.setStyleSheet("font-weight: bold; padding: 10px;")
         layout.addWidget(self.hoga_info)
 
         layout.addStretch()

@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 from config import Config
 from app.support.theme import apply_theme
 from app.support.theme import set_ui_font_scale as _set_ui_font_scale
+from app.support.theme import set_ui_density as _set_ui_density
+from app.support.ui_scale import next_scale_step as _next_scale_step
 from ui_dialogs import HelpDialog
 from ._typing import TraderMixinBase
 
@@ -96,6 +98,25 @@ class SystemShellMixin(TraderMixinBase):
         view_menu.addAction("테마 전환", self._toggle_theme)
         view_menu.addSeparator()
         view_menu.addAction("사운드 켜기/끄기", self._toggle_sound)
+        view_menu.addSeparator()
+        ui_scale_menu = view_menu.addMenu("UI 크기")
+        assert ui_scale_menu is not None
+        self._ui_scale_actions = {}
+        for _step in (1.0, 1.15, 1.3, 1.5):
+            _action = ui_scale_menu.addAction(
+                f"글자 {int(round(_step * 100))}%",
+                lambda _checked=False, _s=_step: self._set_ui_scale_step(_s),
+            )
+            assert _action is not None
+            _action.setCheckable(True)
+            self._ui_scale_actions[_step] = _action
+        self._density_action = view_menu.addAction(
+            "여유 있는 밀도", self._toggle_ui_density
+        )
+        assert self._density_action is not None
+        self._density_action.setCheckable(True)
+        self._density_action.setToolTip("메뉴/버튼 간격을 넓혀 고배율에서 고르기 쉽게 합니다.")
+        self._refresh_ui_scale_menu()
         view_menu.addSeparator()
         workspace_menu = view_menu.addMenu("워크스페이스 이동")
         assert workspace_menu is not None
@@ -284,15 +305,94 @@ class SystemShellMixin(TraderMixinBase):
             (Config.SHORTCUTS.get("show_help", "F1"), lambda: HelpDialog(self).exec()),
             (Config.SHORTCUTS.get("search_stock", "Ctrl+F"), self._open_stock_search),
             (Config.SHORTCUTS.get("manual_order", "Ctrl+O"), self._open_manual_order),
+            (Config.SHORTCUTS.get("ui_zoom_in", "Ctrl+="), self._zoom_ui_in),
+            (Config.SHORTCUTS.get("ui_zoom_out", "Ctrl+-"), self._zoom_ui_out),
         ]
 
         for key, callback in shortcuts:
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(callback)
 
+    def set_ui_density(self, density):
+        """UI 밀도 변경 후 현재 테마 재적용 (compact/comfortable)."""
+        applied = _set_ui_density(self, density)
+        combo = getattr(self, "combo_ui_density", None)
+        if combo is not None:
+            try:
+                combo.blockSignals(True)
+                combo.setCurrentText(applied)
+            finally:
+                try:
+                    combo.blockSignals(False)
+                except Exception:
+                    pass
+        self._refresh_ui_scale_menu()
+        self.log(f"UI 밀도 '{applied}' 적용")
+        return applied
+
+    def _set_ui_scale_step(self, scale):
+        """보기 메뉴/단축키에서 고른 배율로 UI 글자 크기 변경."""
+        clamped = self.set_ui_font_scale(scale)
+        spin = getattr(self, "spin_ui_font_scale", None)
+        if spin is not None:
+            try:
+                spin.blockSignals(True)
+                spin.setValue(float(clamped))
+            finally:
+                try:
+                    spin.blockSignals(False)
+                except Exception:
+                    pass
+        self._refresh_ui_scale_menu()
+        return clamped
+
+    def _toggle_ui_density(self):
+        """빽빽/여유 밀도 전환."""
+        current = str(getattr(self, "ui_density", "compact"))
+        self.set_ui_density("compact" if current == "comfortable" else "comfortable")
+
+    def _zoom_ui_in(self):
+        """UI 한 단계 확대 (Ctrl+=)."""
+        self._set_ui_scale_step(
+            _next_scale_step(getattr(self, "ui_font_scale", 1.0), 1)
+        )
+
+    def _zoom_ui_out(self):
+        """UI 한 단계 축소 (Ctrl+-)."""
+        self._set_ui_scale_step(
+            _next_scale_step(getattr(self, "ui_font_scale", 1.0), -1)
+        )
+
+    def _on_density_changed(self, density):
+        """UI 밀도 콤보박스 변경 처리."""
+        self.set_ui_density(density)
+
+    def _refresh_ui_scale_menu(self):
+        """보기 메뉴의 UI 크기 체크 상태를 현재 값과 동기화."""
+        try:
+            current = float(getattr(self, "ui_font_scale", 1.0) or 1.0)
+        except (TypeError, ValueError):
+            current = 1.0
+        actions = getattr(self, "_ui_scale_actions", None)
+        if isinstance(actions, dict):
+            for step, action in actions.items():
+                try:
+                    action.setChecked(abs(float(step) - current) < 1e-9)
+                except Exception:
+                    continue
+        density_action = getattr(self, "_density_action", None)
+        if density_action is not None:
+            try:
+                density_action.setChecked(
+                    str(getattr(self, "ui_density", "compact")) == "comfortable"
+                )
+            except Exception:
+                pass
+
     def set_ui_font_scale(self, scale):
         """UI 폰트 스케일 변경 후 현재 테마 재적용 (0.85~1.5)."""
         clamped = _set_ui_font_scale(self, scale)
+        self._refresh_ui_scale_menu()
         self.log(f"UI 글자 크기 x{clamped:.2f} 적용")
         return clamped
 
@@ -344,6 +444,7 @@ class SystemShellMixin(TraderMixinBase):
                 "  Ctrl+Shift+P: 프리셋 관리",
                 "  Ctrl+E: CSV 내보내기",
                 "  Ctrl+T: 테마 전환",
+                "  Ctrl+= / Ctrl+-: UI 글자 확대 / 축소",
                 "  F5: 새로고침",
                 "  F1: 도움말",
             ]

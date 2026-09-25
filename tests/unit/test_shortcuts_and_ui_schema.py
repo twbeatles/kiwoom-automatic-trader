@@ -58,6 +58,11 @@ class _Harness(SystemShellMixin):
     def _open_manual_order(self):
         return None
 
+    def _zoom_ui_in(self):
+        return None
+
+    def _zoom_ui_out(self):
+        return None
 
 class TestShortcutsAndUISchema(unittest.TestCase):
     def _read_feature_text(self, path: str) -> str:

@@ -1,5 +1,25 @@
 # Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
+## 2026-09-25 HiDPI 고배율 UI 밀집도 해소 동기화 메모
+
+1. 원인
+- 진입점에서 fractional 스케일 rounding 미지정 → 125/150/175%에서 UI가 작게 뭉침
+- 테마 폰트 전부 `px` (OS 텍스트 스케일 미추종), 메뉴 터치 타깃 고정, 창 1400x950 고정
+- 인라인 `font-size: Npx`가 테마 스케일 우회
+
+2. 수정
+- 진입점: `configure_high_dpi_scaling()` PassThrough (`app/support/ui_scale.py` 신규, Qt-optional)
+- `app/support/theme.py`: 폰트 `pt` 방출 + `ui_density`(compact/comfortable) 패딩 스케일, `QMenu min-width`
+- 첫 실행 자동완화: 화면 DPR/DPI로 `ui_font_scale`↑·`comfortable` 전환(저장값 우선), 창은 가용영역 비례
+- `보기 > UI 크기`(100/115/130/150%) + `여유 있는 밀도` + `Ctrl+=`/`Ctrl+-` 줌, 설정탭 밀도 콤보
+- `ui_density` 저장/복원/마이그레이션 parity, `Config.DEFAULT_UI_DENSITY`/`SHORTCUTS` 확장
+- `KiwoomTrader.spec` hiddenimports에 `app.support.ui_scale` 추가
+
+3. 검증
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 285 passed
+- `python tools/refactor_verify.py`: 통과 / `python -m compileall`: 통과 / `pyright .`: 0 errors
+- 오프스크린 실창 smoke: PassThrough 정책, pt QSS, 보기 메뉴, 배율/밀도 왕복 확인
+
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
 > **최종 업데이트**: 2026-09-25

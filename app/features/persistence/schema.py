@@ -125,6 +125,10 @@ class PersistenceSchemaMixin(TraderMixinBase):
             bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True)),
         )
         settings.setdefault("market_limit", int(getattr(Config, "DEFAULT_MARKET_LIMIT", 70)))
+        settings.setdefault(
+            "ui_density",
+            str(getattr(Config, "DEFAULT_UI_DENSITY", "compact")),
+        )
         settings.setdefault("sector_limit", int(getattr(Config, "DEFAULT_SECTOR_LIMIT", 30)))
 
         for key, default in self._v4_guard_defaults().items():

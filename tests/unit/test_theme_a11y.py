@@ -51,7 +51,8 @@ class _StubHost:
 
 
 def _font_sizes(qss):
-    return [int(v) for v in re.findall(r"font-size:\s*(\d+)px", qss)]
+    # Fonts are emitted in pt for HiDPI correctness; accept legacy px too.
+    return [float(v) for v in re.findall(r"font-size:\s*([\d.]+)p[xt]", qss)]
 
 
 class TestThemeTokens(unittest.TestCase):

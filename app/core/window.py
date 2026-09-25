@@ -142,6 +142,7 @@ class KiwoomProTrader(
         # v4.3 신규 상태
         self.current_theme = Config.DEFAULT_THEME
         self.ui_font_scale = float(getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+        self.ui_density = str(getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
         self.schedule = {'enabled': False, 'start': '09:00', 'end': '15:19', 'liquidate': True}
         self.schedule_started = False
 

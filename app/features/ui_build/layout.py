@@ -21,14 +21,15 @@ from app.support.worker import Worker
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
 from app.support.theme import apply_accessibility_names, apply_theme
+from app.support.ui_scale import recommended_density, recommended_font_scale
 from app.mixins._typing import TraderMixinBase
 
 
 class UIBuildLayoutMixin(TraderMixinBase):
     def _init_ui(self):
         self.setWindowTitle("키움 자동매매 도우미 v4.5 | Kiwoom Pro Algo-Trader [REST API]")
-        self.setGeometry(100, 100, 1400, 950)
-        self.setMinimumSize(1100, 800)
+        self._apply_hidpi_defaults()
+        self._apply_display_aware_geometry()
         apply_theme(self)
         apply_accessibility_names(self)
 
@@ -50,6 +51,71 @@ class UIBuildLayoutMixin(TraderMixinBase):
         layout.addWidget(main_splitter)
 
         self._create_statusbar()
+    def _screen_scale_hints(self):
+        """Return (device_pixel_ratio, logical_dpi) of the current screen."""
+        try:
+            screen = self.screen()
+        except Exception:
+            return None, None
+        if screen is None:
+            return None, None
+        ratio = None
+        try:
+            ratio = float(screen.devicePixelRatio())
+        except Exception:
+            ratio = None
+        dpi = None
+        try:
+            dpi = float(screen.logicalDotsPerInchX())
+        except Exception:
+            try:
+                dpi = float(screen.logicalDotsPerInch())
+            except Exception:
+                dpi = None
+        return ratio, dpi
+
+    def _apply_hidpi_defaults(self):
+        """Raise first-run font scale/density on high-ratio displays.
+
+        Saved settings (applied later by _load_settings) always win; this
+        only lifts the starting point so HiDPI first runs are usable.
+        """
+        ratio, dpi = self._screen_scale_hints()
+        try:
+            current = float(getattr(self, "ui_font_scale", 1.0) or 1.0)
+        except (TypeError, ValueError):
+            current = 1.0
+        suggested = recommended_font_scale(ratio, dpi)
+        if suggested > current:
+            self.ui_font_scale = suggested
+        if str(getattr(self, "ui_density", "compact")) == "compact":
+            if recommended_density(ratio, dpi) == "comfortable":
+                self.ui_density = "comfortable"
+
+    def _apply_display_aware_geometry(self):
+        """Size the window from the available screen, not fixed pixels."""
+        base_w, base_h, min_w, min_h = 1400, 950, 1100, 800
+        try:
+            screen = self.screen()
+            avail = screen.availableGeometry() if screen is not None else None
+        except Exception:
+            avail = None
+        if avail is None:
+            self.setGeometry(100, 100, base_w, base_h)
+            self.setMinimumSize(min_w, min_h)
+            return
+        try:
+            avail_w = int(avail.width())
+            avail_h = int(avail.height())
+        except Exception:
+            self.setGeometry(100, 100, base_w, base_h)
+            self.setMinimumSize(min_w, min_h)
+            return
+        width = max(900, min(base_w, int(avail_w * 0.92)))
+        height = max(650, min(base_h, int(avail_h * 0.90)))
+        self.resize(width, height)
+        self.setMinimumSize(min(min_w, width), min(min_h, height))
+
     def _create_dashboard(self):
         """
         메인 대시보드 생성 - 시장 상태, 계좌 정보, 빠른 실행 버튼 포함
@@ -92,7 +158,7 @@ class UIBuildLayoutMixin(TraderMixinBase):
 
         self.lbl_deposit = QLabel("💰 예수금: -")
         self.lbl_deposit.setStyleSheet("""
-            color: #e6edf3; font-weight: bold; font-size: 15px;
+            color: #e6edf3; font-weight: bold;
             padding: 10px 15px; border-radius: 8px;
             background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.2);
         """)
@@ -100,7 +166,7 @@ class UIBuildLayoutMixin(TraderMixinBase):
         self.lbl_profit = QLabel("📈 당일손익: -")
         self.lbl_profit.setObjectName("profitLabel")
         self.lbl_profit.setStyleSheet("""
-            color: #e6edf3; font-weight: bold; font-size: 15px;
+            color: #e6edf3; font-weight: bold;
             padding: 10px 15px; border-radius: 8px;
             background: rgba(139, 148, 158, 0.1); border: 1px solid rgba(139, 148, 158, 0.2);
         """)
@@ -215,7 +281,7 @@ class UIBuildLayoutMixin(TraderMixinBase):
     def _create_statusbar(self):
         # 시간 표시
         self.status_time = QLabel()
-        self.status_time.setStyleSheet("color: #8b949e; font-family: monospace; font-size: 13px;")
+        self.status_time.setStyleSheet("color: #8b949e; font-family: monospace;")
 
         # 매매 상태 배지
         self.status_trading = QLabel("⏸️ 대기 중")

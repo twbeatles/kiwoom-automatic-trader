@@ -135,6 +135,11 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 "liquidate": True,
             },
             "theme": self.current_theme,
+            "ui_density": str(
+                self.combo_ui_density.currentText()
+                if hasattr(self, "combo_ui_density")
+                else getattr(self, "ui_density", getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
+            ),
             "ui_font_scale": float(
                 self.spin_ui_font_scale.value()
                 if hasattr(self, "spin_ui_font_scale")
@@ -497,12 +502,22 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             ))
             if hasattr(self, "spin_ui_font_scale"):
                 self.spin_ui_font_scale.setValue(saved_scale)
+            from app.support.ui_scale import clamp_density as _clamp_density
+            saved_density = _clamp_density(settings.get(
+                "ui_density", getattr(self, "ui_density", getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
+            ))
+            if hasattr(self, "combo_ui_density"):
+                try:
+                    self.combo_ui_density.blockSignals(True)
+                    self.combo_ui_density.setCurrentText(saved_density)
+                finally:
+                    self.combo_ui_density.blockSignals(False)
             saved_theme = settings.get("theme", "dark")
             from app.support.theme import apply_theme as _apply_loaded_theme
-            if saved_theme != self.current_theme or abs(saved_scale - float(
+            if saved_theme != self.current_theme or saved_density != str(getattr(self, "ui_density", "")) or abs(saved_scale - float(
                 getattr(self, "ui_font_scale", saved_scale)
             )) > 1e-9:
-                _apply_loaded_theme(self, saved_theme, saved_scale)
+                _apply_loaded_theme(self, saved_theme, saved_scale, saved_density)
             if hasattr(self, "combo_theme"):
                 self.combo_theme.setCurrentText(self.current_theme)
             if False:  # legacy branch superseded by tokenized apply_theme above

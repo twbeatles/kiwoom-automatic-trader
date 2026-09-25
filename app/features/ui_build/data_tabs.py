@@ -39,7 +39,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         ]):
             grid.addWidget(QLabel(f"{label}:"), i // 3, (i % 3) * 2)
             lbl = QLabel("-")
-            lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+            lbl.setStyleSheet("font-weight: bold;")
             self.stats_labels[key] = lbl
             grid.addWidget(lbl, i // 3, (i % 3) * 2 + 1)
 
