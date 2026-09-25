@@ -45,12 +45,61 @@ class UIBuildDataTabsMixin(TraderMixinBase):
 
         stats_group.setLayout(grid)
         layout.addWidget(stats_group)
+        portfolio_group = QGroupBox("💼 포트폴리오 요약 (PnL/비중/노출)")
+        portfolio_grid = QGridLayout()
+        self.portfolio_labels = {}
+        for i, (key, label) in enumerate([
+            ("pnl", "실현+평가 PnL"), ("weight", "상위 비중"),
+            ("exposure", "시장/섹터 노출"), ("health", "외부/동기화"),
+        ]):
+            portfolio_grid.addWidget(QLabel(f"{label}:"), i // 2, (i % 2) * 2)
+            _plbl = QLabel("-")
+            _plbl.setWordWrap(True)
+            self.portfolio_labels[key] = _plbl
+            portfolio_grid.addWidget(_plbl, i // 2, (i % 2) * 2 + 1)
+        portfolio_group.setLayout(portfolio_grid)
+        layout.addWidget(portfolio_group)
+        self._refresh_portfolio_cards()
 
         btn_refresh = QPushButton("🔄 새로고침")
         btn_refresh.clicked.connect(self._update_stats)
+        btn_refresh.clicked.connect(self._refresh_portfolio_cards)
         layout.addWidget(btn_refresh)
         layout.addStretch()
         return widget
+    def _refresh_portfolio_cards(self):
+        """통계 탭 포트폴리오 요약 카드 갱신 (보유/외부/내역 기반)."""
+        labels = getattr(self, "portfolio_labels", None)
+        if not labels:
+            return
+        try:
+            from app.support.portfolio_summary import compute_portfolio_summary
+        except Exception:
+            return
+        import datetime as _datetime
+        today = _datetime.datetime.now().strftime("%Y-%m-%d")
+        universe = getattr(self, "universe", {})
+        if not isinstance(universe, dict):
+            universe = {}
+        external = getattr(self, "external_positions", {})
+        if not isinstance(external, dict):
+            external = {}
+        history = getattr(self, "trade_history", [])
+        if not isinstance(history, list):
+            history = []
+        summary = compute_portfolio_summary(universe, external, history, today=today)
+        labels["pnl"].setText(
+            f"실현 {summary['realized_pnl']:+,.0f} / 평가 {summary['unrealized_pnl']:+,.0f} / 합계 {summary['total_pnl']:+,.0f}"
+        )
+        top = ", ".join(f"{code} {w * 100:.1f}%" for code, w in summary["top_weights"]) or "-"
+        labels["weight"].setText(f"평가 {summary['eval_total']:,.0f} / {top}")
+        market_top = sorted(summary["exposures"]["market"].items(), key=lambda kv: -kv[1])[:2]
+        market_text = ", ".join(f"{name} {amount:,.0f}" for name, amount in market_top) or "-"
+        labels["exposure"].setText(market_text)
+        counts = summary["counts"]
+        labels["health"].setText(
+            f"외부 {counts['external']}(읽기전용 {counts['read_only']}) / 동기화실패 {counts['sync_failed']}"
+        )
     def _create_history_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)

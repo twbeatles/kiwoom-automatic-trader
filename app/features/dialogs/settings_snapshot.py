@@ -105,6 +105,11 @@ class SettingsSnapshotMixin(TraderMixinBase):
             "use_order_health_guard": self.chk_use_order_health_guard.isChecked() if hasattr(self, "chk_use_order_health_guard") else True,
             "schedule": dict(self.schedule),
             "theme": self.current_theme,
+            "ui_font_scale": float(
+                self.spin_ui_font_scale.value()
+                if hasattr(self, "spin_ui_font_scale")
+                else getattr(self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+            ),
         }
 
     def _apply_settings(self, settings):
@@ -386,7 +391,23 @@ class SettingsSnapshotMixin(TraderMixinBase):
                     setattr(self.config, key, settings[key])
         if 'schedule' in settings and isinstance(settings['schedule'], dict):
             self.schedule = settings['schedule']
-        if settings.get('theme') in ('dark', 'light'):
-            if settings['theme'] != self.current_theme:
+        if 'ui_font_scale' in settings:
+            try:
+                _snap_scale = float(settings['ui_font_scale'])
+            except (TypeError, ValueError):
+                _snap_scale = float(getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+            if hasattr(self, 'spin_ui_font_scale'):
+                self.spin_ui_font_scale.setValue(_snap_scale)
+        else:
+            _snap_scale = float(getattr(self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0)))
+        if settings.get('theme') in ('dark', 'light') or 'ui_font_scale' in settings:
+            from app.support.theme import apply_theme as _apply_snap_theme
+            _snap_theme = settings.get('theme', self.current_theme)
+            _apply_snap_theme(self, _snap_theme, _snap_scale)
+            if hasattr(self, 'combo_theme'):
+                self.combo_theme.setCurrentText(self.current_theme)
+            if False:  # legacy branch superseded by tokenized apply above
+                pass
+            if settings.get('theme') != self.current_theme and False:
                 self.current_theme = settings['theme']
                 self.setStyleSheet(LIGHT_STYLESHEET if self.current_theme == 'light' else DARK_STYLESHEET)

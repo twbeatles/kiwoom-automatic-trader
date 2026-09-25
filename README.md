@@ -445,7 +445,7 @@ kiwoom-automatic-trader/
 │   │   ├── diagnostics/    # 시스템 진단 및 상태 점검 패키지
 │   │   └── dialogs/        # 수동주문/즐겨찾기/프리셋·프로필·예약/설정스냅샷 (dialogs_profiles composite)
 │   ├── mixins/             # 기존 mixin 호환 shim 및 타입 베이스 (_typing.py)
-│   └── support/            # 백그라운드 Worker, 위젯, 백테스트 러너, UI 텍스트 헬퍼
+│   └── support/            # 백그라운드 Worker, 위젯, 백테스트 러너, UI 텍스트 헬퍼, 테마/포트폴리오요약/인텔타임라인
 │
 ├── backtest/               # 이벤트 드리븐 백테스트 엔진(models/_base/_metrics/_policy/_guards/_intel_events + engine facade)
 ├── data/providers/         # 외부 데이터 Provider (DART, NAVER 뉴스/트렌드, FRED 매크로, AI)
@@ -453,7 +453,7 @@ kiwoom-automatic-trader/
 ├── portfolio/              # 포트폴리오 리스크 예산 배분기
 ├── strategies/             # 전략 오케스트레이션 및 전략팩 엔진
 │   └── manager_mixins/     # 지표 계산, 시그널 필터, 리스크 오버레이 세부 구현
-├── tests/unit/             # 단위 테스트 스위트 (217 테스트)
+├── tests/unit/             # 단위 테스트 스위트 (266 테스트)
 └── tools/                  # 리팩토링 검증 및 성능 스모크 테스트 도구
 ```
 
@@ -484,7 +484,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 # 2. 리팩토링 구조 동등성 검증
 python tools/refactor_verify.py
 
-# 3. 전체 단위 테스트 실행 (217 tests)
+# 3. 전체 단위 테스트 실행 (266 tests)
 python -m pytest tests/unit --override-ini addopts= --tb=short
 
 # 4. 정적 타입 검사 (Pyright)

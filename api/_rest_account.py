@@ -250,3 +250,99 @@ class RestAccountMixin(RestTransport):
                 tax=_safe_int(item.get("tax", 0)),
             ))
         return orders
+
+    def get_realized_pnl(self, account_no: str, start_date: str = "", end_date: str = "") -> List[Dict[str, Any]]:
+        """일자별 실현손익 조회 (ka10074 /api/dostk/acnt).
+
+        공식 TR은 토큰 기준 계좌를 사용하므로 account_no는 식별용으로만 받는다.
+        """
+        del account_no
+        today = datetime.now().strftime("%Y%m%d")
+        data = {
+            "strt_dt": str(start_date or today),
+            "end_dt": str(end_date or start_date or today),
+        }
+
+        try:
+            result = self._request("POST", self.PATHS["acnt"], tr_code=self.TR_CODES["PNL_DAILY"], data=data)
+        except Exception as exc:
+            self.logger.warning(f"실현손익 조회 예외: {exc}")
+            return []
+
+        if not result or result.get("return_code") != 0:
+            return []
+
+        rows = _payload_records(result, "dt_rlzt_pl", "output")
+
+        realized: List[Dict[str, Any]] = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            realized.append({
+                "date": str(_pick(item, "dt", "date", default="") or ""),
+                "buy_amount": _safe_int(_pick(item, "buy_amt")),
+                "sell_amount": _safe_int(_pick(item, "sell_amt")),
+                "realized_pnl": _safe_int(_pick(item, "tdy_sell_pl", "rlzt_pl")),
+                "commission": _safe_int(_pick(item, "tdy_trde_cmsn", "trde_cmsn")),
+                "tax": _safe_int(_pick(item, "tdy_trde_tax", "trde_tax")),
+            })
+        return realized
+
+    def get_realized_pnl_by_stock(self, account_no: str, code: str, date: str = "") -> List[Dict[str, Any]]:
+        """일자별 종목별 실현손익 조회 (ka10072 /api/dostk/acnt)."""
+        del account_no
+        data = {
+            "strt_dt": str(date or datetime.now().strftime("%Y%m%d")),
+            "stk_cd": str(code or ""),
+        }
+
+        try:
+            result = self._request("POST", self.PATHS["acnt"], tr_code=self.TR_CODES["PNL_STOCK_DATE"], data=data)
+        except Exception as exc:
+            self.logger.warning(f"종목별 실현손익 조회 예외: {exc}")
+            return []
+
+        if not result or result.get("return_code") != 0:
+            return []
+
+        rows = _payload_records(result, "dt_stk_dly_rlzt_pl", "output")
+        return [self._parse_stock_pnl_row(item) for item in rows if isinstance(item, dict)]
+
+    def get_realized_pnl_by_stock_period(
+        self, account_no: str, code: str, start_date: str = "", end_date: str = ""
+    ) -> List[Dict[str, Any]]:
+        """기간별 종목별 실현손익 조회 (ka10073 /api/dostk/acnt)."""
+        del account_no
+        today = datetime.now().strftime("%Y%m%d")
+        data = {
+            "stk_cd": str(code or ""),
+            "strt_dt": str(start_date or today),
+            "end_dt": str(end_date or start_date or today),
+        }
+
+        try:
+            result = self._request("POST", self.PATHS["acnt"], tr_code=self.TR_CODES["PNL_STOCK_PERIOD"], data=data)
+        except Exception as exc:
+            self.logger.warning(f"기간 종목별 실현손익 조회 예외: {exc}")
+            return []
+
+        if not result or result.get("return_code") != 0:
+            return []
+
+        rows = _payload_records(result, "dt_stk_dly_rlzt_pl", "stk_dly_rlzt_pl", "output")
+        return [self._parse_stock_pnl_row(item) for item in rows if isinstance(item, dict)]
+
+    @staticmethod
+    def _parse_stock_pnl_row(item: Dict[str, Any]) -> Dict[str, Any]:
+        """ka10072/ka10073 종목별 실현손익 행 파싱 (공식 컬럼 기준)."""
+        return {
+            "code": str(_pick(item, "stk_cd", default="") or ""),
+            "name": str(_pick(item, "stk_nm", default="") or ""),
+            "exec_quantity": _safe_int(_pick(item, "cntr_qty")),
+            "buy_price": _safe_int(_pick(item, "buy_uv", "buy_prc"), absolute=True),
+            "exec_price": _safe_int(_pick(item, "cntr_pric", "exec_prc"), absolute=True),
+            "realized_pnl": _safe_int(_pick(item, "tdy_sell_pl", "rlzt_pl")),
+            "profit_rate": _safe_float(_pick(item, "pl_rt", "prft_rt")),
+            "commission": _safe_int(_pick(item, "tdy_trde_cmsn", "trde_cmsn")),
+            "tax": _safe_int(_pick(item, "tdy_trde_tax", "trde_tax")),
+        }

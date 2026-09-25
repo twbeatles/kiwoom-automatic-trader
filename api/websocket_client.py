@@ -91,6 +91,7 @@ class KiwoomWebSocketClient:
         "ORDER_EXEC": "00",     # 주문체결
         "INDEX": "0J",          # 업종지수
         "VI": "1h",             # VI발동/해제
+        "MARKET_STATUS": "0s",  # 장시작시간 (장 상태)
     }
     
     def __init__(self, auth: KiwoomAuth, ws_url: Optional[str] = None):
@@ -121,6 +122,9 @@ class KiwoomWebSocketClient:
         self._on_order_exec: Optional[Callable[[dict], None]] = None
         self._on_index: Optional[Callable[[IndexTick], None]] = None
         self._on_vi: Optional[Callable[[dict], None]] = None
+        self._on_market_status: Optional[Callable[[dict], None]] = None
+        self._market_status_cache: Dict[str, Any] = {}
+        self._condition_realtime: Dict[str, Callable[[dict], None]] = {}
         self._on_connect: Optional[Callable[[], None]] = None
         self._on_disconnect: Optional[Callable[[], None]] = None
         self._on_error: Optional[Callable[[Exception], None]] = None
@@ -372,6 +376,83 @@ class KiwoomWebSocketClient:
                 self._loop,
             )
     
+    def subscribe_market_status(
+        self,
+        callback: Optional[Callable[[dict], None]] = None,
+        codes: Optional[List[str]] = None,
+    ):
+        """장시작시간(REAL `0s`) 구독 — 수신 즉시 스냅샷 캐시.
+
+        Args:
+            callback: 장상태 수신 시 호출될 콜백 함수 (snapshot dict)
+            codes: 등록 item 코드 (기본 전체시장 "000", 호출자 override 가능)
+        """
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
+        if callback is not None:
+            self._on_market_status = callback
+
+        items = [str(code) for code in (codes if codes is not None else ["000"]) if str(code).strip()]
+        for code in items:
+            key = f"market_status_{code}"
+            self._subscriptions[key] = SubscriptionInfo(
+                code=code,
+                data_type="market_status",
+                callback=callback or (lambda snapshot: None),
+            )
+            self._subscribed_codes.add(code)
+
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._send_subscribe(items, self.REAL_TYPE["MARKET_STATUS"]),
+                self._loop
+            )
+
+    def get_market_status_snapshot(self) -> Dict[str, Any]:
+        """마지막 `0s` 장상태 스냅샷 (없으면 빈 dict — REST 프록시 폴백용)."""
+        return dict(self._market_status_cache)
+
+    def subscribe_condition_realtime(
+        self,
+        condition_index: int,
+        callback: Optional[Callable[[dict], None]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """조건검색 실시간 등록 (ka10173: CNSRREQ search_type=1).
+
+        지속 연결 중이면 REG 전문을 전송하고, 미연결이면 request_once
+        스냅샷을 반환한다. 실시간 푸시는 등록 콜백으로 전달된다.
+        """
+        seq = str(condition_index)
+        if callback is not None:
+            self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
+            self._condition_realtime[seq] = callback
+        payload = {
+            "trnm": "CNSRREQ",
+            "seq": seq,
+            "search_type": "1",
+            "stex_tp": "K",
+        }
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._send_json(payload),
+                self._loop
+            )
+            return None
+        return self.request_once(payload)
+
+    def unsubscribe_condition_realtime(self, condition_index: int) -> bool:
+        """조건검색 실시간 해제 (ka10174: CNSRCLR)."""
+        seq = str(condition_index)
+        self._condition_realtime.pop(seq, None)
+        payload = {"trnm": "CNSRCLR", "seq": seq}
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._send_json(payload),
+                self._loop
+            )
+            return True
+        result = self.request_once(payload)
+        return isinstance(result, dict)
+
     def subscribe_order_execution(self, callback: Callable[[dict], None]):
         """
         주문 체결 알림 구독
@@ -394,6 +475,7 @@ class KiwoomWebSocketClient:
         hoga_codes: List[str] = []
         index_codes: List[str] = []
         vi_codes: List[str] = []
+        market_status_codes: List[str] = []
 
         for code in codes:
             self._subscribed_codes.discard(code)
@@ -405,6 +487,8 @@ class KiwoomWebSocketClient:
                 index_codes.append(code)
             if self._subscriptions.pop(f"vi_{code}", None):
                 vi_codes.append(code)
+            if self._subscriptions.pop(f"market_status_{code}", None):
+                market_status_codes.append(code)
         
         if self._connected and self._loop:
             if exec_codes:
@@ -427,7 +511,12 @@ class KiwoomWebSocketClient:
                     self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]),
                     self._loop
                 )
-    
+            if market_status_codes:
+                asyncio.run_coroutine_threadsafe(
+                    self._send_unsubscribe(market_status_codes, self.REAL_TYPE["MARKET_STATUS"]),
+                    self._loop
+                )
+
     def unsubscribe_all(self):
         """모든 구독 해제"""
         exec_codes = [
@@ -445,6 +534,10 @@ class KiwoomWebSocketClient:
         vi_codes = [
             sub.code for sub in self._subscriptions.values()
             if sub.data_type == "vi"
+        ]
+        market_status_codes = [
+            sub.code for sub in self._subscriptions.values()
+            if sub.data_type == "market_status"
         ]
 
         self._subscribed_codes.clear()
@@ -471,7 +564,12 @@ class KiwoomWebSocketClient:
                     self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]),
                     self._loop
                 )
-    
+            if market_status_codes:
+                asyncio.run_coroutine_threadsafe(
+                    self._send_unsubscribe(market_status_codes, self.REAL_TYPE["MARKET_STATUS"]),
+                    self._loop
+                )
+
     def _build_reg_payload(self, codes: List[str], real_type: str, register: bool = True) -> Dict[str, Any]:
         items = [str(code) for code in codes if str(code).strip()]
         return {
@@ -496,6 +594,13 @@ class KiwoomWebSocketClient:
         message = self._build_reg_payload([], self.REAL_TYPE["ORDER_EXEC"], register=True)
         await self._ws.send(json.dumps(message))
         self.logger.info("주문 체결 실시간 구독 요청")
+
+    async def _send_json(self, payload: Dict[str, Any]):
+        """1회성/제어 전문(CNSRREQ/CNSRCLR 등) 전송."""
+        if not self._ws:
+            return
+        await self._ws.send(json.dumps(payload))
+        self.logger.info(f"WebSocket 제어 전문 전송: trnm={payload.get('trnm')}")
     
     async def _send_unsubscribe(self, codes: List[str], real_type: str):
         """구독 해제 요청 전송"""
@@ -523,6 +628,10 @@ class KiwoomWebSocketClient:
             sub.code for sub in self._subscriptions.values()
             if sub.data_type == "vi"
         ]
+        market_status_codes = [
+            sub.code for sub in self._subscriptions.values()
+            if sub.data_type == "market_status"
+        ]
 
         if exec_codes:
             await self._send_subscribe(exec_codes, self.REAL_TYPE["EXECUTION"])
@@ -532,9 +641,18 @@ class KiwoomWebSocketClient:
             await self._send_subscribe(index_codes, self.REAL_TYPE["INDEX"])
         if vi_codes:
             await self._send_subscribe(vi_codes, self.REAL_TYPE["VI"])
-        
+        if market_status_codes:
+            await self._send_subscribe(market_status_codes, self.REAL_TYPE["MARKET_STATUS"])
+
         if self._on_order_exec:
             await self._send_subscribe_order()
+        for seq in list(self._condition_realtime):
+            await self._send_json({
+                "trnm": "CNSRREQ",
+                "seq": seq,
+                "search_type": "1",
+                "stex_tp": "K",
+            })
     
     # =========================================================================
     # 메시지 처리
@@ -552,7 +670,11 @@ class KiwoomWebSocketClient:
                 if self._ws:
                     await self._ws.send(json.dumps({"trnm": "PING"}))
                 return
-            if trnm in {"LOGIN", "REG", "REMOVE"}:
+            if trnm in {"LOGIN", "REG", "REMOVE", "CNSRCLR"}:
+                return
+
+            if trnm == "CNSRREQ" and self._condition_realtime:
+                await self._handle_condition_realtime_push(data)
                 return
 
             if trnm == "REAL":
@@ -585,6 +707,8 @@ class KiwoomWebSocketClient:
             await self._handle_index(body)
         elif real_type == self.REAL_TYPE["VI"]:
             await self._handle_vi(body)
+        elif real_type == self.REAL_TYPE["MARKET_STATUS"]:
+            await self._handle_market_status(body)
         elif real_type:
             self.logger.debug(f"알 수 없는 실시간 타입: {real_type}")
 
@@ -720,6 +844,45 @@ class KiwoomWebSocketClient:
         if not self._on_vi:
             return
         self._invoke_on_main_thread(self._on_vi, body)
+
+    async def _handle_market_status(self, body: dict):
+        """장시작시간(`0s`) 수신 — 스냅샷 캐시 후 콜백 전달."""
+        snapshot = {
+            "trading_status": str(
+                body.get("trd_st")
+                or body.get("market_status")
+                or body.get("status")
+                or ""
+            ),
+            "market_event": str(body.get("market_event") or body.get("event") or ""),
+            "timestamp": str(
+                body.get("tm")
+                or body.get("exec_tm")
+                or body.get("timestamp")
+                or ""
+            ),
+            "source": "websocket_0s",
+            "raw": dict(body),
+        }
+        self._market_status_cache = snapshot
+        if self._on_market_status:
+            self._invoke_on_main_thread(self._on_market_status, dict(snapshot))
+
+    async def _handle_condition_realtime_push(self, data: dict):
+        """조건검색 실시간 푸시(CNSRREQ)를 seq별 콜백으로 전달."""
+        records = data.get("data") or data.get("output") or []
+        if not isinstance(records, list):
+            records = [records]
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            seq = str(record.get("seq") or record.get("cond_seq") or "")
+            callback = self._condition_realtime.get(seq)
+            if callback is None and len(self._condition_realtime) == 1:
+                callback = next(iter(self._condition_realtime.values()))
+            if callback is None:
+                continue
+            self._invoke_on_main_thread(callback, record)
     
     # =========================================================================
     # 이벤트 콜백 설정
@@ -749,6 +912,11 @@ class KiwoomWebSocketClient:
         """VI 이벤트 데이터 콜백 설정"""
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_vi = callback
+
+    def set_on_market_status(self, callback: Callable[[dict], None]):
+        """장상태(`0s`) 데이터 콜백 설정"""
+        self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
+        self._on_market_status = callback
 
     def request_once(self, body: Dict[str, Any], timeout: float = 15.0) -> Optional[Dict[str, Any]]:
         """조건검색 등 1회성 WebSocket 요청 (CNSRLST/CNSRREQ)."""

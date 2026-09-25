@@ -20,7 +20,7 @@ from app.support.ui_text import (
 from app.support.worker import Worker
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
-from dark_theme import DARK_STYLESHEET
+from app.support.theme import apply_accessibility_names, apply_theme
 from app.mixins._typing import TraderMixinBase
 
 
@@ -29,7 +29,8 @@ class UIBuildLayoutMixin(TraderMixinBase):
         self.setWindowTitle("키움 자동매매 도우미 v4.5 | Kiwoom Pro Algo-Trader [REST API]")
         self.setGeometry(100, 100, 1400, 950)
         self.setMinimumSize(1100, 800)
-        self.setStyleSheet(DARK_STYLESHEET)
+        apply_theme(self)
+        apply_accessibility_names(self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -176,27 +177,11 @@ class UIBuildLayoutMixin(TraderMixinBase):
         group.setLayout(main_layout)
         return group
     def _create_tabs(self):
-        tabs = QTabWidget()
-        self.main_tabs = tabs
-        tabs.addTab(self._create_strategy_tab(), "🎯 핵심 설정")
-        tabs.addTab(self._create_advanced_tab(), "🛠 상세 설정")
-        if hasattr(self, "_create_market_intelligence_settings_tab"):
-            tabs.addTab(self._create_market_intelligence_settings_tab(), "🧠 인텔리전스 설정")
-        api_tab = self._create_api_tab()
-        api_tab.setObjectName("api_tab")
-        tabs.addTab(api_tab, "🔐 API/알림")
-        tabs.addTab(self._create_chart_tab(), "📈 차트")
-        tabs.addTab(self._create_orderbook_tab(), "📋 호가")
-        tabs.addTab(self._create_condition_tab(), "🔍 조건 검색")
-        tabs.addTab(self._create_ranking_tab(), "🏆 순위")
-        tabs.addTab(self._create_stats_tab(), "📊 통계")
-        tabs.addTab(self._create_history_tab(), "📝 내역")
-        if hasattr(self, "_create_market_intelligence_tab"):
-            tabs.addTab(self._create_market_intelligence_tab(), "🧠 인텔리전스 현황")
-        if hasattr(self, "_create_market_replay_tab"):
-            tabs.addTab(self._create_market_replay_tab(), "📼 인텔리전스 리플레이")
-        tabs.addTab(self._create_diagnostics_tab(), "🩺 시스템 진단")
+        """5-워크스페이스 탭 + 우측 주문 티켓 도크 (빌더는 workspaces 믹스인)."""
+        tabs = self._create_workspace_tabs()
+        self._create_order_dock()
         return tabs
+
     def _create_stock_panel(self):
         """주식 테이블 + 로그 패널 (내부 스플리터)"""
         splitter = QSplitter(Qt.Orientation.Vertical)

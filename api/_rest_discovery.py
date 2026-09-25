@@ -276,3 +276,97 @@ class RestDiscoveryMixin(RestTransport):
                     deviance_rate=_safe_float(_pick(item, "static_dispty_rt", "dynm_dispty_rt", "dev_rt")),
                 ))
         return events
+
+    def get_broker_stock_trend(
+        self, code: str, member_code: str = "", start_date: str = "", end_date: str = ""
+    ) -> List[Dict[str, Any]]:
+        """증권사별 종목 매매동향 조회 (ka10078 /api/dostk/mrkcond).
+
+        member_code는 ka10102 회원사 리스트의 코드 (빈 값이면 전체).
+        """
+        if not str(code or "").strip():
+            return []
+        today = datetime.now().strftime("%Y%m%d")
+        data = {
+            "mbrm_cd": str(member_code or ""),
+            "stk_cd": str(code),
+            "strt_dt": str(start_date or today),
+            "end_dt": str(end_date or start_date or today),
+        }
+        try:
+            result = self._request("POST", self.PATHS["mrkcond"], tr_code=self.TR_CODES["BROKER_STOCK_TREND"], data=data)
+        except Exception as exc:
+            self.logger.warning(f"증권사 매매동향 조회 예외: {exc}")
+            return []
+        if not result or result.get("return_code") != 0:
+            return []
+        rows = _payload_records(result, "sec_stk_trde_trend", "output")
+        trend: List[Dict[str, Any]] = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            buy_qty = _safe_int(_pick(item, "buy_qty"))
+            sell_qty = _safe_int(_pick(item, "sell_qty"))
+            trend.append({
+                "date": str(_pick(item, "dt", "date", default="") or ""),
+                "current_price": _safe_int(_pick(item, "cur_prc"), absolute=True),
+                "change": _safe_int(_pick(item, "pred_pre", "chg_amt")),
+                "change_rate": _safe_float(_pick(item, "flu_rt", "chg_rt")),
+                "acc_volume": _safe_int(_pick(item, "acc_trde_qty", "acc_vol")),
+                "net_buy_qty": _safe_int(_pick(item, "netprps_qty", "net"), default=buy_qty - sell_qty),
+                "buy_qty": buy_qty,
+                "sell_qty": sell_qty,
+            })
+        return trend
+
+    def request_condition_realtime(self, condition_index: int) -> List[Dict[str, Any]]:
+        """조건검색 실시간 요청 (ka10173: WebSocket CNSRREQ search_type=1)."""
+        ws = self._condition_ws()
+        if ws is None:
+            return []
+        result = ws.request_once({
+            "trnm": "CNSRREQ",
+            "seq": str(condition_index),
+            "search_type": "1",
+            "stex_tp": "K",
+        })
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 실시간 요청 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            return []
+        return self._parse_condition_stock_rows(result)
+
+    def stop_condition_realtime(self, condition_index: int) -> bool:
+        """조건검색 실시간 해제 (ka10174: WebSocket CNSRCLR)."""
+        ws = self._condition_ws()
+        if ws is None:
+            return False
+        result = ws.request_once({
+            "trnm": "CNSRCLR",
+            "seq": str(condition_index),
+        })
+        return isinstance(result, dict)
+
+    def _parse_condition_stock_rows(self, result: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """CNSRREQ 응답(record list/dict 혼용) → 종목 행 파싱."""
+        stocks: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
+                stocks.append({
+                    "code": self._stk_cd(_pick(item, "9001", "stk_cd", "code")),
+                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
+                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
+                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
+                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
+                })
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                stocks.append({
+                    "code": self._stk_cd(item[0]),
+                    "name": str(item[1] or ""),
+                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
+                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
+                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
+                })
+        return [row for row in stocks if row.get("code")]

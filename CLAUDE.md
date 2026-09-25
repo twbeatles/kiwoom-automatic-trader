@@ -2,7 +2,30 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-09-20
+> **최종 업데이트**: 2026-09-25
+
+## 2026-09-25 P0 API 갭 해소 + 증권앱형 UI/UX 개편 동기화 메모
+
+1. API 갭 해소
+- 신규: `ka10074` 실현손익(`ka10072-73` 계열 포함), `ka10078` 증권사추이, `ka10100/101/102` 종목정보, WS `ka10173` 실시간등록/`ka10174` 해제(`CNSRCLR`), `0s` 장상태 스냅샷 구독
+- `get_market_status()`는 WS 스냅샷 우선 + 가격/스프레드 프록시 폴백 유지 (REST 장시작 TR 없음)
+- `REAL_API_PREPARATION_GUIDE.md` 계약표에 신규 TR 행 반영
+
+2. UI/UX 개편 (증권앱형, 로직 변경 없음)
+- 13개 탭 → 5개 워크스페이스(매매/관심+차트+호가/포트폴리오/인텔/시스템): `app/features/ui_build/workspaces.py` 신규
+- 주문 다이얼로그 → 우측 도크 주문티켓 (수량 프리셋, 예상금액+수수료 미리보기, 검증 초크포인트 유지)
+- 포트폴리오 요약 카드: `app/support/portfolio_summary.py` 신규
+- 인텔 타임라인+드로어: `app/support/intel_timeline.py` 신규
+- 테마 토큰화 + 라이트 테마, 대비 4.5:1, 포커스링, 폰트 스케일: `app/support/theme.py` 신규
+
+3. 패키징
+- `KiwoomTrader.spec` hiddenimports에 `app.support.theme/intel_timeline/portfolio_summary`, `app.features.ui_build.workspaces` 명시 (`collect_submodules`와 병행)
+
+4. 검증 결과
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 266 passed
+- `python tools/refactor_verify.py`: 통과
+- `python -m compileall`: 통과
+- `pyright .`: 0 errors
 
 ---
 

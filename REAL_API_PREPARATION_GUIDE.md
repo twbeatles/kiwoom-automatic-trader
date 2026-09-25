@@ -112,7 +112,11 @@ secret 저장은 keyring이 우선이다. 실전 모드에서 keyring 저장 실
 | 프로그램 매매 추이 | ka90013 | `/api/dostk/mrkcond` |
 | 업종현재가 | ka20001 | `/api/dostk/sect` |
 | 조건검색 목록/실행 | ka10171/ka10172 | WebSocket `CNSRLST`/`CNSRREQ` |
-| 장시작시간 | REAL `0s` | REST 없음. 가격 프록시 사용 |
+| 조건 실시간등록/해제 | ka10173/ka10174 | WebSocket 등록/`CNSRCLR` 해제 |
+| 실현손익 | ka10074 (ka10072-73 계열 포함) | `/api/dostk/acnt` |
+| 증권사추이 | ka10078 | `/api/dostk/mrkcond` |
+| 종목정보 | ka10100/101/102 | `/api/dostk/stkinfo` |
+| 장시작시간 | REAL `0s` | REST 없음. WS 스냅샷 우선, 가격 프록시 폴백 |
 
 조건검색은 API 연결(토큰) 후 WebSocket 1회 요청으로 동작한다. 토큰이 없거나 WebSocket이 실패하면 빈 목록을 반환한다.
 

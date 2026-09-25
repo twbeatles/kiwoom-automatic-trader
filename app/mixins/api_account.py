@@ -1,4 +1,4 @@
-﻿"""API/account connection and refresh mixin for KiwoomProTrader."""
+"""API/account connection and refresh mixin for KiwoomProTrader."""
 
 import time
 
@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTabWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 from api import KiwoomAuth, KiwoomRESTClient, KiwoomWebSocketClient
@@ -19,6 +20,51 @@ from app.support.worker import Worker
 from config import Config
 from telegram_notifier import TelegramNotifier
 from ._typing import TraderMixinBase
+
+
+def _iter_tab_containers(tabs):
+    containers = [tabs]
+    find_children = getattr(tabs, "findChildren", None)
+    if callable(find_children):
+        try:
+            found = find_children(QTabWidget)
+        except Exception:
+            found = []
+        if isinstance(found, list):
+            containers = containers + found
+    return containers
+
+
+def _reveal_nested_tab(host, container) -> None:
+    """Select the top-level workspace page hosting a nested sub-tab."""
+    central = host.centralWidget()
+    tabs = central.findChild(QTabWidget) if central is not None else None
+    if tabs is None or container is tabs:
+        return
+    try:
+        top_count = int(tabs.count())
+    except Exception:
+        return
+    for top_index in range(top_count):
+        page = tabs.widget(top_index)
+        if page is None:
+            continue
+        if page is container:
+            tabs.setCurrentIndex(top_index)
+            return
+        find_children = getattr(page, "findChildren", None)
+        if not callable(find_children):
+            continue
+        try:
+            found_children = find_children(QWidget)
+        except Exception:
+            continue
+        if not isinstance(found_children, list):
+            continue
+        nested = found_children
+        if any(child is container for child in nested):
+            tabs.setCurrentIndex(top_index)
+            return
 
 
 class APIAccountMixin(TraderMixinBase):
@@ -36,6 +82,20 @@ class APIAccountMixin(TraderMixinBase):
         tabs = central.findChild(QTabWidget) if central is not None else None
         if tabs is None:
             return False
+        for container in _iter_tab_containers(tabs):
+            try:
+                count = int(container.count())
+            except Exception:
+                continue
+            for index in range(count):
+                widget = container.widget(index)
+                object_name = str(widget.objectName() if widget is not None else "")
+                title = str(container.tabText(index) or "")
+                if object_name == "api_tab" or "API" in title:
+                    container.setCurrentIndex(index)
+                    _reveal_nested_tab(self, container)
+                    return True
+        return False
         for index in range(tabs.count()):
             widget = tabs.widget(index)
             object_name = str(widget.objectName() if widget is not None else "")

@@ -190,60 +190,70 @@ class ManualOrdersMixin(TraderMixinBase):
             if not self._validate_manual_order_request(order):
                 return
             order["validated"] = True
-            signal_only = getattr(self, "_is_signal_only_mode", None)
-            if callable(signal_only) and bool(signal_only()):
-                recorder = getattr(self, "_record_signal_only_order", None)
-                if callable(recorder):
-                    recorder(
-                        side="buy" if order.get("type") == "매수" else "sell",
-                        code=str(order.get("code", "")),
-                        quantity=int(order.get("qty", 0) or 0),
-                        price=int(order.get("expected_price", order.get("price", 0)) or 0),
-                        reason="MANUAL_ORDER",
-                        payload=dict(order),
-                    )
+            self._dispatch_manual_order(order)
+            return
+
+    def _dispatch_manual_order(self, order):
+        """검증 통과 주문의 실행 단계(signal_only/live 가드 + Worker 전송).
+
+        주문 티켓과 수동 주문 다이얼로그가 공유하는 단일 실행 경로다.
+        호출자는 반드시 _validate_manual_order_request 통과 후
+        order["validated"] = True 를 세팅해야 한다.
+        """
+        signal_only = getattr(self, "_is_signal_only_mode", None)
+        if callable(signal_only) and bool(signal_only()):
+            recorder = getattr(self, "_record_signal_only_order", None)
+            if callable(recorder):
+                recorder(
+                    side="buy" if order.get("type") == "매수" else "sell",
+                    code=str(order.get("code", "")),
+                    quantity=int(order.get("qty", 0) or 0),
+                    price=int(order.get("expected_price", order.get("price", 0)) or 0),
+                    reason="MANUAL_ORDER",
+                    payload=dict(order),
+                )
+            return
+        if self._manual_order_live_guard_required():
+            confirm_guard = getattr(self, "_confirm_live_trading_guard", None)
+            if callable(confirm_guard) and not bool(confirm_guard()):
                 return
-            if self._manual_order_live_guard_required():
-                confirm_guard = getattr(self, "_confirm_live_trading_guard", None)
-                if callable(confirm_guard) and not bool(confirm_guard()):
-                    return
-            self.log(f"📝 수동 주문 요청: {order['type']} {order['code']} {order['qty']}주")
+        self.log(f"📝 수동 주문 요청: {order['type']} {order['code']} {order['qty']}주")
 
-            # 방어막: 검증 통과 플래그가 없으면 절대 주문을 실행하지 않는다.
-            # (choke point 회귀로 인한 우회를 원천 차단)
-            if not bool(order.get("validated", False)):
-                self.log("❌ 수동 주문 차단: 검증을 통과하지 않은 요청입니다.")
-                return
+        # 방어막: 검증 통과 플래그가 없으면 절대 주문을 실행하지 않는다.
+        # (choke point 회귀로 인한 우회를 원천 차단)
+        if not bool(order.get("validated", False)):
+            self.log("❌ 수동 주문 차단: 검증을 통과하지 않은 요청입니다.")
+            return
 
-            # 실제 주문 실행 (Worker 사용)
-            code = order['code']
-            qty = order['qty']
-            price = order.get('price', 0)
-            order_type = order['type']
-            price_type = order.get('price_type', '시장가')
-            
-            # API 호출 함수 선택
-            if order_type == '매수':
-                if price_type == '시장가':
-                    func = self.rest_client.buy_market
-                    args = (self.current_account, code, qty)
-                else:
-                    func = self.rest_client.buy_limit
-                    args = (self.current_account, code, qty, price)
-            else:  # 매도
-                if price_type == '시장가':
-                    func = self.rest_client.sell_market
-                    args = (self.current_account, code, qty)
-                else:
-                    func = self.rest_client.sell_limit
-                    args = (self.current_account, code, qty, price)
+        # 실제 주문 실행 (Worker 사용)
+        code = order['code']
+        qty = order['qty']
+        price = order.get('price', 0)
+        order_type = order['type']
+        price_type = order.get('price_type', '시장가')
+        
+        # API 호출 함수 선택
+        if order_type == '매수':
+            if price_type == '시장가':
+                func = self.rest_client.buy_market
+                args = (self.current_account, code, qty)
+            else:
+                func = self.rest_client.buy_limit
+                args = (self.current_account, code, qty, price)
+        else:  # 매도
+            if price_type == '시장가':
+                func = self.rest_client.sell_market
+                args = (self.current_account, code, qty)
+            else:
+                func = self.rest_client.sell_limit
+                args = (self.current_account, code, qty, price)
 
-            worker = Worker(func, *args)
-            worker.signals.result.connect(
-                lambda res, submitted_order=order: self._on_manual_order_result(res, submitted_order, order_type, code)
-            )
-            worker.signals.error.connect(lambda e: self.log(f"❌ 수동 주문 오류: {e}"))
-            self.threadpool.start(worker)
+        worker = Worker(func, *args)
+        worker.signals.result.connect(
+            lambda res, submitted_order=order: self._on_manual_order_result(res, submitted_order, order_type, code)
+        )
+        worker.signals.error.connect(lambda e: self.log(f"❌ 수동 주문 오류: {e}"))
+        self.threadpool.start(worker)
 
     def _on_manual_order_result(self, result, order, order_type, code):
         """수동 주문 결과 처리"""

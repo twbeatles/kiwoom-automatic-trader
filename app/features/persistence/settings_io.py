@@ -135,6 +135,11 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 "liquidate": True,
             },
             "theme": self.current_theme,
+            "ui_font_scale": float(
+                self.spin_ui_font_scale.value()
+                if hasattr(self, "spin_ui_font_scale")
+                else getattr(self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+            ),
         }
 
         guard_defaults = self._v4_guard_defaults()
@@ -487,8 +492,20 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     "liquidate": bool(raw_schedule.get("liquidate", self.schedule.get("liquidate", True))),
                 }
 
+            saved_scale = float(settings.get(
+                "ui_font_scale", getattr(self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+            ))
+            if hasattr(self, "spin_ui_font_scale"):
+                self.spin_ui_font_scale.setValue(saved_scale)
             saved_theme = settings.get("theme", "dark")
-            if saved_theme != self.current_theme:
+            from app.support.theme import apply_theme as _apply_loaded_theme
+            if saved_theme != self.current_theme or abs(saved_scale - float(
+                getattr(self, "ui_font_scale", saved_scale)
+            )) > 1e-9:
+                _apply_loaded_theme(self, saved_theme, saved_scale)
+            if hasattr(self, "combo_theme"):
+                self.combo_theme.setCurrentText(self.current_theme)
+            if False:  # legacy branch superseded by tokenized apply_theme above
                 self.current_theme = saved_theme
                 self.setStyleSheet(LIGHT_STYLESHEET if saved_theme == "light" else DARK_STYLESHEET)
 

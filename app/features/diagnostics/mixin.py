@@ -287,6 +287,45 @@ class DiagnosticsMixin(TraderMixinBase):
             f"마지막 이벤트 ID: {market_intel.get('last_event_id', '')}",
         ]
         panel.setPlainText("\n".join(detail))
+        self._render_diagnostic_drilldown(code, info, market_intel, pending)
+    def _render_diagnostic_drilldown(self, code, info, market_intel, pending):
+        """진단 드릴다운: PnL/비중/노출 + 외부 읽기전용/sync_failed 안내 (읽기 전용)."""
+        panel = getattr(self, "diag_detail_panel", None)
+        if panel is None:
+            return
+        try:
+            from app.support.portfolio_summary import compute_portfolio_summary, position_eval
+        except Exception:
+            return
+        universe = getattr(self, "universe", {})
+        if not isinstance(universe, dict):
+            universe = {}
+        external = getattr(self, "external_positions", {})
+        if not isinstance(external, dict):
+            external = {}
+        history = getattr(self, "trade_history", [])
+        if not isinstance(history, list):
+            history = []
+        summary = compute_portfolio_summary(universe, external, history)
+        snap = position_eval(info if isinstance(info, dict) else {})
+        weight = float(summary["weights"].get(code, 0.0)) * 100.0
+        if code in external and code not in universe:
+            guidance = "외부 보유: 읽기 전용 추적 중. 수동 매도는 가능수량 검증을 통과해야 합니다."
+        elif str(info.get("status", "") or "") == "sync_failed":
+            guidance = "sync_failed: 자동 주문 차단 중. '동기화 실패 해제 요청'은 재동기화 성공 시에만 복구됩니다."
+        else:
+            guidance = "추적 위치: 유니버스."
+        extra = [
+            f"평가금액: {snap['eval_amount']:,.0f} / 투자금: {snap['invest_amount']:,.0f}",
+            f"평가손익: {snap['unrealized_pnl']:+,.0f} ({snap['profit_rate']:+.2f}%)",
+            f"포트폴리오 비중: {weight:.2f}% (전체 평가 {summary['eval_total']:,.0f})",
+            f"시장/섹터: {info.get('market_type', '')} / {info.get('sector', '')}",
+            guidance,
+        ]
+        to_text = getattr(panel, "toPlainText", None)
+        if not callable(to_text):
+            return
+        panel.setPlainText(str(to_text()) + "\n" + "\n".join(extra))
     def _on_diagnostic_selection_changed(self):
         self._render_selected_diagnostic_detail()
     def _on_diagnostic_resync_selected(self):

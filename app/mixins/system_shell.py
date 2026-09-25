@@ -12,8 +12,8 @@ from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
 from config import Config
-from dark_theme import DARK_STYLESHEET
-from light_theme import LIGHT_STYLESHEET
+from app.support.theme import apply_theme
+from app.support.theme import set_ui_font_scale as _set_ui_font_scale
 from ui_dialogs import HelpDialog
 from ._typing import TraderMixinBase
 
@@ -96,6 +96,12 @@ class SystemShellMixin(TraderMixinBase):
         view_menu.addAction("테마 전환", self._toggle_theme)
         view_menu.addSeparator()
         view_menu.addAction("사운드 켜기/끄기", self._toggle_sound)
+        view_menu.addSeparator()
+        workspace_menu = view_menu.addMenu("워크스페이스 이동")
+        assert workspace_menu is not None
+        for _ws_index, _ws_label in enumerate(("⚡ 매매", "📊 종목 탐색", "💼 포트폴리오", "🧠 인텔리전스", "⚙ 시스템")):
+            workspace_menu.addAction(_ws_label, lambda _checked=False, _i=_ws_index: self._goto_workspace(_i))
+        view_menu.addAction("주문 티켓 표시/숨기기", self._toggle_order_ticket)
 
         help_menu = menubar.addMenu("도움말")
         assert help_menu is not None
@@ -284,16 +290,30 @@ class SystemShellMixin(TraderMixinBase):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(callback)
 
+    def set_ui_font_scale(self, scale):
+        """UI 폰트 스케일 변경 후 현재 테마 재적용 (0.85~1.5)."""
+        clamped = _set_ui_font_scale(self, scale)
+        self.log(f"UI 글자 크기 x{clamped:.2f} 적용")
+        return clamped
+
     def _toggle_theme(self):
         """다크/라이트 테마 전환."""
-        if self.current_theme == "dark":
-            self.current_theme = "light"
-            self.setStyleSheet(LIGHT_STYLESHEET)
+        new_theme = "light" if getattr(self, "current_theme", "dark") == "dark" else "dark"
+        apply_theme(self, new_theme)
+        if self.current_theme == "light":
             self.log("라이트 테마 적용")
         else:
-            self.current_theme = "dark"
-            self.setStyleSheet(DARK_STYLESHEET)
             self.log("다크 테마 적용")
+
+    def _on_theme_combo_changed(self, theme):
+        """테마 콤보박스 변경 처리."""
+        if theme in ("dark", "light") and theme != getattr(self, "current_theme", "dark"):
+            apply_theme(self, theme)
+            self.log(f"{'다크' if theme == 'dark' else '라이트'} 테마 적용")
+
+    def _on_font_scale_changed(self, scale):
+        """UI 글자 크기 스핀박스 변경 처리."""
+        self.set_ui_font_scale(scale)
 
     def _toggle_sound(self):
         """사운드 켜기/끄기."""

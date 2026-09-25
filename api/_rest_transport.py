@@ -58,6 +58,26 @@ class RestTransport:
         # 미체결 / 체결
         "ORDER_OPEN": "ka10075",         # 미체결요청
         "ORDER_EXECUTED": "ka10076",     # 체결요청
+
+        # 실현손익 (공식 TOC: ka10072 일자별종목별실현손익_일자,
+        # ka10073 일자별종목별실현손익_기간, ka10074 일자별실현손익)
+        "PNL_DAILY": "ka10074",          # 일자별실현손익요청
+        "PNL_STOCK_DATE": "ka10072",     # 일자별종목별실현손익요청_일자
+        "PNL_STOCK_PERIOD": "ka10073",   # 일자별종목별실현손익요청_기간
+
+        # 증권사 매매동향 (공식 TOC: ka10078 증권사별종목매매동향요청)
+        "BROKER_STOCK_TREND": "ka10078",
+
+        # 종목정보 (공식 TOC: ka10100 종목정보조회, ka10101 업종코드,
+        # ka10102 회원사 리스트)
+        "STOCK_INFO_DETAIL": "ka10100",
+        "SECTOR_CODE_LIST": "ka10101",
+        "MEMBER_LIST": "ka10102",
+
+        # 조건검색 실시간 (WebSocket 전용: ka10173 CNSRREQ search_type=1,
+        # ka10174 CNSRCLR)
+        "CONDITION_REALTIME": "ka10173",
+        "CONDITION_REALTIME_STOP": "ka10174",
     }
 
     PATHS = {

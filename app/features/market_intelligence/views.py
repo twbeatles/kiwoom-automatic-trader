@@ -472,6 +472,9 @@ class MarketIntelViewsMixin(TraderMixinBase):
 
         self._render_selected_market_replay_event_detail()
         self._render_selected_market_replay_audit_detail()
+        _timeline_refresher = getattr(self, "_refresh_intel_timeline", None)
+        if callable(_timeline_refresher):
+            _timeline_refresher(event_records, audit_records)
     def _selected_market_replay_event_record(self) -> Dict[str, Any]:
         table = getattr(self, "market_replay_event_table", None)
         if table is None:
@@ -540,6 +543,62 @@ class MarketIntelViewsMixin(TraderMixinBase):
             json.dumps(record, ensure_ascii=False, indent=2),
         ]
         panel.setPlainText("\n".join(detail))
+    def _refresh_intel_timeline(self, event_records=None, audit_records=None):
+        """이벤트+감사 JSONL 기록을 하나의 통합 타임라인으로 병합 표시 (읽기 전용)."""
+        table = getattr(self, "market_replay_timeline_table", None)
+        if table is None:
+            return
+        if event_records is None:
+            event_records = getattr(self, "_market_replay_event_records", [])
+        if audit_records is None:
+            audit_records = getattr(self, "_market_replay_audit_records", [])
+        try:
+            from app.support.intel_timeline import build_intel_timeline, timeline_row
+        except Exception:
+            return
+        spin = getattr(self, "spin_market_replay_limit", None)
+        try:
+            limit = int(spin.value()) if spin is not None else 100
+        except Exception:
+            limit = 100
+        entries = build_intel_timeline(event_records, audit_records, limit=limit)
+        self._market_replay_timeline_entries = entries
+        table.setUpdatesEnabled(False)
+        try:
+            table.setRowCount(len(entries))
+            for row, entry in enumerate(entries):
+                for col, value in enumerate(timeline_row(entry)):
+                    item = table.item(row, col)
+                    if item is None:
+                        item = QTableWidgetItem(str(value))
+                        table.setItem(row, col, item)
+                    else:
+                        item.setText(str(value))
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col < 3 else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        finally:
+            table.setUpdatesEnabled(True)
+        self._render_selected_intel_timeline_detail()
+    def _render_selected_intel_timeline_detail(self):
+        panel = getattr(self, "market_replay_timeline_detail_panel", None)
+        if panel is None:
+            return
+        table = getattr(self, "market_replay_timeline_table", None)
+        entries = getattr(self, "_market_replay_timeline_entries", [])
+        record = {}
+        if table is not None:
+            selected = table.selectedItems()
+            if selected:
+                idx = selected[0].row()
+                if isinstance(entries, list) and 0 <= int(idx) < len(entries):
+                    source = entries[int(idx)].get("source", {})
+                    if isinstance(source, dict):
+                        record = source
+        if not record:
+            panel.setPlainText("선택된 타임라인 항목이 없습니다.")
+            return
+        panel.setPlainText(json.dumps(record, ensure_ascii=False, indent=2))
+    def _on_intel_timeline_selection_changed(self):
+        self._render_selected_intel_timeline_detail()
     def _on_market_replay_event_selection_changed(self):
         self._render_selected_market_replay_event_detail()
     def _on_market_replay_audit_selection_changed(self):
@@ -635,6 +694,21 @@ class MarketIntelViewsMixin(TraderMixinBase):
         body_layout.addWidget(audit_group, 0, 1)
 
         layout.addLayout(body_layout)
+        timeline_group = QGroupBox("통합 타임라인 (이벤트+감사)")
+        timeline_layout = QVBoxLayout(timeline_group)
+        self.market_replay_timeline_table = QTableWidget()
+        timeline_cols = ["시각", "구분", "대상", "내용", "정책/사유"]
+        self.market_replay_timeline_table.setColumnCount(len(timeline_cols))
+        self.market_replay_timeline_table.setHorizontalHeaderLabels(timeline_cols)
+        self.market_replay_timeline_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.market_replay_timeline_table.itemSelectionChanged.connect(self._on_intel_timeline_selection_changed)
+        timeline_layout.addWidget(self.market_replay_timeline_table)
+        self.market_replay_timeline_detail_panel = QPlainTextEdit()
+        self.market_replay_timeline_detail_panel.setReadOnly(True)
+        self.market_replay_timeline_detail_panel.setMaximumHeight(160)
+        self.market_replay_timeline_detail_panel.setPlainText("선택된 타임라인 항목이 없습니다.")
+        timeline_layout.addWidget(self.market_replay_timeline_detail_panel)
+        layout.addWidget(timeline_group)
         self._schedule_market_replay_refresh(force=True)
         return widget
     def _create_market_intelligence_tab(self):

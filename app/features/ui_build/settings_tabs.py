@@ -689,6 +689,31 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         )
         g6.addWidget(self.chk_allow_plaintext_secret_fallback, 2, 0, 1, 4)
 
+        lbl_theme = QLabel("테마")
+        lbl_theme.setToolTip("다크/라이트 테마 (Ctrl+T로 전환)")
+        g6.addWidget(lbl_theme, 3, 0)
+        self.combo_theme = NoScrollComboBox()
+        self.combo_theme.addItems(["dark", "light"])
+        self.combo_theme.setToolTip("UI 테마 선택")
+        self.combo_theme.setAccessibleName("테마 선택")
+        self.combo_theme.currentTextChanged.connect(self._on_theme_combo_changed)
+        g6.addWidget(self.combo_theme, 3, 1)
+
+        lbl_font_scale = QLabel("UI 글자 크기")
+        lbl_font_scale.setToolTip("0.85~1.5 배율 (WCAG 1.4.4 텍스트 크기 조정)")
+        g6.addWidget(lbl_font_scale, 3, 2)
+        self.spin_ui_font_scale = NoScrollDoubleSpinBox()
+        self.spin_ui_font_scale.setRange(
+            float(getattr(Config, "UI_FONT_SCALE_MIN", 0.85)),
+            float(getattr(Config, "UI_FONT_SCALE_MAX", 1.5)),
+        )
+        self.spin_ui_font_scale.setSingleStep(0.05)
+        self.spin_ui_font_scale.setValue(float(getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0)))
+        self.spin_ui_font_scale.setToolTip("UI 글자 크기 배율")
+        self.spin_ui_font_scale.setAccessibleName("UI 글자 크기 배율")
+        self.spin_ui_font_scale.valueChanged.connect(self._on_font_scale_changed)
+        g6.addWidget(self.spin_ui_font_scale, 3, 3)
+
         grp_sys.setLayout(g6)
         system_layout.addWidget(grp_sys)
 

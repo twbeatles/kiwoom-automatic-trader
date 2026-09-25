@@ -229,8 +229,97 @@ class RestMarketMixin(RestTransport):
         return quote.name if quote else ""
 
     def get_market_status(self) -> Dict[str, Any]:
-        """장 상태는 공식 REST TR이 없고 WebSocket REAL `0s`(장시작시간)만 존재한다."""
+        """장 상태 조회.
+
+        1순위: 부착된 WebSocket 클라이언트의 `0s`(장시작시간) 스냅샷.
+        2순위: 빈 dict — 호출자(risk_state 가격/스프레드 프록시)가 폴백을 수행한다.
+        장시작시간의 공식 REST TR은 없으며 실시간은 WebSocket `0s`만 존재한다.
+        """
+        ws = getattr(self, "ws_client", None)
+        snapshot_getter = getattr(ws, "get_market_status_snapshot", None)
+        if callable(snapshot_getter):
+            try:
+                snapshot = snapshot_getter() or {}
+                if isinstance(snapshot, dict) and snapshot:
+                    return {str(k): v for k, v in snapshot.items()} if isinstance(snapshot, dict) else {}
+            except Exception as exc:
+                self.logger.warning(f"장상태 스냅샷 조회 실패(프록시 폴백): {exc}")
         return {}
+
+    def get_stock_info_detail(self, code: str) -> Dict[str, Any]:
+        """종목정보 조회 (ka10100 /api/dostk/stkinfo)."""
+        if not str(code or "").strip():
+            return {}
+        data = {"stk_cd": str(code)}
+        try:
+            result = self._request("POST", self.PATHS["stkinfo"], tr_code=self.TR_CODES["STOCK_INFO_DETAIL"], data=data)
+        except Exception as exc:
+            self.logger.warning(f"종목정보 조회 예외: {exc}")
+            return {}
+        if not result or result.get("return_code") != 0:
+            return {}
+        info = _payload_dict(result, "output")
+        if not info:
+            return {}
+        return {
+            "code": str(_pick(info, "code", "stk_cd", default="") or code),
+            "name": str(_pick(info, "name", "stk_nm", default="") or ""),
+            "listed_shares": _safe_int(_pick(info, "listCount", "listed_qty")),
+            "audit_info": str(_pick(info, "auditInfo", default="") or ""),
+            "listed_date": str(_pick(info, "regDay", "listed_dt", default="") or ""),
+            "prev_close": _safe_int(_pick(info, "lastPrice", "prev_close"), absolute=True),
+            "state": str(_pick(info, "state", default="") or ""),
+            "market_code": str(_pick(info, "marketCode", default="") or ""),
+            "market_name": str(_pick(info, "marketName", default="") or ""),
+            "sector_name": str(_pick(info, "upName", "sector", default="") or ""),
+            "company_class": str(_pick(info, "companyClassName", default="") or ""),
+            "order_warning": str(_pick(info, "orderWarning", default="") or ""),
+            "nxt_enabled": str(_pick(info, "nxtEnable", default="") or ""),
+        }
+
+    def get_sector_code_list(self, market: str = "0") -> List[Dict[str, Any]]:
+        """업종코드 리스트 조회 (ka10101 /api/dostk/stkinfo)."""
+        data = {"mrkt_tp": str(market or "0")}
+        try:
+            result = self._request("POST", self.PATHS["stkinfo"], tr_code=self.TR_CODES["SECTOR_CODE_LIST"], data=data)
+        except Exception as exc:
+            self.logger.warning(f"업종코드 조회 예외: {exc}")
+            return []
+        if not result or result.get("return_code") != 0:
+            return []
+        rows = _payload_records(result, "list", "output")
+        sectors: List[Dict[str, Any]] = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            sectors.append({
+                "market_code": str(_pick(item, "marketCode", default="") or ""),
+                "code": str(_pick(item, "code", "sect_cd", default="") or ""),
+                "name": str(_pick(item, "name", "sect_nm", default="") or ""),
+                "group": str(_pick(item, "group", default="") or ""),
+            })
+        return [row for row in sectors if row.get("code") or row.get("name")]
+
+    def get_member_list(self) -> List[Dict[str, Any]]:
+        """회원사 리스트 조회 (ka10102 /api/dostk/stkinfo, ka10078 mbrm_cd 참조용)."""
+        try:
+            result = self._request("POST", self.PATHS["stkinfo"], tr_code=self.TR_CODES["MEMBER_LIST"], data={})
+        except Exception as exc:
+            self.logger.warning(f"회원사 조회 예외: {exc}")
+            return []
+        if not result or result.get("return_code") != 0:
+            return []
+        rows = _payload_records(result, "list", "output")
+        members: List[Dict[str, Any]] = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            members.append({
+                "code": str(_pick(item, "code", "mbrm_cd", default="") or ""),
+                "name": str(_pick(item, "name", "mbrm_nm", default="") or ""),
+                "gb": str(_pick(item, "gb", default="") or ""),
+            })
+        return [row for row in members if row.get("code") or row.get("name")]
 
     def get_index_quote(self, index_code: str) -> Dict[str, Any]:
         """업종현재가 조회 (ka20001 /api/dostk/sect)."""

@@ -88,11 +88,21 @@ class TestShortcutsAndUISchema(unittest.TestCase):
         market_text = self._read_feature_text("app/features/market_intelligence")
 
         for label in (
-            "🎯 핵심 설정",
-            "🛠 상세 설정",
+            "⚡ 매매",
+            "📊 종목 탐색",
+            "💼 포트폴리오",
+            "🧠 인텔리전스",
+            "⚙ 시스템",
+            "🔎 관심(조건+순위)",
+            "📈 차트",
+            "📋 호가",
+            "🔍 조건검색",
+            "🏆 순위",
+            "📝 주문 티켓",
             "🧠 인텔리전스 설정",
             "🧠 인텔리전스 현황",
             "📼 인텔리전스 리플레이",
+            "🛠 상세 설정",
             "🩺 시스템 진단",
             "🔐 API/알림",
             "진입 판단",

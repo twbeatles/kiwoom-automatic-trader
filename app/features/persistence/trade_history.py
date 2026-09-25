@@ -169,6 +169,9 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
         self.stats_labels["profit"].setText(f"{total_profit:+,} 원")
         self.stats_labels["max_profit"].setText(f"{max(profits):+,}" if profits else "-")
         self.stats_labels["max_loss"].setText(f"{min(profits):+,}" if profits else "-")
+        refresher = getattr(self, "_refresh_portfolio_cards", None)
+        if callable(refresher):
+            refresher()
     def _load_trade_history(self):
         """거래 내역 로드."""
         try:
