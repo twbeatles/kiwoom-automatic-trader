@@ -29,23 +29,21 @@ class StockSearchDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        self.setWindowTitle("🔍 종목 검색")
+        self.setWindowTitle("종목 검색")
         self.setFixedSize(600, 500)
-        self.setStyleSheet("background-color: #0d1117; color: #e6edf3;")
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(24, 24, 24, 24)
 
         title = QLabel("종목 검색")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #58a6ff; margin-bottom: 10px;")
+        title.setProperty("section", True)
         layout.addWidget(title)
 
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("종목명 또는 종목코드를 입력하세요...")
         self.search_input.setMinimumHeight(40)
-        self.search_input.setStyleSheet("border-radius: 8px; font-size: 14px;")
         self.search_input.returnPressed.connect(self._search)
 
         btn_search = QPushButton("검색")
@@ -68,21 +66,16 @@ class StockSearchDialog(QDialog):
         result_vertical_header = self.result_table.verticalHeader()
         if result_vertical_header is not None:
             result_vertical_header.setVisible(False)
-        self.result_table.setStyleSheet(
-            """
-            QTableWidget { border: 1px solid #30363d; border-radius: 8px; }
-            QHeaderView::section { background: #161b22; padding: 8px; border: none; }
-            """
-        )
         layout.addWidget(self.result_table)
         self.search_status = QLabel("6자리 코드는 API 확인, 종목명은 로컬 캐시에서 검색합니다.")
         self.search_status.setWordWrap(True)
+        self.search_status.setProperty("hint", True)
         layout.addWidget(self.search_status)
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        btn_apply = QPushButton("✅ 선택 적용")
+        btn_apply = QPushButton("선택 적용")
         btn_apply.setMinimumHeight(36)
         btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_apply.clicked.connect(self._apply)
@@ -131,7 +124,7 @@ class StockSearchDialog(QDialog):
 
         self._last_results = deduped
         self._render_results(deduped)
-        self.search_status.setText(" | ".join(status_parts) if status_parts else "검색 결과 없음")
+        self.search_status.setText("| ".join(status_parts) if status_parts else "검색 결과 없음")
 
     def _search_code_via_api(self, code: str):
         if not self.rest_client:
@@ -168,8 +161,8 @@ class StockSearchDialog(QDialog):
             self.result_table.setCellWidget(i, 0, chk)
             self.result_table.setItem(i, 1, QTableWidgetItem(code))
             self.result_table.setItem(i, 2, QTableWidgetItem(name))
-            self.result_table.setItem(i, 3, QTableWidgetItem(f"{current_price:,}" if current_price > 0 else "-"))
-            self.result_table.setItem(i, 4, QTableWidgetItem("API 확인" if source == "api" else "캐시"))
+            self.result_table.setItem(i, 3, QTableWidgetItem(f"{current_price:,}"if current_price > 0 else "-"))
+            self.result_table.setItem(i, 4, QTableWidgetItem("API 확인"if source == "api"else "캐시"))
 
     def _apply(self):
         self.selected_codes = []

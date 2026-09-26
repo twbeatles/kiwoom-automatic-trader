@@ -30,7 +30,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         layout = QVBoxLayout(widget)
 
         self.stats_labels = {}
-        stats_group = QGroupBox("📊 오늘의 성과")
+        stats_group = QGroupBox("오늘의 성과")
         grid = QGridLayout()
 
         for i, (key, label) in enumerate([
@@ -39,13 +39,13 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         ]):
             grid.addWidget(QLabel(f"{label}:"), i // 3, (i % 3) * 2)
             lbl = QLabel("-")
-            lbl.setStyleSheet("font-weight: bold;")
+            lbl.setProperty("value", True)
             self.stats_labels[key] = lbl
             grid.addWidget(lbl, i // 3, (i % 3) * 2 + 1)
 
         stats_group.setLayout(grid)
         layout.addWidget(stats_group)
-        portfolio_group = QGroupBox("💼 포트폴리오 요약 (PnL/비중/노출)")
+        portfolio_group = QGroupBox("포트폴리오 요약 (PnL/비중/노출)")
         portfolio_grid = QGridLayout()
         self.portfolio_labels = {}
         for i, (key, label) in enumerate([
@@ -61,7 +61,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         layout.addWidget(portfolio_group)
         self._refresh_portfolio_cards()
 
-        btn_refresh = QPushButton("🔄 새로고침")
+        btn_refresh = QPushButton("새로고침")
         btn_refresh.clicked.connect(self._update_stats)
         btn_refresh.clicked.connect(self._refresh_portfolio_cards)
         layout.addWidget(btn_refresh)
@@ -91,10 +91,10 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         labels["pnl"].setText(
             f"실현 {summary['realized_pnl']:+,.0f} / 평가 {summary['unrealized_pnl']:+,.0f} / 합계 {summary['total_pnl']:+,.0f}"
         )
-        top = ", ".join(f"{code} {w * 100:.1f}%" for code, w in summary["top_weights"]) or "-"
+        top = ", ".join(f"{code} {w * 100:.1f}%"for code, w in summary["top_weights"]) or "-"
         labels["weight"].setText(f"평가 {summary['eval_total']:,.0f} / {top}")
         market_top = sorted(summary["exposures"]["market"].items(), key=lambda kv: -kv[1])[:2]
-        market_text = ", ".join(f"{name} {amount:,.0f}" for name, amount in market_top) or "-"
+        market_text = ", ".join(f"{name} {amount:,.0f}"for name, amount in market_top) or "-"
         labels["exposure"].setText(market_text)
         counts = summary["counts"]
         labels["health"].setText(
@@ -114,10 +114,10 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         layout.addWidget(self.history_table)
 
         btn_layout = QHBoxLayout()
-        btn_export = QPushButton("📤 CSV 내보내기")
+        btn_export = QPushButton("CSV 내보내기")
         btn_export.clicked.connect(self._export_csv)
         btn_layout.addWidget(btn_export)
-        btn_clear = QPushButton("🗑️ 오늘 기록 삭제")
+        btn_clear = QPushButton("오늘 기록 삭제")
         btn_clear.clicked.connect(self._clear_today_history)
         btn_layout.addWidget(btn_clear)
         btn_layout.addStretch()
@@ -202,7 +202,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         layout = QVBoxLayout(content_widget)
 
         # API 인증
-        group1 = QGroupBox("🔐 키움 REST API 인증")
+        group1 = QGroupBox("키움 REST API 인증")
         form1 = QFormLayout()
         self.input_app_key = QLineEdit()
         self.input_app_key.setEchoMode(QLineEdit.EchoMode.Password)
@@ -218,7 +218,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         layout.addWidget(group1)
 
         # 텔레그램
-        group2 = QGroupBox("📱 텔레그램 알림")
+        group2 = QGroupBox("텔레그램 알림")
         form2 = QFormLayout()
         self.input_tg_token = QLineEdit()
         self.input_tg_token.setPlaceholderText("텔레그램 Bot Token")
@@ -242,7 +242,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         group3.setLayout(form3)
         layout.addWidget(group3)
 
-        btn_save = QPushButton("💾 전체 설정 저장")
+        btn_save = QPushButton("전체 설정 저장")
         btn_save.clicked.connect(self._save_settings)
         layout.addWidget(btn_save)
         layout.addStretch()

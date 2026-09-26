@@ -6,8 +6,6 @@ from typing import Any, Dict
 from app.support.ui_text import combo_value, set_combo_value
 from app.mixins._typing import TraderMixinBase
 from config import Config
-from dark_theme import DARK_STYLESHEET
-from light_theme import LIGHT_STYLESHEET
 
 
 class SettingsSnapshotMixin(TraderMixinBase):
@@ -406,8 +404,3 @@ class SettingsSnapshotMixin(TraderMixinBase):
             _apply_snap_theme(self, _snap_theme, _snap_scale)
             if hasattr(self, 'combo_theme'):
                 self.combo_theme.setCurrentText(self.current_theme)
-            if False:  # legacy branch superseded by tokenized apply above
-                pass
-            if settings.get('theme') != self.current_theme and False:
-                self.current_theme = settings['theme']
-                self.setStyleSheet(LIGHT_STYLESHEET if self.current_theme == 'light' else DARK_STYLESHEET)

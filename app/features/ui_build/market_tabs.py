@@ -26,7 +26,7 @@ from app.mixins._typing import TraderMixinBase
 
 class UIBuildMarketTabsMixin(TraderMixinBase):
     def _create_chart_tab(self):
-        """📈 차트 시각화 탭"""
+        """차트 시각화 탭"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
@@ -41,7 +41,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         self.chart_type_combo.addItems(["일봉", "주봉", "1분봉", "5분봉", "15분봉", "30분봉", "60분봉"])
         ctrl_layout.addWidget(self.chart_type_combo)
 
-        btn_load = QPushButton("🔄 차트 조회")
+        btn_load = QPushButton("차트 조회")
         btn_load.clicked.connect(self._load_chart)
         ctrl_layout.addWidget(btn_load)
         ctrl_layout.addStretch()
@@ -58,12 +58,12 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
 
         # 차트 정보
         self.chart_info = QLabel("차트를 조회하세요")
-        self.chart_info.setStyleSheet("padding: 10px; background: #16213e; border-radius: 5px;")
+        self.chart_info.setProperty("hint", True)
         layout.addWidget(self.chart_info)
 
         return widget
     def _create_orderbook_tab(self):
-        """📋 호가창 탭"""
+        """호가창 탭"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
@@ -74,7 +74,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         self.hoga_code_input.setMaximumWidth(100)
         ctrl_layout.addWidget(self.hoga_code_input)
 
-        btn_load = QPushButton("🔄 호가 조회")
+        btn_load = QPushButton("호가 조회")
         btn_load.clicked.connect(self._load_orderbook)
         ctrl_layout.addWidget(btn_load)
         ctrl_layout.addStretch()
@@ -122,13 +122,13 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
 
         # 총 잔량 표시
         self.hoga_info = QLabel("총 매도잔량: - | 총 매수잔량: -")
-        self.hoga_info.setStyleSheet("font-weight: bold; padding: 10px;")
+        self.hoga_info.setProperty("value", True)
         layout.addWidget(self.hoga_info)
 
         layout.addStretch()
         return widget
     def _create_condition_tab(self):
-        """🔍 조건검색 탭"""
+        """조건검색 탭"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
@@ -139,15 +139,15 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         self.condition_combo.setMinimumWidth(200)
         ctrl_layout.addWidget(self.condition_combo)
 
-        btn_refresh = QPushButton("🔄 목록 갱신")
+        btn_refresh = QPushButton("목록 갱신")
         btn_refresh.clicked.connect(self._load_conditions)
         ctrl_layout.addWidget(btn_refresh)
 
-        btn_search = QPushButton("🔍 검색 실행")
+        btn_search = QPushButton("검색 실행")
         btn_search.clicked.connect(self._execute_condition)
         ctrl_layout.addWidget(btn_search)
 
-        btn_apply = QPushButton("📌 종목 적용")
+        btn_apply = QPushButton("종목 적용")
         btn_apply.clicked.connect(self._apply_condition_result)
         ctrl_layout.addWidget(btn_apply)
         ctrl_layout.addStretch()
@@ -167,7 +167,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
 
         return widget
     def _create_ranking_tab(self):
-        """🏆 순위 정보 탭"""
+        """순위 정보 탭"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
@@ -181,7 +181,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         self.ranking_market.addItems(["전체", "코스피", "코스닥"])
         ctrl_layout.addWidget(self.ranking_market)
 
-        btn_load = QPushButton("🔄 순위 조회")
+        btn_load = QPushButton("순위 조회")
         btn_load.clicked.connect(self._load_ranking)
         ctrl_layout.addWidget(btn_load)
         ctrl_layout.addStretch()

@@ -16,6 +16,11 @@ from PyQt6.QtWidgets import (
 )
 
 from api import KiwoomAuth, KiwoomRESTClient, KiwoomWebSocketClient
+from app.support.components.helpers import (
+    mark_invalid,
+    set_connection_badge,
+    set_profit_sign,
+)
 from app.support.worker import Worker
 from config import Config
 from telegram_notifier import TelegramNotifier
@@ -117,13 +122,13 @@ class APIAccountMixin(TraderMixinBase):
         if not app_key or not secret_key:
             self._focus_api_tab()
 
-            self.input_app_key.setStyleSheet("border: 2px solid #ff5555;" if not app_key else "")
-            self.input_secret.setStyleSheet("border: 2px solid #ff5555;" if not secret_key else "")
+            mark_invalid(self.input_app_key, not app_key)
+            mark_invalid(self.input_secret, not secret_key)
             QMessageBox.warning(self, "경고", "API 연동을 위해 App Key와 Secret Key를 입력해주세요.")
             return
 
-        self.input_app_key.setStyleSheet("")
-        self.input_secret.setStyleSheet("")
+        mark_invalid(self.input_app_key, False)
+        mark_invalid(self.input_secret, False)
         self.btn_start.setEnabled(False)
         self._connect_inflight = True
         self.btn_connect.setEnabled(False)
@@ -229,35 +234,7 @@ class APIAccountMixin(TraderMixinBase):
             return
 
         self._last_connection_mode = mode
-        if mode == "connected":
-            self.lbl_status.setObjectName("statusConnected")
-            self.lbl_status.setStyleSheet(
-                """
-                color: #3fb950;
-                font-weight: bold;
-                /* font-size: theme-governed */
-                padding: 8px 16px;
-                background: rgba(63, 185, 80, 0.15);
-                border-radius: 14px;
-                border: 1px solid rgba(63, 185, 80, 0.3);
-                """
-            )
-        elif mode == "connecting":
-            self.lbl_status.setObjectName("statusConnecting")
-            self.lbl_status.setStyleSheet("color: #ffc107;")
-        else:
-            self.lbl_status.setObjectName("statusDisconnected")
-            self.lbl_status.setStyleSheet(
-                """
-                color: #f85149;
-                font-weight: bold;
-                /* font-size: theme-governed */
-                padding: 8px 16px;
-                background: rgba(248, 81, 73, 0.15);
-                border-radius: 14px;
-                border: 1px solid rgba(248, 81, 73, 0.3);
-                """
-            )
+        set_connection_badge(self.lbl_status, mode)
 
     def _reset_connection_state(self):
         if self.ws_client:
@@ -355,42 +332,7 @@ class APIAccountMixin(TraderMixinBase):
             return
 
         self._last_profit_sign = sign
-        if sign > 0:
-            self.lbl_profit.setStyleSheet(
-                """
-                color: #3fb950;
-                font-weight: bold;
-                /* font-size: theme-governed */
-                padding: 8px 16px;
-                background: rgba(63, 185, 80, 0.15);
-                border-radius: 10px;
-                border: 1px solid rgba(63, 185, 80, 0.2);
-                """
-            )
-        elif sign < 0:
-            self.lbl_profit.setStyleSheet(
-                """
-                color: #f85149;
-                font-weight: bold;
-                /* font-size: theme-governed */
-                padding: 8px 16px;
-                background: rgba(248, 81, 73, 0.15);
-                border-radius: 10px;
-                border: 1px solid rgba(248, 81, 73, 0.2);
-                """
-            )
-        else:
-            self.lbl_profit.setStyleSheet(
-                """
-                color: #e6edf3;
-                font-weight: bold;
-                /* font-size: theme-governed */
-                padding: 8px 16px;
-                background: rgba(139, 148, 158, 0.1);
-                border-radius: 10px;
-                border: 1px solid rgba(139, 148, 158, 0.2);
-                """
-            )
+        set_profit_sign(self.lbl_profit, sign)
 
     def _on_account_info_error(self, account: str, error: Exception):
         self._account_refresh_pending = False

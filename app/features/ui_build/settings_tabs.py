@@ -20,7 +20,7 @@ from app.support.ui_text import (
 from app.support.worker import Worker
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
-from dark_theme import DARK_STYLESHEET
+from app.support.components.helpers import mark_secondary
 from app.mixins._typing import TraderMixinBase
 
 
@@ -30,7 +30,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         outer = QVBoxLayout(widget)
         outer.setSpacing(14)
 
-        guide_group = QGroupBox("🧭 처음 설정 순서")
+        guide_group = QGroupBox("처음 설정 순서")
         guide_layout = QVBoxLayout(guide_group)
         guide_label = QLabel(
             "\n".join(
@@ -44,22 +44,21 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             )
         )
         guide_label.setWordWrap(True)
-        guide_label.setStyleSheet("color: #c9d1d9; line-height: 1.5;")
         guide_layout.addWidget(guide_label)
         outer.addWidget(guide_group)
 
-        basic_group = QGroupBox("🎯 기본 매매 수치")
+        basic_group = QGroupBox("기본 매매 수치")
         layout = QGridLayout(basic_group)
         layout.setSpacing(10)
 
-        layout.addWidget(QLabel("📌 즐겨찾기:"), 0, 0)
+        layout.addWidget(QLabel("즐겨찾기:"), 0, 0)
         self.combo_favorites = NoScrollComboBox()
         self.combo_favorites.addItem("즐겨찾기 선택")
         self._load_favorites()
         self.combo_favorites.currentIndexChanged.connect(self._on_favorite_selected)
         layout.addWidget(self.combo_favorites, 0, 1)
 
-        layout.addWidget(QLabel("🧾 종목 입력:"), 0, 2)
+        layout.addWidget(QLabel("종목 입력:"), 0, 2)
         self.input_codes = QLineEdit(Config.DEFAULT_CODES)
         self.input_codes.setAcceptDrops(True)
         self.input_codes.setPlaceholderText("예: 005930,000660 처럼 쉼표로 구분해 입력")
@@ -67,20 +66,20 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.input_codes.dropEvent = self._drop_codes
         layout.addWidget(self.input_codes, 0, 3, 1, 3)
 
-        btn_save_fav = QPushButton("⭐ 저장")
+        btn_save_fav = QPushButton("저장")
         btn_save_fav.setToolTip("현재 입력한 종목을 즐겨찾기로 저장합니다.")
         btn_save_fav.clicked.connect(self._save_favorite)
         layout.addWidget(btn_save_fav, 0, 6)
 
-        layout.addWidget(QLabel("💵 한 종목 투자 비중:"), 1, 0)
+        layout.addWidget(QLabel("한 종목 투자 비중:"), 1, 0)
         self.spin_betting = NoScrollDoubleSpinBox()
         self.spin_betting.setRange(1, 100)
         self.spin_betting.setValue(Config.DEFAULT_BETTING_RATIO)
-        self.spin_betting.setSuffix(" %")
+        self.spin_betting.setSuffix("%")
         self.spin_betting.setToolTip("한 종목에 전체 자금의 몇 %를 배분할지 정합니다.")
         layout.addWidget(self.spin_betting, 1, 1)
 
-        layout.addWidget(QLabel("📐 목표가 민감도(K):"), 1, 2)
+        layout.addWidget(QLabel("목표가 민감도(K):"), 1, 2)
         self.spin_k = NoScrollDoubleSpinBox()
         self.spin_k.setRange(0.1, 1.0)
         self.spin_k.setSingleStep(0.1)
@@ -88,33 +87,33 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_k.setToolTip("값이 클수록 목표가가 멀어져 진입이 더 신중해집니다.")
         layout.addWidget(self.spin_k, 1, 3)
 
-        layout.addWidget(QLabel("🎯 이익 보호 시작:"), 1, 4)
+        layout.addWidget(QLabel("이익 보호 시작:"), 1, 4)
         self.spin_ts_start = NoScrollDoubleSpinBox()
         self.spin_ts_start.setRange(0.5, 20)
         self.spin_ts_start.setValue(Config.DEFAULT_TS_START)
-        self.spin_ts_start.setSuffix(" %")
+        self.spin_ts_start.setSuffix("%")
         self.spin_ts_start.setToolTip("수익률이 이 기준을 넘으면 추적 손절이 시작됩니다.")
         layout.addWidget(self.spin_ts_start, 1, 5)
 
-        layout.addWidget(QLabel("📉 추적 손절 폭:"), 2, 0)
+        layout.addWidget(QLabel("추적 손절 폭:"), 2, 0)
         self.spin_ts_stop = NoScrollDoubleSpinBox()
         self.spin_ts_stop.setRange(0.5, 10)
         self.spin_ts_stop.setValue(Config.DEFAULT_TS_STOP)
-        self.spin_ts_stop.setSuffix(" %")
+        self.spin_ts_stop.setSuffix("%")
         self.spin_ts_stop.setToolTip("최고 수익률에서 이만큼 밀리면 매도합니다.")
         layout.addWidget(self.spin_ts_stop, 2, 1)
 
-        layout.addWidget(QLabel("🛑 최대 손절률:"), 2, 2)
+        layout.addWidget(QLabel("최대 손절률:"), 2, 2)
         self.spin_loss = NoScrollDoubleSpinBox()
         self.spin_loss.setRange(0.5, 10)
         self.spin_loss.setValue(Config.DEFAULT_LOSS_CUT)
-        self.spin_loss.setSuffix(" %")
+        self.spin_loss.setSuffix("%")
         self.spin_loss.setToolTip("매수 후 손실이 이 기준을 넘으면 손절합니다.")
         layout.addWidget(self.spin_loss, 2, 3)
 
         note_label = QLabel("초보자 권장: 투자 비중은 낮게 시작하고, 기본값에서 하나씩만 조절하세요.")
         note_label.setWordWrap(True)
-        note_label.setStyleSheet("color: #8b949e;")
+        mark_secondary(note_label)
         layout.addWidget(note_label, 3, 0, 1, 7)
 
         outer.addWidget(basic_group)
@@ -129,7 +128,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             "세부 옵션은 기능별로 나눠 두었습니다. 초보자는 먼저 [진입 판단], [리스크 관리], [주문/청산]만 확인해도 충분합니다."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color: #8b949e;")
+        mark_secondary(intro)
         main_layout.addWidget(intro)
 
         detail_tabs = QTabWidget()
@@ -143,7 +142,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
 
             desc = QLabel(description)
             desc.setWordWrap(True)
-            desc.setStyleSheet("color: #8b949e;")
+            mark_secondary(desc)
             page_layout.addWidget(desc)
 
             scroll = QScrollArea()
@@ -185,7 +184,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         )
 
         # ── 📊 기술지표 필터 ──
-        grp_ind = QGroupBox("📊 보조지표 필터")
+        grp_ind = QGroupBox("보조지표 필터")
         g1 = QGridLayout()
         g1.setSpacing(10)
 
@@ -238,7 +237,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         entry_layout.addWidget(grp_ind)
 
         # ── 🛡️ 리스크 관리 ──
-        grp_risk = QGroupBox("🛡️ 계좌 리스크 관리")
+        grp_risk = QGroupBox("계좌 리스크 관리")
         g2 = QGridLayout()
         g2.setSpacing(10)
 
@@ -249,7 +248,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_max_loss = NoScrollDoubleSpinBox()
         self.spin_max_loss.setRange(1, 20)
         self.spin_max_loss.setValue(Config.DEFAULT_MAX_DAILY_LOSS)
-        self.spin_max_loss.setSuffix(" %")
+        self.spin_max_loss.setSuffix("%")
         g2.addWidget(self.spin_max_loss, 0, 2)
         g2.addWidget(QLabel("동시 보유 수:"), 0, 3)
         self.spin_max_holdings = NoScrollSpinBox()
@@ -283,7 +282,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_market_limit = NoScrollSpinBox()
         self.spin_market_limit.setRange(50, 100)
         self.spin_market_limit.setValue(70)
-        self.spin_market_limit.setSuffix(" %")
+        self.spin_market_limit.setSuffix("%")
         g2.addWidget(self.spin_market_limit, 2, 2)
 
         # 섹터 제한
@@ -294,7 +293,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_sector_limit = NoScrollSpinBox()
         self.spin_sector_limit.setRange(10, 50)
         self.spin_sector_limit.setValue(30)
-        self.spin_sector_limit.setSuffix(" %")
+        self.spin_sector_limit.setSuffix("%")
         g2.addWidget(self.spin_sector_limit, 2, 5)
 
         # 동적 포지션 사이징
@@ -309,14 +308,14 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_risk_percent = NoScrollDoubleSpinBox()
         self.spin_risk_percent.setRange(0.5, 5.0)
         self.spin_risk_percent.setValue(1.0)
-        self.spin_risk_percent.setSuffix(" %")
+        self.spin_risk_percent.setSuffix("%")
         g2.addWidget(self.spin_risk_percent, 3, 4)
 
         grp_risk.setLayout(g2)
         risk_layout.addWidget(grp_risk)
 
         # ── 📈 진입 전략 ──
-        grp_entry = QGroupBox("📈 추가 진입 판단")
+        grp_entry = QGroupBox("추가 진입 판단")
         g3 = QGridLayout()
         g3.setSpacing(10)
 
@@ -386,7 +385,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         entry_layout.addWidget(grp_entry)
 
         # ── ⚙️ 주문 실행 ──
-        grp_order = QGroupBox("⚙️ 주문/청산 상세")
+        grp_order = QGroupBox("주문/청산 상세")
         g4 = QGridLayout()
         g4.setSpacing(10)
 
@@ -402,7 +401,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_split_percent = NoScrollDoubleSpinBox()
         self.spin_split_percent.setRange(0.1, 2.0)
         self.spin_split_percent.setValue(Config.DEFAULT_SPLIT_PERCENT)
-        self.spin_split_percent.setSuffix(" %")
+        self.spin_split_percent.setSuffix("%")
         g4.addWidget(self.spin_split_percent, 0, 4)
 
         self.chk_use_cooldown = QCheckBox("재진입 대기 시간")
@@ -412,7 +411,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g4.addWidget(QLabel("대기 시간:"), 1, 1)
         self.spin_cooldown_min = NoScrollSpinBox()
         self.spin_cooldown_min.setRange(1, 120)
-        self.spin_cooldown_min.setSuffix(" 분")
+        self.spin_cooldown_min.setSuffix("분")
         self.spin_cooldown_min.setValue(Config.DEFAULT_COOLDOWN_MINUTES)
         g4.addWidget(self.spin_cooldown_min, 1, 2)
 
@@ -423,7 +422,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g4.addWidget(QLabel("최대 보유:"), 1, 4)
         self.spin_time_stop_min = NoScrollSpinBox()
         self.spin_time_stop_min.setRange(5, 480)
-        self.spin_time_stop_min.setSuffix(" 분")
+        self.spin_time_stop_min.setSuffix("분")
         self.spin_time_stop_min.setValue(Config.DEFAULT_MAX_HOLD_MINUTES)
         g4.addWidget(self.spin_time_stop_min, 1, 5)
 
@@ -435,7 +434,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_min_value = NoScrollDoubleSpinBox()
         self.spin_min_value.setRange(1, 500)
         self.spin_min_value.setValue(Config.DEFAULT_MIN_AVG_VALUE / 100_000_000)
-        self.spin_min_value.setSuffix(" 억")
+        self.spin_min_value.setSuffix("억")
         g4.addWidget(self.spin_min_value, 2, 2)
 
         self.chk_use_spread = QCheckBox("호가 스프레드 제한")
@@ -446,7 +445,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_spread_max = NoScrollDoubleSpinBox()
         self.spin_spread_max.setRange(0.05, 2.0)
         self.spin_spread_max.setValue(Config.DEFAULT_MAX_SPREAD_PCT)
-        self.spin_spread_max.setSuffix(" %")
+        self.spin_spread_max.setSuffix("%")
         g4.addWidget(self.spin_spread_max, 2, 5)
 
         g4.addWidget(QLabel("실행 모드:"), 3, 0)
@@ -463,7 +462,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         order_layout.addWidget(grp_order)
 
         # ── 🚀 v5.0 Strategy Pack ──
-        grp_v5 = QGroupBox("🚀 전략 묶음/백테스트")
+        grp_v5 = QGroupBox("전략 묶음/백테스트")
         g5 = QGridLayout()
         g5.setSpacing(10)
 
@@ -578,14 +577,14 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             "백테스트는 CSV 가격 데이터와 선택적 인텔리전스 JSONL을 사용하며 실거래 API를 호출하지 않습니다."
         )
         lbl_pack_note.setWordWrap(True)
-        lbl_pack_note.setStyleSheet("color: #8b949e;")
+        mark_secondary(lbl_pack_note)
         g5.addWidget(lbl_pack_note, 10, 0, 1, 6)
 
         grp_v5.setLayout(g5)
         pack_layout.addWidget(grp_v5)
 
         # ── 🚨 v4 급변동/서킷 가드 ──
-        grp_guard = QGroupBox("🚨 시장 급변동 보호")
+        grp_guard = QGroupBox("시장 급변동 보호")
         g7 = QGridLayout()
         g7.setSpacing(10)
 
@@ -597,19 +596,19 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_shock_1m.setRange(0.5, 10.0)
         self.spin_shock_1m.setSingleStep(0.1)
         self.spin_shock_1m.setValue(float(getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5)))
-        self.spin_shock_1m.setSuffix(" %")
+        self.spin_shock_1m.setSuffix("%")
         g7.addWidget(self.spin_shock_1m, 0, 2)
         g7.addWidget(QLabel("5분 변동률:"), 0, 3)
         self.spin_shock_5m = NoScrollDoubleSpinBox()
         self.spin_shock_5m.setRange(1.0, 15.0)
         self.spin_shock_5m.setSingleStep(0.1)
         self.spin_shock_5m.setValue(float(getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8)))
-        self.spin_shock_5m.setSuffix(" %")
+        self.spin_shock_5m.setSuffix("%")
         g7.addWidget(self.spin_shock_5m, 0, 4)
         g7.addWidget(QLabel("보호 유지 시간:"), 0, 5)
         self.spin_shock_cooldown = NoScrollSpinBox()
         self.spin_shock_cooldown.setRange(1, 120)
-        self.spin_shock_cooldown.setSuffix(" 분")
+        self.spin_shock_cooldown.setSuffix("분")
         self.spin_shock_cooldown.setValue(int(getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10)))
         g7.addWidget(self.spin_shock_cooldown, 0, 6)
 
@@ -619,7 +618,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g7.addWidget(QLabel("보호 유지 시간:"), 1, 1)
         self.spin_vi_cooldown = NoScrollSpinBox()
         self.spin_vi_cooldown.setRange(1, 120)
-        self.spin_vi_cooldown.setSuffix(" 분")
+        self.spin_vi_cooldown.setSuffix("분")
         self.spin_vi_cooldown.setValue(int(getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7)))
         g7.addWidget(self.spin_vi_cooldown, 1, 2)
 
@@ -649,14 +648,14 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
 
         guard_notice = QLabel("주의: 이 영역은 시장 급변 시 신규 진입을 자동으로 제한합니다. 실거래에서는 기본적으로 켜 두는 편이 안전합니다.")
         guard_notice.setWordWrap(True)
-        guard_notice.setStyleSheet("color: #d29922;")
+        guard_notice.setProperty("tone", "warning")
         g7.addWidget(guard_notice, 4, 0, 1, 7)
 
         grp_guard.setLayout(g7)
         guard_layout.addWidget(grp_guard)
 
         # ── 🔧 시스템 설정 ──
-        grp_sys = QGroupBox("🔧 시스템 설정")
+        grp_sys = QGroupBox("시스템 설정")
         g6 = QGridLayout()
         g6.setSpacing(10)
 

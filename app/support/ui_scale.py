@@ -65,11 +65,13 @@ def recommended_font_scale(
 ) -> float:
     """Return the first-run ``ui_font_scale`` for a display.
 
-    Standard 100% displays keep 1.0 so their appearance does not change;
-    higher buckets step up to keep physical text size readable.
+    Always 1.0: theme fonts are emitted in ``pt`` so the OS text scale
+    already keeps physical text size constant across 100/125/150/200%.
+    Raising the app multiplier on top of that double-scales text
+    (HiDPI text rendered too large), so no bucket steps up anymore.
+    Users who want larger text use 보기 > UI 크기 / Ctrl+= explicitly.
     """
-    bucket = _scale_class(device_pixel_ratio, logical_dpi)
-    return {"100": 1.0, "125": 1.1, "150": 1.15, "200": 1.3}[bucket]
+    return 1.0
 
 
 def recommended_density(

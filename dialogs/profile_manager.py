@@ -25,7 +25,7 @@ class ProfileManagerDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        self.setWindowTitle("👤 프로필 관리")
+        self.setWindowTitle("프로필 관리")
         self.setFixedSize(550, 450)
 
         layout = QVBoxLayout(self)
@@ -37,7 +37,7 @@ class ProfileManagerDialog(QDialog):
         layout.addWidget(self.list_widget)
 
         self.detail_label = QLabel("프로필을 선택하세요")
-        self.detail_label.setStyleSheet("padding: 10px; background: #16213e; border-radius: 5px;")
+        self.detail_label.setProperty("hint", True)
         self.detail_label.setWordWrap(True)
         layout.addWidget(self.detail_label)
 
@@ -45,17 +45,17 @@ class ProfileManagerDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("새 프로필 이름")
         save_layout.addWidget(self.name_input)
-        btn_save = QPushButton("💾 저장")
+        btn_save = QPushButton("저장")
         btn_save.clicked.connect(self._save_profile)
         save_layout.addWidget(btn_save)
         layout.addLayout(save_layout)
 
         btn_layout = QHBoxLayout()
-        btn_del = QPushButton("🗑️ 삭제")
+        btn_del = QPushButton("삭제")
         btn_del.clicked.connect(self._delete_profile)
         btn_layout.addWidget(btn_del)
         btn_layout.addStretch()
-        btn_apply = QPushButton("✅ 적용")
+        btn_apply = QPushButton("적용")
         btn_apply.clicked.connect(self._apply_profile)
         btn_layout.addWidget(btn_apply)
         btn_close = QPushButton("닫기")
@@ -67,7 +67,7 @@ class ProfileManagerDialog(QDialog):
         self.list_widget.clear()
         for name in self.pm.get_profile_names():
             self.pm.get_profile_info(name)
-            item = QListWidgetItem(f"👤 {name}")
+            item = QListWidgetItem(f"{name}")
             item.setData(Qt.ItemDataRole.UserRole, name)
             self.list_widget.addItem(item)
 

@@ -34,8 +34,6 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 from app.support.ui_text import combo_value, set_combo_value
 from app.support.worker import Worker
 from config import Config
-from dark_theme import DARK_STYLESHEET
-from light_theme import LIGHT_STYLESHEET
 from app.mixins._typing import TraderMixinBase
 
 
@@ -520,9 +518,6 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 _apply_loaded_theme(self, saved_theme, saved_scale, saved_density)
             if hasattr(self, "combo_theme"):
                 self.combo_theme.setCurrentText(self.current_theme)
-            if False:  # legacy branch superseded by tokenized apply_theme above
-                self.current_theme = saved_theme
-                self.setStyleSheet(LIGHT_STYLESHEET if saved_theme == "light" else DARK_STYLESHEET)
 
             # v3+ strategy/backtest UI restore
             if hasattr(self, "combo_strategy_pack") and isinstance(settings.get("strategy_pack"), dict):

@@ -3,6 +3,7 @@
 import re
 import sys
 import unittest
+from typing import Any
 from unittest.mock import MagicMock
 
 sys.modules.setdefault("keyring", MagicMock())
@@ -53,11 +54,13 @@ class TestDisplayRecommendations(unittest.TestCase):
         self.assertEqual(recommended_font_scale(1.0, 96), 1.0)
         self.assertEqual(recommended_font_scale("bad", "bad"), 1.0)
 
-    def test_high_ratio_displays_step_up(self):
-        self.assertEqual(recommended_font_scale(1.25, None), 1.1)
-        self.assertEqual(recommended_font_scale(1.5, 144), 1.15)
-        self.assertEqual(recommended_font_scale(2.0, 192), 1.3)
-        self.assertEqual(recommended_font_scale(None, 200), 1.3)
+    def test_high_ratio_displays_keep_scale_1(self):
+        # pt fonts already follow the OS scale; an app multiplier on top
+        # double-scales HiDPI text, so every bucket stays at 1.0.
+        self.assertEqual(recommended_font_scale(1.25, None), 1.0)
+        self.assertEqual(recommended_font_scale(1.5, 144), 1.0)
+        self.assertEqual(recommended_font_scale(2.0, 192), 1.0)
+        self.assertEqual(recommended_font_scale(None, 200), 1.0)
 
     def test_density_recommendation(self):
         self.assertEqual(recommended_density(1.0, 96), "compact")
@@ -83,6 +86,30 @@ class TestDisplayRecommendations(unittest.TestCase):
             configure_high_dpi_scaling(),
             ("passthrough", "legacy", "unavailable"),
         )
+
+    def test_hidpi_defaults_keep_font_scale(self):
+        # Regression: first-run HiDPI must not lift ui_font_scale
+        # (pt fonts already follow the OS scale); density may relax.
+        from app.features.ui_build.layout import UIBuildLayoutMixin
+
+        class _FakeScreen:
+            def devicePixelRatio(self):
+                return 1.5
+
+            def logicalDotsPerInchX(self):
+                return 144.0
+
+        class _Stub(UIBuildLayoutMixin):
+            ui_font_scale = 1.0
+            ui_density = "compact"
+
+            def screen(self) -> Any:
+                return _FakeScreen()
+
+        stub = _Stub()
+        stub._apply_hidpi_defaults()
+        self.assertEqual(stub.ui_font_scale, 1.0)
+        self.assertEqual(stub.ui_density, "comfortable")
 
 
 class TestThemeHidpiOutput(unittest.TestCase):

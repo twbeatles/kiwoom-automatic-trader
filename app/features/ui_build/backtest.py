@@ -20,7 +20,6 @@ from app.support.ui_text import (
 from app.support.worker import Worker
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
-from dark_theme import DARK_STYLESHEET
 from app.mixins._typing import TraderMixinBase
 
 
@@ -45,12 +44,12 @@ class UIBuildBacktestMixin(TraderMixinBase):
         return values
     def _run_backtest_from_ui(self):
         if hasattr(self, "chk_feature_backtest") and not self.chk_feature_backtest.isChecked():
-            QMessageBox.warning(self, "경고", "백테스트 기능이 비활성화되어 있습니다.")
+            self.notify_bar("warning", "백테스트 비활성화", "백테스트 기능이 비활성화되어 있습니다.")
             return
         bars_path = str(self.input_backtest_bars_path.text()).strip() if hasattr(self, "input_backtest_bars_path") else ""
         intel_path = str(self.input_backtest_intel_path.text()).strip() if hasattr(self, "input_backtest_intel_path") else ""
         if not bars_path:
-            QMessageBox.warning(self, "경고", "백테스트 가격 CSV를 선택해주세요.")
+            self.notify_bar("warning", "CSV 필요", "백테스트 가격 CSV를 선택해주세요.")
             return
         if hasattr(self, "btn_run_backtest"):
             self.btn_run_backtest.setEnabled(False)
@@ -97,6 +96,11 @@ class UIBuildBacktestMixin(TraderMixinBase):
                     self.backtest_trades_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
         if hasattr(self, "log"):
             self.log(f"백테스트 완료: trades={len(getattr(result, 'trades', []) or [])}")
+        self.notify_bar(
+            "success",
+            "백테스트 완료",
+            f"trades={len(getattr(result, 'trades', []) or [])}",
+        )
     def _on_backtest_error(self, error):
         if hasattr(self, "btn_run_backtest"):
             self.btn_run_backtest.setEnabled(True)
@@ -104,7 +108,7 @@ class UIBuildBacktestMixin(TraderMixinBase):
             self.lbl_backtest_status.setText("실패")
         if hasattr(self, "log"):
             self.log(f"백테스트 실패: {error}")
-        QMessageBox.warning(self, "백테스트 실패", str(error))
+        self.notify_bar("error", "백테스트 실패", str(error))
     def _save_backtest_result(self):
         result = getattr(self, "_last_backtest_result", None)
         if result is None:

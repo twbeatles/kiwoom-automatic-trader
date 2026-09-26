@@ -295,9 +295,9 @@ QGroupBox::title {{
     color: {t['accent']};
 }}
 QGroupBox#dashboardCard {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {t['surface']}, stop:1 {t['bg']});
-    border: 1px solid rgba(88, 166, 255, 0.3);
-    border-radius: 16px;
+    background-color: {t['surface']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
 }}
 QPushButton {{
     background-color: {t['surface_2']};
@@ -345,13 +345,20 @@ QPushButton#stopBtn {{
 }}
 QPushButton#stopBtn:hover {{ background-color: {t['border']}; }}
 QPushButton#emergencyBtn {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {t['warning_dark']}, stop:1 {t['warning']});
+    background-color: {t['warning_dark']};
     color: white;
     border: none;
     font-weight: bold;
 }}
-QPushButton#emergencyBtn:hover {{ background: {t['warning']}; }}
-QPushButton#emergencyBtn:pressed {{ background: {t['warning_dark']}; }}
+QPushButton#emergencyBtn:hover {{ background-color: {t['warning']}; }}
+QPushButton#emergencyBtn:pressed {{ background-color: {t['warning_dark']}; }}
+QPushButton#orderBtn {{
+    background-color: {t['accent_solid']};
+    color: {t['on_accent']};
+    border: none;
+}}
+QPushButton#orderBtn:hover {{ background-color: {t['accent_hover']}; }}
+QPushButton#orderBtn:pressed {{ background-color: {t['accent_pressed']}; }}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {t['input_bg']};
     border: 1px solid {t['border']};
@@ -448,14 +455,14 @@ QLabel#statusConnected {{
     color: {t['success']};
     background-color: rgba(63, 185, 80, 0.1);
     padding: {_pad(4, ls)}px {_pad(12, ls)}px;
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid rgba(63, 185, 80, 0.2);
 }}
 QLabel#statusDisconnected {{
     color: {t['danger']};
     background-color: rgba(248, 81, 73, 0.1);
     padding: {_pad(4, ls)}px {_pad(12, ls)}px;
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid rgba(248, 81, 73, 0.2);
 }}
 QScrollBar:vertical {{
@@ -559,8 +566,7 @@ QProgressBar {{
     color: {t['text']};
 }}
 QProgressBar::chunk {{
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {t['accent_solid']}, stop:0.5 {t['accent']}, stop:1 {t['success']});
+    background-color: {t['accent_solid']};
     border-radius: 8px;
 }}
 QListWidget {{
@@ -583,7 +589,7 @@ QListWidget::item:selected {{
 QDialog {{
     background-color: {t['bg']};
     border: 1px solid {t['border']};
-    border-radius: 16px;
+    border-radius: 8px;
 }}
 QMessageBox {{ background-color: {t['surface']}; }}
 QMessageBox QLabel {{
@@ -596,6 +602,101 @@ QMessageBox QPushButton {{
 }}
 .profit {{ color: {t['success']}; }}
 .loss {{ color: {t['danger']}; }}
+QLabel[secondary="true"] {{ color: {t['text_muted']}; }}
+QLabel[section="true"] {{
+    color: {t['text_bright']};
+    font-weight: 600;
+    font-size: {fs['title']}px;
+}}
+QLabel[hint="true"] {{
+    color: {t['text_muted']};
+    font-size: {fs['small']}px;
+}}
+QLabel[value="true"] {{ font-weight: 600; }}
+QLineEdit[invalid="true"], QComboBox[invalid="true"] {{
+    border: 2px solid {t['danger']};
+}}
+QFrame[infobar="success"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['success']};
+    border-radius: 8px;
+}}
+QFrame[infobar="info"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['accent']};
+    border-radius: 8px;
+}}
+QFrame[infobar="warning"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['warning']};
+    border-radius: 8px;
+}}
+QFrame[infobar="error"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['danger']};
+    border-radius: 8px;
+}}
+QPushButton[secondary_button="true"] {{
+    background-color: {t['surface_2']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
+    padding: {_pad(6, ls)}px {_pad(12, ls)}px;
+}}
+QGroupBox[section="true"] {{
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid {t['border']};
+    border-radius: 0px;
+    margin-top: {_pad(16, ls)}px;
+    padding-top: {_pad(12, ls)}px;
+}}
+QLabel[badge="connected"], QLabel[badge="active"] {{
+    color: {t['success']};
+    font-weight: bold;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(63, 185, 80, 0.1);
+    border: 1px solid rgba(63, 185, 80, 0.2);
+}}
+QLabel[badge="connecting"] {{ color: {t['warning']}; font-weight: bold; }}
+QLabel[badge="disconnected"], QLabel[badge="off"] {{
+    color: {t['danger']};
+    font-weight: bold;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(248, 81, 73, 0.1);
+    border: 1px solid rgba(248, 81, 73, 0.2);
+}}
+QLabel[profit_state="up"] {{
+    color: {t['success']};
+    font-weight: bold;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(63, 185, 80, 0.15);
+    border: 1px solid rgba(63, 185, 80, 0.2);
+}}
+QLabel[profit_state="down"] {{
+    color: {t['danger']};
+    font-weight: bold;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.2);
+}}
+QLabel[profit_state="flat"] {{
+    color: {t['text_bright']};
+    font-weight: bold;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(139, 148, 158, 0.1);
+    border: 1px solid rgba(139, 148, 158, 0.2);
+}}
+QLabel[tone="warning"] {{
+    color: {t['warning']};
+    font-weight: 600;
+}}
+QLabel[tone="success"] {{ color: {t['success']}; }}
+QLabel[tone="error"] {{ color: {t['danger']}; }}
 QTextEdit {{
     background-color: {t['bg']};
     border: 1px solid {t['border']};
@@ -644,10 +745,9 @@ QGroupBox::title {{
     font-size: {fs['base']}px;
 }}
 QGroupBox#dashboardCard {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {t['surface']}, stop:1 {t['bg']});
-    border: 1px solid rgba(13, 110, 253, 0.2);
-    border-radius: 16px;
+    background-color: {t['surface']};
+    border: 1px solid {t['border_soft']};
+    border-radius: 8px;
     padding: 20px;
 }}
 QPushButton {{
@@ -677,7 +777,7 @@ QPushButton#startBtn {{
     background-color: {t['danger']};
     font-size: {fs['button_large']}px;
     padding: {_pad(14, ls)}px {_pad(36, ls)}px;
-    border-radius: 14px;
+    border-radius: 8px;
 }}
 QPushButton#startBtn:hover {{ background-color: {t['danger_dark']}; }}
 QPushButton#emergencyBtn {{
@@ -686,6 +786,13 @@ QPushButton#emergencyBtn {{
     font-weight: bold;
 }}
 QPushButton#emergencyBtn:hover {{ background-color: {t['warning_dark']}; }}
+QPushButton#orderBtn {{
+    background-color: {t['accent_solid']};
+    color: {t['on_accent']};
+    border: none;
+}}
+QPushButton#orderBtn:hover {{ background-color: {t['accent_hover']}; }}
+QPushButton#orderBtn:pressed {{ background-color: {t['accent_pressed']}; }}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {t['input_bg']};
     border: 1px solid {t['border']};
@@ -757,7 +864,7 @@ QLabel#statusConnected {{
     color: {t['success']};
     font-weight: bold;
     padding: {_pad(6, ls)}px {_pad(14, ls)}px;
-    border-radius: 12px;
+    border-radius: 8px;
     background: rgba(25, 135, 84, 0.1);
     border: 1px solid rgba(25, 135, 84, 0.3);
 }}
@@ -765,7 +872,7 @@ QLabel#statusDisconnected {{
     color: {t['danger']};
     font-weight: bold;
     padding: {_pad(6, ls)}px {_pad(14, ls)}px;
-    border-radius: 12px;
+    border-radius: 8px;
     background: rgba(220, 53, 69, 0.1);
     border: 1px solid rgba(220, 53, 69, 0.3);
 }}
@@ -773,7 +880,7 @@ QLabel#statusPending {{
     color: {t['pending']};
     font-weight: bold;
     padding: {_pad(6, ls)}px {_pad(14, ls)}px;
-    border-radius: 12px;
+    border-radius: 8px;
     background: rgba(253, 126, 20, 0.1);
     border: 1px solid rgba(253, 126, 20, 0.3);
 }}
@@ -906,8 +1013,7 @@ QProgressBar {{
     color: {t['text']};
 }}
 QProgressBar::chunk {{
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {t['accent_solid']}, stop:0.5 {t['log_fg']}, stop:1 {t['success']});
+    background-color: {t['accent_solid']};
     border-radius: 8px;
 }}
 QListWidget {{
@@ -930,9 +1036,104 @@ QListWidget::item:selected {{
 QDialog {{
     background-color: {t['bg']};
     border: 1px solid {t['border_soft']};
-    border-radius: 16px;
+    border-radius: 8px;
 }}
 QMessageBox {{ background-color: {t['surface']}; }}
+QLabel[secondary="true"] {{ color: {t['text_muted']}; }}
+QLabel[section="true"] {{
+    color: {t['text']};
+    font-weight: 600;
+    font-size: {fs['title']}px;
+}}
+QLabel[hint="true"] {{
+    color: {t['text_muted']};
+    font-size: {fs['small']}px;
+}}
+QLabel[value="true"] {{ font-weight: 600; }}
+QLineEdit[invalid="true"], QComboBox[invalid="true"] {{
+    border: 2px solid {t['danger']};
+}}
+QFrame[infobar="success"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['success']};
+    border-radius: 8px;
+}}
+QFrame[infobar="info"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['accent_solid']};
+    border-radius: 8px;
+}}
+QFrame[infobar="warning"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['warning']};
+    border-radius: 8px;
+}}
+QFrame[infobar="error"] {{
+    background-color: {t['surface']};
+    border: 1px solid {t['danger']};
+    border-radius: 8px;
+}}
+QPushButton[secondary_button="true"] {{
+    background-color: {t['surface_2']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
+    padding: {_pad(6, ls)}px {_pad(12, ls)}px;
+}}
+QGroupBox[section="true"] {{
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid {t['border_soft']};
+    border-radius: 0px;
+    margin-top: {_pad(16, ls)}px;
+    padding-top: {_pad(12, ls)}px;
+}}
+QLabel[badge="connected"], QLabel[badge="active"] {{
+    color: {t['success']};
+    font-weight: bold;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(25, 135, 84, 0.1);
+    border: 1px solid rgba(25, 135, 84, 0.3);
+}}
+QLabel[badge="connecting"] {{ color: {t['pending']}; font-weight: bold; }}
+QLabel[badge="disconnected"], QLabel[badge="off"] {{
+    color: {t['danger']};
+    font-weight: bold;
+    padding: {_pad(4, ls)}px {_pad(12, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+}}
+QLabel[profit_state="up"] {{
+    color: {t['success']};
+    font-weight: bold;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(25, 135, 84, 0.1);
+    border: 1px solid rgba(25, 135, 84, 0.3);
+}}
+QLabel[profit_state="down"] {{
+    color: {t['danger']};
+    font-weight: bold;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
+    border-radius: 8px;
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+}}
+QLabel[profit_state="flat"] {{
+    color: {t['text']};
+    font-weight: bold;
+    padding: {_pad(8, ls)}px {_pad(16, ls)}px;
+    border-radius: 8px;
+    background-color: {t['surface_2']};
+    border: 1px solid {t['border']};
+}}
+QLabel[tone="warning"] {{
+    color: {t['warning_dark']};
+    font-weight: 600;
+}}
+QLabel[tone="success"] {{ color: {t['success']}; }}
+QLabel[tone="error"] {{ color: {t['danger']}; }}
 QMessageBox QLabel {{
     color: {t['text']};
     font-size: {fs['widget']}px;

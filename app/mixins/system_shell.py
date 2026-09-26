@@ -12,6 +12,7 @@ from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
 from config import Config
+from app.support.components.helpers import set_trading_badge
 from app.support.theme import apply_theme
 from app.support.theme import set_ui_font_scale as _set_ui_font_scale
 from app.support.theme import set_ui_density as _set_ui_density
@@ -193,28 +194,10 @@ class SystemShellMixin(TraderMixinBase):
             if self.is_running:
                 self.status_trading.setText("자동매매 실행중")
                 self.status_trading.setObjectName("tradingActive")
-                self.status_trading.setStyleSheet(
-                    """
-                    color: #3fb950;
-                    font-weight: bold;
-                    padding: 4px 12px;
-                    background: rgba(63, 185, 80, 0.15);
-                    border-radius: 10px;
-                    border: 1px solid rgba(63, 185, 80, 0.3);
-                    """
-                )
             else:
                 self.status_trading.setText("자동매매 대기중")
                 self.status_trading.setObjectName("tradingOff")
-                self.status_trading.setStyleSheet(
-                    """
-                    color: #8b949e;
-                    font-weight: bold;
-                    padding: 4px 12px;
-                    background: rgba(48, 54, 61, 0.5);
-                    border-radius: 10px;
-                    """
-                )
+            set_trading_badge(self.status_trading, self.is_running)
 
         if self.schedule.get("enabled", False) and self.is_connected:
             current_time = now.strftime("%H:%M")

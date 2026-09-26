@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
 )
 
 from config import Config
-from dark_theme import DARK_STYLESHEET
 
 
 class PresetDialog(QDialog):
@@ -30,11 +29,11 @@ class PresetDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        self.setWindowTitle("📋 프리셋 관리")
+        self.setWindowTitle("프리셋 관리")
         self.setFixedSize(600, 500)
-        self.setStyleSheet(DARK_STYLESHEET)
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
 
         self.list_widget = QListWidget()
         self._refresh_list()
@@ -43,7 +42,7 @@ class PresetDialog(QDialog):
         layout.addWidget(self.list_widget)
 
         self.detail_label = QLabel("프리셋을 선택하세요")
-        self.detail_label.setStyleSheet("padding: 10px; background: #16213e; border-radius: 5px;")
+        self.detail_label.setProperty("hint", True)
         self.detail_label.setWordWrap(True)
         layout.addWidget(self.detail_label)
 
@@ -51,17 +50,17 @@ class PresetDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("새 프리셋 이름")
         save_layout.addWidget(self.name_input)
-        btn_save = QPushButton("💾 저장")
+        btn_save = QPushButton("저장")
         btn_save.clicked.connect(self._save_preset)
         save_layout.addWidget(btn_save)
         layout.addLayout(save_layout)
 
         btn_layout = QHBoxLayout()
-        btn_del = QPushButton("🗑️ 삭제")
+        btn_del = QPushButton("삭제")
         btn_del.clicked.connect(self._delete_preset)
         btn_layout.addWidget(btn_del)
         btn_layout.addStretch()
-        btn_apply = QPushButton("✅ 적용")
+        btn_apply = QPushButton("적용")
         btn_apply.clicked.connect(self._apply_preset)
         btn_layout.addWidget(btn_apply)
         btn_close = QPushButton("닫기")
@@ -96,7 +95,7 @@ class PresetDialog(QDialog):
     def _refresh_list(self):
         self.list_widget.clear()
         for key, preset in self.presets.items():
-            prefix = "[기본] " if key in Config.DEFAULT_PRESETS else "[사용자] "
+            prefix = "[기본] "if key in Config.DEFAULT_PRESETS else "[사용자] "
             item = QListWidgetItem(prefix + preset.get("name", key))
             item.setData(Qt.ItemDataRole.UserRole, key)
             self.list_widget.addItem(item)
@@ -115,7 +114,7 @@ class PresetDialog(QDialog):
             return
         key = f"custom_{name.lower().replace(' ', '_')}"
         self.presets[key] = {
-            "name": f"⭐ {name}",
+            "name": f"{name}",
             "description": f"사용자 정의 ({datetime.datetime.now():%Y-%m-%d})",
             **self.current_values,
         }

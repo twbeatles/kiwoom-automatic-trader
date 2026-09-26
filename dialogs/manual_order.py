@@ -25,20 +25,18 @@ class ManualOrderDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        self.setWindowTitle("📝 수동 주문")
+        self.setWindowTitle("수동 주문")
         self.setFixedSize(450, 420)
         parent = self.parent()
         if isinstance(parent, QWidget) and parent.styleSheet():
             self.setStyleSheet(parent.styleSheet())
-        else:
-            self.setStyleSheet("background-color: #0d1117; color: #e6edf3;")
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
+        layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
         header = QLabel("신규 주문")
-        header.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
+        header.setProperty("section", True)
         layout.addWidget(header)
 
         form = QFormLayout()
@@ -53,7 +51,6 @@ class ManualOrderDialog(QDialog):
         self.combo_type = QComboBox()
         self.combo_type.addItems(["매수", "매도"])
         self.combo_type.setMinimumHeight(36)
-        self.combo_type.setStyleSheet("QComboBox { padding: 5px; }")
         form.addRow("주문유형:", self.combo_type)
 
         self.spin_qty = QSpinBox()
@@ -77,13 +74,8 @@ class ManualOrderDialog(QDialog):
 
         layout.addLayout(form)
 
-        self.lbl_warning = QLabel("⚠️ 주문이 즉시 전송됩니다. 확인해주세요.")
-        self.lbl_warning.setStyleSheet(
-            """
-            color: #d29922; font-size: 12px; font-weight: bold;
-            background: rgba(210, 153, 34, 0.1); border-radius: 6px; padding: 10px;
-            """
-        )
+        self.lbl_warning = QLabel("주문이 즉시 전송됩니다. 확인해주세요.")
+        self.lbl_warning.setProperty("tone", "warning")
         self.lbl_warning.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_warning)
 
@@ -92,23 +84,14 @@ class ManualOrderDialog(QDialog):
 
         btn_close = QPushButton("취소")
         btn_close.setMinimumHeight(45)
+        btn_close.setProperty("secondary_button", True)
         btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.clicked.connect(self.reject)
 
-        btn_order = QPushButton("⚡ 주문 실행")
+        btn_order = QPushButton("주문 실행")
         btn_order.setMinimumHeight(45)
         btn_order.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_order.setObjectName("orderBtn")
-        btn_order.setStyleSheet(
-            """
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #d32f2f, stop:1 #b71c1c);
-                color: white; font-weight: bold; border-radius: 8px; border: none; font-size: 14px;
-            }
-            QPushButton:hover { background: #e53935; }
-            QPushButton:pressed { background: #b71c1c; }
-            """
-        )
         btn_order.clicked.connect(self._execute_order)
 
         btn_layout.addWidget(btn_close)

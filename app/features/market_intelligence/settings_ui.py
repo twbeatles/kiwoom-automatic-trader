@@ -52,6 +52,7 @@ from app.support.ui_text import (
     populate_combo,
     set_combo_value,
 )
+from app.support.components.helpers import mark_secondary
 from app.support.widgets import NoScrollComboBox, NoScrollSpinBox
 from config import Config
 from data.providers import AIProvider, DartProvider, MacroProvider, NaverTrendProvider, NewsProvider
@@ -146,7 +147,7 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
             "초보자는 먼저 '기본 사용'과 '점수/차단 기준'만 확인해도 충분합니다."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color: #8b949e;")
+        mark_secondary(intro)
         body.addWidget(intro)
 
         basic_group = QGroupBox("기본 사용")
@@ -259,7 +260,7 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
             "3. 실거래 전에는 API 키와 로그 저장 위치를 반드시 점검하세요."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #d29922;")
+        note.setProperty("tone", "warning")
         note_layout.addWidget(note)
         body.addWidget(note_group)
 

@@ -25,12 +25,12 @@ from PyQt6.QtWidgets import (
 from app.mixins._typing import TraderMixinBase
 
 
-# 최상위 워크스페이스 라벨 (표시 순서 고정)
-WORKSPACE_TRADE = "⚡ 매매"
-WORKSPACE_EXPLORE = "📊 종목 탐색"
-WORKSPACE_PORTFOLIO = "💼 포트폴리오"
-WORKSPACE_INTEL = "🧠 인텔리전스"
-WORKSPACE_SYSTEM = "⚙ 시스템"
+# 최상위 워크스페이스 라벨 (표시 순서 고정, 규칙 §19: emoji 아이콘 금지)
+WORKSPACE_TRADE = "매매"
+WORKSPACE_EXPLORE = "종목 탐색"
+WORKSPACE_PORTFOLIO = "포트폴리오"
+WORKSPACE_INTEL = "인텔리전스"
+WORKSPACE_SYSTEM = "시스템"
 
 WORKSPACE_LABELS = (
     WORKSPACE_TRADE,
@@ -63,23 +63,23 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
     # -- 워크스페이스 -----------------------------------------------
 
     def _create_trade_workspace(self):
-        """⚡ 매매: 핵심 설정 + 우측 주문 티켓 안내는 도크로 분리."""
+        """매매: 핵심 설정 + 우측 주문 티켓 안내는 도크로 분리."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel("주문은 우측 주문 티켓(📝) 또는 매매 메뉴 > 수동 주문(Ctrl+O)에서 실행합니다.")
+        hint = QLabel("주문은 우측 주문 티켓 또는 매매 메뉴 > 수동 주문(Ctrl+O)에서 실행합니다.")
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: #8b949e; padding: 4px 2px;")
+        hint.setProperty("hint", True)
         layout.addWidget(hint)
         layout.addWidget(self._create_strategy_tab())
         return widget
 
     def _create_explore_workspace(self):
-        """📊 종목 탐색: 통합 관심리스트(조건+순위+검색) + 차트 + 호가."""
+        """종목 탐색: 통합 관심리스트(조건+순위+검색) + 차트 + 호가."""
         sub = QTabWidget()
-        sub.addTab(self._create_unified_watchlist(), "🔎 관심(조건+순위)")
-        sub.addTab(self._create_chart_tab(), "📈 차트")
-        sub.addTab(self._create_orderbook_tab(), "📋 호가")
+        sub.addTab(self._create_unified_watchlist(), "관심(조건+순위)")
+        sub.addTab(self._create_chart_tab(), "차트")
+        sub.addTab(self._create_orderbook_tab(), "호가")
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -95,17 +95,17 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         search_row = QHBoxLayout()
         search_row.addWidget(QLabel("관심 종목을 조건·순위·검색에서 모아봅니다."))
         search_row.addStretch()
-        btn_search = QPushButton("🔍 종목검색")
+        btn_search = QPushButton("종목검색")
         btn_search.clicked.connect(self._open_stock_search)
         search_row.addWidget(btn_search)
         layout.addLayout(search_row)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.setHandleWidth(6)
-        condition_group = QGroupBox("🔍 조건검색")
+        condition_group = QGroupBox("조건검색")
         condition_layout = QVBoxLayout(condition_group)
         condition_layout.addWidget(self._create_condition_tab())
-        ranking_group = QGroupBox("🏆 순위")
+        ranking_group = QGroupBox("순위")
         ranking_layout = QVBoxLayout(ranking_group)
         ranking_layout.addWidget(self._create_ranking_tab())
         splitter.addWidget(condition_group)
@@ -115,10 +115,10 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         return widget
 
     def _create_portfolio_workspace(self):
-        """💼 포트폴리오: 통계 + 거래 내역."""
+        """포트폴리오: 통계 + 거래 내역."""
         sub = QTabWidget()
-        sub.addTab(self._create_stats_tab(), "📊 통계")
-        sub.addTab(self._create_history_tab(), "📝 내역")
+        sub.addTab(self._create_stats_tab(), "통계")
+        sub.addTab(self._create_history_tab(), "내역")
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -126,14 +126,14 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         return widget
 
     def _create_intel_workspace(self):
-        """🧠 인텔리전스: 설정 + 현황 + 리플레이."""
+        """인텔리전스: 설정 + 현황 + 리플레이."""
         sub = QTabWidget()
         if hasattr(self, "_create_market_intelligence_settings_tab"):
-            sub.addTab(self._create_market_intelligence_settings_tab(), "🧠 인텔리전스 설정")
+            sub.addTab(self._create_market_intelligence_settings_tab(), "인텔리전스 설정")
         if hasattr(self, "_create_market_intelligence_tab"):
-            sub.addTab(self._create_market_intelligence_tab(), "🧠 인텔리전스 현황")
+            sub.addTab(self._create_market_intelligence_tab(), "인텔리전스 현황")
         if hasattr(self, "_create_market_replay_tab"):
-            sub.addTab(self._create_market_replay_tab(), "📼 인텔리전스 리플레이")
+            sub.addTab(self._create_market_replay_tab(), "인텔리전스 리플레이")
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -141,13 +141,13 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         return widget
 
     def _create_system_workspace(self):
-        """⚙ 시스템: 상세 설정 + API/알림 + 시스템 진단."""
+        """시스템: 상세 설정 + API/알림 + 시스템 진단."""
         sub = QTabWidget()
-        sub.addTab(self._create_advanced_tab(), "🛠 상세 설정")
+        sub.addTab(self._create_advanced_tab(), "상세 설정")
         api_tab = self._create_api_tab()
         api_tab.setObjectName("api_tab")
-        sub.addTab(api_tab, "🔐 API/알림")
-        sub.addTab(self._create_diagnostics_tab(), "🩺 시스템 진단")
+        sub.addTab(api_tab, "API/알림")
+        sub.addTab(self._create_diagnostics_tab(), "시스템 진단")
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -159,7 +159,7 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
 
     def _create_order_dock(self):
         """우측 레일 주문 티켓 도크 (모든 워크스페이스에서 상시 노출)."""
-        dock = QDockWidget("📝 주문 티켓", self)
+        dock = QDockWidget("주문 티켓", self)
         dock.setObjectName("order_ticket_dock")
         dock.setAllowedAreas(
             Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
@@ -170,7 +170,7 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         return dock
 
     def _create_order_ticket(self):
-        box = QGroupBox("📝 주문 티켓")
+        box = QGroupBox("주문 티켓")
         form = QFormLayout(box)
 
         self.ticket_code = QLineEdit()
@@ -198,20 +198,21 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         self.ticket_price.setEnabled(False)
         form.addRow("주문가격:", self.ticket_price)
 
-        btn_submit = QPushButton("⚡ 주문 실행")
+        btn_submit = QPushButton("주문 실행")
         btn_submit.setObjectName("orderBtn")
         btn_submit.setMinimumHeight(40)
         btn_submit.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_submit.clicked.connect(self._submit_order_ticket)
         form.addRow(btn_submit)
 
-        btn_dialog = QPushButton("📝 수동 주문 창 열기")
+        btn_dialog = QPushButton("수동 주문 창 열기")
+        btn_dialog.setProperty("secondary_button", True)
         btn_dialog.clicked.connect(self._open_manual_order)
         form.addRow(btn_dialog)
 
-        hint = QLabel("실행 전 _validate_manual_order_request 검증을 항상 통과합니다.")
+        hint = QLabel("실행 전 주문 검증을 항상 통과합니다.")
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: #8b949e;")
+        hint.setProperty("hint", True)
         form.addRow(hint)
         return box
 
@@ -246,7 +247,7 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         if not self._validate_manual_order_request(order):
             return
         order["validated"] = True
-        self.log(f"📝 주문 티켓 요청: {order['type']} {order['code']} {order['qty']}주")
+        self.log(f"주문 티켓 요청: {order['type']} {order['code']} {order['qty']}주")
         dispatcher = getattr(self, "_dispatch_manual_order", None)
         if callable(dispatcher):
             dispatcher(order)
