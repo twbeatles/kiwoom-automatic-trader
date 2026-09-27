@@ -1,5 +1,27 @@
 # Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
+## 2026-09-27 Fluent UI 잔여 갭 해소 동기화 메모
+
+1. 배경
+- 2026-09-26 Fluent 개편 후 잔여 갭 감사: 사용자 노출 라벨의 이모지 5곳, 라이트 테마 표 셀 색상 대비 미달
+- 참조: `DESKTOP_UI_DESIGN_RULES.md` (§§7/8/19) + srtgo(ktrain) Fluent 패턴 (Navigation/InfoBar/SettingCard/테마 모듈)
+- Qt 바인딩은 기존 PyQt6 유지 (§1.1): qfluentwidgets 미도입, PyQt6 네이티브 + 토큰 QSS + InfoBar 호스트로 동등 UX 구현
+
+2. 수정
+- §19: 워크스페이스 이동 메뉴 → `WORKSPACE_LABELS` 단일 출처 참조, 즐겨찾기 콤보 `⭐` 접두 제거,
+  리플레이/소스 그룹박스·예약 저장 버튼·프리셋명·도움말 텍스트의 이모지 제거 (로그 문구 제외)
+- §§7-8: `theme.table_status_color(theme, role)` + `TABLE_STATUS_COLORS` 신규 (6 role × 2 테마, 전 구간 4.5:1 통과),
+  진단/거래내역/보유 테이블 셀 전경색을 하드코딩 hex에서 테마 헬퍼로 전환 (한국식 적상·청하 유지)
+- 테스트: `test_ui_design_tokens.py`에 라벨 무이모지 + 테이블 색상 대비 가드 추가 (신규 가드가 HEAD 소스에서 실패함을 역검증)
+
+3. 검증
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 304 passed
+- `python tools/refactor_verify.py`: 통과 / `python -m compileall`: 통과 / `pyright .`: 0 errors
+- 빌드: `pyinstaller --clean --distpath dist_build KiwoomTrader.spec` 성공 (50.9MB),
+  오프스크린 25초 스모크 무충돌. 실행 중 exe 4건이 `dist/`, `dist_new/`를 잠그고 있어 별도 `dist_build/`로 산출
+  (기존 프로세스 보호를 위해 강제 종료·덮어쓰기 안 함, `dist_build/`는 `.gitignore`에 추가)
+
+
 ## 2026-09-25 HiDPI 고배율 UI 밀집도 해소 동기화 메모
 
 1. 원인

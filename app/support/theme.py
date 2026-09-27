@@ -230,6 +230,54 @@ def check_theme_contrast(theme: str) -> dict:
     return report
 
 
+# Table-cell status colors per theme (rules 7-8: semantic roles, AA on the
+# theme's table background). Diagnostics/history tables must use these via
+# table_status_color() instead of hardcoded hex so light theme stays
+# legible. Profit hues keep the Korean market convention (red = up).
+TABLE_STATUS_COLORS = {
+    "dark": {
+        "error": "#f85149",
+        "warning": "#d29922",
+        "ok": "#3fb950",
+        "muted": "#8b949e",
+        "profit_up": "#e63946",
+        "profit_down": "#58a6ff",
+    },
+    "light": {
+        "error": "#dc3545",
+        "warning": "#9a6700",
+        "ok": "#198754",
+        "muted": "#495057",
+        "profit_up": "#c81e3a",
+        "profit_down": "#4361ee",
+    },
+}
+
+TABLE_STATUS_ROLES = ("error", "warning", "ok", "muted", "profit_up", "profit_down")
+
+# Token holding each theme's table background for contrast checks.
+TABLE_STATUS_BG_TOKEN = {"dark": "bg", "light": "surface"}
+
+
+def table_status_color(theme, role):
+    """Return the table-cell hex for *role* under *theme*."""
+    palette = TABLE_STATUS_COLORS.get(theme, TABLE_STATUS_COLORS["dark"])
+    if role in palette:
+        return palette[role]
+    return TABLE_STATUS_COLORS["dark"].get(role, "#8b949e")
+
+
+def check_table_status_contrast(theme):
+    """Return {role: ratio} of each status color on the table background."""
+    bg = TOKENS[theme][TABLE_STATUS_BG_TOKEN[theme]]
+    report = {}
+    for role in TABLE_STATUS_ROLES:
+        report[role] = round(
+            contrast_ratio(TABLE_STATUS_COLORS[theme][role], bg), 2
+        )
+    return report
+
+
 def build_stylesheet(
     theme: str = "dark",
     font_scale: float = 1.0,

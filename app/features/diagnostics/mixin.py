@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
+from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase
 from app.support.ui_text import (
     display_action_policy,
@@ -162,6 +163,7 @@ class DiagnosticsMixin(TraderMixinBase):
                     str(info.get("sync_failed_reason", "") or ""),
                 ]
 
+                _theme = str(getattr(self, "current_theme", "dark") or "dark")
                 for col, text in enumerate(values):
                     item = self.diagnostic_table.item(row, col)
                     if item is None:
@@ -173,45 +175,45 @@ class DiagnosticsMixin(TraderMixinBase):
                     if col == 9:
                         state = str(text).lower()
                         if state == "error":
-                            item.setForeground(QColor("#f85149"))
+                            item.setForeground(QColor(table_status_color(_theme, "error")))
                         elif state == "stale":
-                            item.setForeground(QColor("#d29922"))
+                            item.setForeground(QColor(table_status_color(_theme, "warning")))
                         elif state == "fresh":
-                            item.setForeground(QColor("#3fb950"))
+                            item.setForeground(QColor(table_status_color(_theme, "ok")))
                         else:
-                            item.setForeground(QColor("#8b949e"))
+                            item.setForeground(QColor(table_status_color(_theme, "muted")))
                     elif col == 12:
                         state = raw_market_state.lower()
                         if state in {"halt", "vi"}:
-                            item.setForeground(QColor("#f85149"))
+                            item.setForeground(QColor(table_status_color(_theme, "error")))
                         elif state == "reopen_cooldown":
-                            item.setForeground(QColor("#d29922"))
+                            item.setForeground(QColor(table_status_color(_theme, "warning")))
                         else:
-                            item.setForeground(QColor("#8b949e"))
+                            item.setForeground(QColor(table_status_color(_theme, "muted")))
                     elif col == 13:
-                        item.setForeground(QColor("#f85149") if raw_guard_reason else QColor("#8b949e"))
+                        item.setForeground(QColor(table_status_color(_theme, "error")) if raw_guard_reason else QColor(table_status_color(_theme, "muted")))
                     elif col == 14:
                         item.setForeground(QColor("#8b949e" if not str(text) else "#d29922"))
                     elif col == 15:
                         state = raw_action_policy.lower()
                         if state in {"force_exit", "tighten_exit", "reduce_size", "block_entry"}:
-                            item.setForeground(QColor("#f85149"))
+                            item.setForeground(QColor(table_status_color(_theme, "error")))
                         elif state in {"allow", ""}:
-                            item.setForeground(QColor("#8b949e"))
+                            item.setForeground(QColor(table_status_color(_theme, "muted")))
                     elif col == 17:
                         state = raw_exit_policy.lower()
                         if state in {"force_exit", "tighten_exit", "reduce_size"}:
-                            item.setForeground(QColor("#f85149"))
+                            item.setForeground(QColor(table_status_color(_theme, "error")))
                         elif state in {"none", ""}:
-                            item.setForeground(QColor("#8b949e"))
+                            item.setForeground(QColor(table_status_color(_theme, "muted")))
                     elif col in {19, 20}:
                         state = raw_risk_mode.lower() if col == 19 else raw_health_mode.lower()
                         if state in {"shock", "degraded"}:
-                            item.setForeground(QColor("#f85149"))
+                            item.setForeground(QColor(table_status_color(_theme, "error")))
                         elif state in {"normal", ""}:
-                            item.setForeground(QColor("#8b949e"))
+                            item.setForeground(QColor(table_status_color(_theme, "muted")))
                     elif col == 23:
-                        item.setForeground(QColor("#f85149") if str(text) else QColor("#8b949e"))
+                        item.setForeground(QColor(table_status_color(_theme, "error")) if str(text) else QColor(table_status_color(_theme, "muted")))
         finally:
             self.diagnostic_table.setUpdatesEnabled(True)
         self._diagnostic_row_to_code = row_to_code

@@ -17,6 +17,7 @@ from app.support.theme import apply_theme
 from app.support.theme import set_ui_font_scale as _set_ui_font_scale
 from app.support.theme import set_ui_density as _set_ui_density
 from app.support.ui_scale import next_scale_step as _next_scale_step
+from app.features.ui_build.workspaces import WORKSPACE_LABELS
 from ui_dialogs import HelpDialog
 from ._typing import TraderMixinBase
 
@@ -121,7 +122,7 @@ class SystemShellMixin(TraderMixinBase):
         view_menu.addSeparator()
         workspace_menu = view_menu.addMenu("워크스페이스 이동")
         assert workspace_menu is not None
-        for _ws_index, _ws_label in enumerate(("⚡ 매매", "📊 종목 탐색", "💼 포트폴리오", "🧠 인텔리전스", "⚙ 시스템")):
+        for _ws_index, _ws_label in enumerate(WORKSPACE_LABELS):
             workspace_menu.addAction(_ws_label, lambda _checked=False, _i=_ws_index: self._goto_workspace(_i))
         view_menu.addAction("주문 티켓 표시/숨기기", self._toggle_order_ticket)
 

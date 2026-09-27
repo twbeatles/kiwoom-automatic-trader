@@ -640,7 +640,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
         control_row.addStretch()
         layout.addLayout(control_row)
 
-        summary_group = QGroupBox("📼 리플레이 요약")
+        summary_group = QGroupBox("리플레이 요약")
         summary_layout = QVBoxLayout(summary_group)
         self.market_replay_summary_panel = QPlainTextEdit()
         self.market_replay_summary_panel.setReadOnly(True)
@@ -715,7 +715,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        source_group = QGroupBox("📡 소스 상태")
+        source_group = QGroupBox("소스 상태")
         source_layout = QGridLayout(source_group)
         for idx, source in enumerate(self.MARKET_INTEL_SOURCE_NAMES):
             label = QLabel(f"{display_source_name(source)}: {display_status('idle')}")

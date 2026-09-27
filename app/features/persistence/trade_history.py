@@ -36,6 +36,7 @@ from app.support.worker import Worker
 from config import Config
 from dark_theme import DARK_STYLESHEET
 from light_theme import LIGHT_STYLESHEET
+from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase
 
 
@@ -59,11 +60,18 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
                 f"{record.get('profit', 0):+,}",
                 record.get("reason", ""),
             ]
+            _theme = str(getattr(self, "current_theme", "dark") or "dark")
             for col, text in enumerate(items):
                 item = QTableWidgetItem(str(text))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 if col == 6:
-                    item.setForeground(QColor("#e63946" if record.get("profit", 0) > 0 else "#4361ee"))
+                    item.setForeground(
+                        QColor(
+                            table_status_color(_theme, "profit_up")
+                            if record.get("profit", 0) > 0
+                            else table_status_color(_theme, "profit_down")
+                        )
+                    )
                 self.history_table.setItem(0, col, item)
         else:
             self._refresh_history_table()
@@ -101,6 +109,7 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
                     f"{record.get('profit', 0):+,}",
                     record.get("reason", ""),
                 ]
+                _theme = str(getattr(self, "current_theme", "dark") or "dark")
                 for col, text in enumerate(items):
                     text_str = str(text)
                     item = self.history_table.item(row, col)
@@ -111,7 +120,13 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
                     elif item.text() != text_str:
                         item.setText(text_str)
                     if col == 6:
-                        item.setForeground(QColor("#e63946" if record.get("profit", 0) > 0 else "#4361ee"))
+                        item.setForeground(
+                            QColor(
+                                table_status_color(_theme, "profit_up")
+                                if record.get("profit", 0) > 0
+                                else table_status_color(_theme, "profit_down")
+                            )
+                        )
         finally:
             self.history_table.setUpdatesEnabled(True)
         if hasattr(self, "stats_labels"):

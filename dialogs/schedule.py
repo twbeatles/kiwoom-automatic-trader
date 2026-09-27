@@ -42,7 +42,7 @@ class ScheduleDialog(QDialog):
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        btn_save = QPushButton("💾 저장")
+        btn_save = QPushButton("저장")
         btn_save.clicked.connect(self._save)
         btn_layout.addWidget(btn_save)
         btn_close = QPushButton("취소")

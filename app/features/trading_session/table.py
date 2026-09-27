@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
 
 from app.support.worker import Worker
 from config import Config
+from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase
 
 
@@ -37,6 +38,7 @@ class TradingSessionTableMixin(TraderMixinBase):
             f"{info.get('max_profit_rate', 0):.2f}%",
             f"{info.get('invest_amount', 0):,}",
         ]
+        _theme = str(getattr(self, "current_theme", "dark") or "dark")
         for col, text in enumerate(data):
             text_str = str(text)
             item = self.table.item(row, col)
@@ -49,9 +51,9 @@ class TradingSessionTableMixin(TraderMixinBase):
 
             if col == 6:
                 if profit_rate > 0:
-                    item.setForeground(QColor("#e63946"))
+                    item.setForeground(QColor(table_status_color(_theme, "profit_up")))
                 elif profit_rate < 0:
-                    item.setForeground(QColor("#4361ee"))
+                    item.setForeground(QColor(table_status_color(_theme, "profit_down")))
     def _refresh_table(self):
         if not self.universe or not self._dirty_codes:
             return

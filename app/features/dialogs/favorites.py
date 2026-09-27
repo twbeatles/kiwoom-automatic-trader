@@ -22,7 +22,7 @@ class FavoritesMixin(TraderMixinBase):
                 with open(fav_file, 'r', encoding='utf-8') as f:
                     self.favorites = json.load(f)
                 for name in self.favorites.keys():
-                    self.combo_favorites.addItem(f"⭐ {name}")
+                    self.combo_favorites.addItem(f"{name}")
             else:
                 self.favorites = {}
         except Exception as exc:
@@ -59,8 +59,8 @@ class FavoritesMixin(TraderMixinBase):
             self.favorites[name] = codes
             # 콤보박스에 추가 (중복 확인)
             existing = [self.combo_favorites.itemText(i) for i in range(self.combo_favorites.count())]
-            if f"⭐ {name}" not in existing:
-                self.combo_favorites.addItem(f"⭐ {name}")
+            if f"{name}" not in existing:
+                self.combo_favorites.addItem(f"{name}")
             
             # 파일 저장
             try:

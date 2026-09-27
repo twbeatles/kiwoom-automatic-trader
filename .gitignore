@@ -35,6 +35,7 @@ htmlcov/
 build/
 dist/
 dist_new/
+dist_build/
 release/
 .pyinstaller/
 *.egg-info/

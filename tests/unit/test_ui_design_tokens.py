@@ -134,6 +134,71 @@ class TestWorkspaceLabels(unittest.TestCase):
             )
 
 
+class TestUserVisibleLabels(unittest.TestCase):
+    """Rule 19: no emoji icons in user-visible labels (logs excluded)."""
+
+    def test_preset_names_and_help_have_no_emoji(self):
+        from config import Config
+
+        for preset in Config.DEFAULT_PRESETS.values():
+            self.assertIsNone(
+                _EMOJI_RE.search(preset["name"]), f"emoji in preset {preset['name']!r}"
+            )
+        for section, body in Config.HELP_CONTENT.items():
+            self.assertIsNone(
+                _EMOJI_RE.search(body), f"emoji in help {section!r}"
+            )
+
+    def test_menu_group_button_labels_have_no_emoji(self):
+        menu_text = (REPO / "app" / "mixins" / "system_shell.py").read_text(
+            encoding="utf-8"
+        )
+        # single source: menu iterates WORKSPACE_LABELS (no literal copies)
+        self.assertIn("enumerate(WORKSPACE_LABELS)", menu_text)
+        views_text = (
+            REPO / "app" / "features" / "market_intelligence" / "views.py"
+        ).read_text(encoding="utf-8")
+        for title in ("리플레이 요약", "소스 상태"):
+            self.assertIn(title, views_text)
+        schedule_text = (REPO / "dialogs" / "schedule.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('QPushButton("저장")', schedule_text)
+        favorites_text = (
+            REPO / "app" / "features" / "dialogs" / "favorites.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('"\u2b50 {name}"', favorites_text)
+        for path, content in (
+            ("app/mixins/system_shell.py", menu_text),
+            ("app/features/market_intelligence/views.py", views_text),
+            ("dialogs/schedule.py", schedule_text),
+        ):
+            for line in content.splitlines():
+                if "addAction(" in line or "QGroupBox(" in line or "QPushButton(" in line:
+                    self.assertIsNone(
+                        _EMOJI_RE.search(line), f"emoji in {path}: {line.strip()}"
+                    )
+
+
+class TestTableStatusColors(unittest.TestCase):
+    def test_roles_resolve_per_theme(self):
+        for theme in ("dark", "light"):
+            for role in theme_engine.TABLE_STATUS_ROLES:
+                color = theme_engine.table_status_color(theme, role)
+                self.assertRegex(color, r"^#[0-9a-f]{6}$", f"{theme}:{role}")
+        self.assertEqual(
+            theme_engine.table_status_color("unknown-theme", "error"),
+            theme_engine.TABLE_STATUS_COLORS["dark"]["error"],
+        )
+
+    def test_status_contrast_passes_on_table_background(self):
+        for theme in ("dark", "light"):
+            for role, ratio in theme_engine.check_table_status_contrast(
+                theme
+            ).items():
+                self.assertGreaterEqual(ratio, 4.5, f"{theme}:{role}")
+
+
 class TestNoInlineQss(unittest.TestCase):
     ALLOW: ClassVar = {
         # central theme engine + parent-stylesheet inherit only

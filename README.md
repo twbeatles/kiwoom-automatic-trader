@@ -333,6 +333,10 @@ graph TD
 - 125/150/175/200% Windows 배율을 그대로 반영하며(분수 스케일 rounding), 글자는 OS 텍스트 스케일을 따르는 `pt` 단위로 렌더링됩니다.
 - 고배율 화면에서는 첫 실행 시 글자 배율 상향 + `comfortable` 밀도(넓은 메뉴/버튼 간격)가 자동 적용됩니다. 저장된 설정이 있으면 그 값이 우선합니다.
 - **[보기 > UI 크기]**에서 100/115/130/150% 선택, **[보기 > 여유 있는 밀도]** 토글, 또는 `Ctrl+=` / `Ctrl+-`로 단계 조절이 가능하며 **[파일 > 설정 저장]**으로 유지됩니다.
+### UI 디자인 규칙 (Fluent 스타일)
+- 메뉴·탭·버튼 라벨은 텍스트 중심으로 표시됩니다 (이모지 아이콘 미사용).
+- 성공/경고/오류 알림은 화면 상단의 알림 바로 뜨며, 삭제·종료 등 되돌릴 수 없는 작업에만 확인 창이 뜹니다.
+- 다크/라이트 테마 모두에서 진단·거래내역 표의 상태 색상이 선명하게 보입니다.
 
 ---
 
@@ -451,7 +455,7 @@ kiwoom-automatic-trader/
 │   │   ├── diagnostics/    # 시스템 진단 및 상태 점검 패키지
 │   │   └── dialogs/        # 수동주문/즐겨찾기/프리셋·프로필·예약/설정스냅샷 (dialogs_profiles composite)
 │   ├── mixins/             # 기존 mixin 호환 shim 및 타입 베이스 (_typing.py)
-│   └── support/            # 백그라운드 Worker, 위젯, 백테스트 러너, UI 텍스트 헬퍼, 테마/포트폴리오요약/인텔타임라인
+│   └── support/            # 백그라운드 Worker, 위젯, 백테스트 러너, UI 텍스트 헬퍼, 테마/포트폴리오요약/인텔타임라인, 디자인 토큰/공통 컴포넌트(InfoBar 호스트)
 │
 ├── backtest/               # 이벤트 드리븐 백테스트 엔진(models/_base/_metrics/_policy/_guards/_intel_events + engine facade)
 ├── data/providers/         # 외부 데이터 Provider (DART, NAVER 뉴스/트렌드, FRED 매크로, AI)
@@ -490,7 +494,7 @@ python -m compileall -q app api data backtest strategies portfolio dialogs ui_di
 # 2. 리팩토링 구조 동등성 검증
 python tools/refactor_verify.py
 
-# 3. 전체 단위 테스트 실행 (266 tests)
+# 3. 전체 단위 테스트 실행 (304 tests)
 python -m pytest tests/unit --override-ini addopts= --tb=short
 
 # 4. 정적 타입 검사 (Pyright)
