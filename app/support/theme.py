@@ -700,6 +700,34 @@ QListWidget::item {{
     margin: {_pad(2, ls)}px 0;
 }}
 QListWidget::item:hover {{ background-color: rgba(88, 166, 255, 0.08); }}
+QFrame#fluentNav {{
+    background-color: {t['surface']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
+}}
+QListWidget#fluentNavList {{
+    background-color: transparent;
+    border: none;
+    padding: {_pad(4, ls)}px;
+    color: {t['text']};
+}}
+QListWidget#fluentNavList::item {{
+    padding: {_pad(10, ls)}px {_pad(14, ls)}px;
+    border-radius: 6px;
+    margin: {_pad(2, ls)}px 0;
+    color: {t['text_muted']};
+    font-weight: 600;
+    border-left: 3px solid transparent;
+}}
+QListWidget#fluentNavList::item:hover {{
+    background-color: rgba(88, 166, 255, 0.08);
+    color: {t['text']};
+}}
+QListWidget#fluentNavList::item:selected {{
+    background-color: rgba(88, 166, 255, 0.15);
+    color: {t['text']};
+    border-left: 3px solid {t['accent']};
+}}
 QListWidget::item:selected {{
     background-color: rgba(88, 166, 255, 0.15);
     color: {t['text']};
@@ -1147,6 +1175,34 @@ QListWidget::item {{
     margin: {_pad(2, ls)}px 0;
 }}
 QListWidget::item:hover {{ background-color: rgba(13, 110, 253, 0.08); }}
+QFrame#fluentNav {{
+    background-color: {t['surface']};
+    border: 1px solid {t['border_soft']};
+    border-radius: 8px;
+}}
+QListWidget#fluentNavList {{
+    background-color: transparent;
+    border: none;
+    padding: {_pad(4, ls)}px;
+    color: {t['text']};
+}}
+QListWidget#fluentNavList::item {{
+    padding: {_pad(10, ls)}px {_pad(14, ls)}px;
+    border-radius: 6px;
+    margin: {_pad(2, ls)}px 0;
+    color: {t['text_muted']};
+    font-weight: 600;
+    border-left: 3px solid transparent;
+}}
+QListWidget#fluentNavList::item:hover {{
+    background-color: rgba(13, 110, 253, 0.08);
+    color: {t['text']};
+}}
+QListWidget#fluentNavList::item:selected {{
+    background-color: rgba(13, 110, 253, 0.15);
+    color: {t['text']};
+    border-left: 3px solid {t['accent']};
+}}
 QListWidget::item:selected {{
     background-color: rgba(13, 110, 253, 0.15);
     color: {t['text']};

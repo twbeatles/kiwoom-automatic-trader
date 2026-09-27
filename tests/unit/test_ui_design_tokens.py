@@ -99,6 +99,8 @@ class TestThemeFluentRules(unittest.TestCase):
                 'QLabel[profit_state="up"]',
                 'QPushButton#orderBtn',
                 'QFrame[infobar="success"]',
+                'QFrame#fluentNav',
+                'QListWidget#fluentNavList::item:selected',
                 'QPushButton[secondary_button="true"]',
                 'QLineEdit[invalid="true"]',
             ):

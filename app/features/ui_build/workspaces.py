@@ -23,6 +23,11 @@ from PyQt6.QtWidgets import (
 )
 
 from app.mixins._typing import TraderMixinBase
+from app.support.components.fluent_nav import (
+    NAV_ACTION_ORDER_TICKET,
+    NAV_ACTION_THEME,
+    FluentNavRail,
+)
 
 
 # 최상위 워크스페이스 라벨 (표시 순서 고정, 규칙 §19: emoji 아이콘 금지)
@@ -59,7 +64,65 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         tabs.addTab(self._create_portfolio_workspace(), WORKSPACE_PORTFOLIO)
         tabs.addTab(self._create_intel_workspace(), WORKSPACE_INTEL)
         tabs.addTab(self._create_system_workspace(), WORKSPACE_SYSTEM)
+        self._hide_workspace_tab_bar(tabs)
+        try:
+            tabs.currentChanged.connect(self._sync_fluent_nav)
+        except Exception:
+            pass
         return tabs
+
+    def _hide_workspace_tab_bar(self, tabs) -> None:
+        """상단 탭바 숨김 (규칙 §9: QTabWidget 전체-앱 내비게이션 금지).
+
+        QTabWidget은 좌측 레일이 조종하는 페이지 스택으로만 쓰고,
+        내비게이션 노출은 FluentNavRail이 담당한다.
+        """
+        try:
+            bar = tabs.tabBar()
+            if bar is not None:
+                bar.setVisible(False)
+        except Exception:
+            pass
+
+    def _create_fluent_nav(self):
+        """좌측 Fluent 내비게이션 레일 (PyQt6 네이티브, 규칙 §9/§27.1)."""
+        parent = self if isinstance(self, QWidget) else None
+        rail = FluentNavRail(list(WORKSPACE_LABELS), parent)
+        try:
+            rail.requested.connect(self._goto_workspace)
+        except Exception:
+            pass
+        try:
+            rail.action_triggered.connect(self._on_fluent_nav_action)
+        except Exception:
+            pass
+        self.fluent_nav = rail
+        return rail
+
+    def _on_fluent_nav_action(self, key) -> None:
+        """레일 하단 빠른 동작을 기존 보기 메뉴 동작과 같은 곳으로 연결."""
+        if key == NAV_ACTION_ORDER_TICKET:
+            toggle = getattr(self, "_toggle_order_ticket", None)
+            if callable(toggle):
+                toggle()
+        elif key == NAV_ACTION_THEME:
+            toggle = getattr(self, "_toggle_theme", None)
+            if callable(toggle):
+                toggle()
+
+    def _sync_fluent_nav(self, index) -> None:
+        """탭 변경을 레일 선택에 반영 (레일은 시그널을 역방출하지 않음)."""
+        try:
+            target = int(index)
+        except (TypeError, ValueError):
+            return
+        rail = getattr(self, "fluent_nav", None)
+        sync = getattr(rail, "set_current", None)
+        if callable(sync):
+            try:
+                sync(target)
+            except Exception:
+                pass
 
     def _is_navigation_guarded(self) -> bool:
         """True when a workspace switch needs user confirmation.
@@ -74,8 +137,10 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         tabs = getattr(self, "main_tabs", None)
         if tabs is not None and 0 <= int(index) < tabs.count():
             if not self._confirm_workspace_switch(int(index)):
+                self._sync_fluent_nav(tabs.currentIndex())
                 return
             tabs.setCurrentIndex(int(index))
+            self._sync_fluent_nav(int(index))
 
         # -- 워크스페이스 네비게이션 가드 -------------------------------
     def _confirm_workspace_switch(self, index) -> bool:

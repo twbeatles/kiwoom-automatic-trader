@@ -1,5 +1,28 @@
 # Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
+## 2026-09-27 Fluent 좌측 내비게이션 누락 수정 동기화 메모
+
+1. 원인
+- 직전 커밋의 "Fluent 전면 재설계"는 토큰 QSS·InfoBar까지만 적용하고 전체-앱 내비게이션을
+  상단 QTabWidget으로 남김 → 규칙 §9/§27.1 금지 패턴 그대로라 좌측 Fluent 메뉴가 없음.
+  오프스크린 실창 증명: 메뉴바 5종·탭 5종은 보이나 레일 없음
+- 진짜 `MSFluentWindow` 이식은 불가: 환경에 `PySide6-Fluent-Widgets`가 설치되어 있어
+  PyQt6 앱과 동일 `qfluentwidgets` namespace 충돌 (규칙 §4), `requirements.txt` PyQt6 고정 유지
+
+2. 수정 (PyQt6 네이티브, 신규 의존성 없음)
+- 신규 `app/support/components/fluent_nav.py`: `FluentNavRail` (상단 5 워크스페이스 + 하단 주문티켓/테마 버튼,
+  `WORKSPACE_LABELS` 단일 출처, 클릭/Enter만 이동·방향키 탐색은 이동 없음, 동기화 역방출 없음)
+- `workspaces.py`: 탭바 숨김(`_hide_workspace_tab_bar`, QTabWidget은 페이지 스택으로만 사용) +
+  `currentChanged`→`_sync_fluent_nav` 양방향 동기화, 가드 차단 시 레일 하이라이트 원복
+- `layout.py` `_create_tabs()`: 좌측 레일 + 스택 QHBox 컨테이너 반환 (`main_tabs` API·메뉴·도크 그대로)
+- `theme.py` 다크/라이트에 `#fluentNav`/`#fluentNavList` QSS (선택 accent 좌측바, 4.5:1 기존 패턴 재사용)
+- `KiwoomTrader.spec` hiddenimports에 `fluent_nav` 명시 (collect_submodules 병행)
+
+3. 검증
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 332 passed (신규 `test_fluent_nav.py` 13)
+- `python tools/refactor_verify.py`·`compileall`·`pyright .`(0 errors) 통과, 신규 파일 `ruff check` 통과
+- 오프스크린 실창: 레일 노출·라벨 일치·탭바 숨김·메뉴바 5종 유지·양방향 이동 동기화 확인
+
 ## 2026-09-27 Fluent 전면 재설계(srtgo 참조) 동기화 메모
 
 1. 배경

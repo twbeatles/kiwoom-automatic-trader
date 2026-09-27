@@ -113,6 +113,7 @@ hiddenimports = [
     'app.support.components',
     'app.support.components.helpers',
     'app.support.components.infobar',
+    'app.support.components.fluent_nav',
     'app.support.intel_timeline',
     'app.support.portfolio_summary',
     'app.features.ui_build.workspaces',

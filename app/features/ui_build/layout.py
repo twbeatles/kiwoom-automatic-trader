@@ -234,10 +234,26 @@ class UIBuildLayoutMixin(TraderMixinBase):
         group.setLayout(main_layout)
         return group
     def _create_tabs(self):
-        """5-워크스페이스 탭 + 우측 주문 티켓 도크 (빌더는 workspaces 믹스인)."""
+        """좌측 Fluent 레일 + 5-워크스페이스 스택 (규칙 §9: 상단 탭바 내비게이션 금지).
+
+        QTabWidget(탭바 숨김)은 페이지 스택으로만 쓰고, 내비게이션 노출은
+        좌측 FluentNavRail이 담당한다. 우측 주문 티켓 도크는 그대로 둔다.
+        """
         tabs = self._create_workspace_tabs()
+        rail = self._create_fluent_nav()
+        try:
+            rail.set_current(tabs.currentIndex())
+        except Exception:
+            pass
+        container = QWidget()
+        box = QHBoxLayout(container)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(8)
+        box.addWidget(rail)
+        box.addWidget(tabs, 1)
+        self.workspace_container = container
         self._create_order_dock()
-        return tabs
+        return container
 
     def _create_stock_panel(self):
         """주식 테이블 + 로그 패널 (내부 스플리터)"""
