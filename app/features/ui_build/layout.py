@@ -33,7 +33,11 @@ class UIBuildLayoutMixin(TraderMixinBase):
         self.setWindowTitle("키움 자동매매 도우미 v4.5 | Kiwoom Pro Algo-Trader [REST API]")
         self._apply_hidpi_defaults()
         self._apply_display_aware_geometry()
-        apply_theme(self)
+        startup_theme = getattr(self, "_apply_startup_theme", None)
+        if callable(startup_theme):
+            startup_theme()
+        else:
+            apply_theme(self)
         apply_accessibility_names(self)
 
         central = QWidget()
@@ -59,6 +63,9 @@ class UIBuildLayoutMixin(TraderMixinBase):
         layout.addWidget(main_splitter)
 
         self._create_statusbar()
+        installer = getattr(self, "_install_system_theme_watcher", None)
+        if callable(installer):
+            installer()
     def _screen_scale_hints(self):
         """Return (device_pixel_ratio, logical_dpi) of the current screen."""
         try:

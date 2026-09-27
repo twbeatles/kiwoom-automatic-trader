@@ -9,11 +9,11 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QTextCursor
-from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from config import Config
 from app.support.components.helpers import set_trading_badge
-from app.support.theme import apply_theme
+from app.support.theme import apply_theme, clamp_theme_mode as _clamp_theme_mode, log_level_color as _log_level_color, log_timestamp_color as _log_timestamp_color, resolve_theme_name as _resolve_theme_name
 from app.support.theme import set_ui_font_scale as _set_ui_font_scale
 from app.support.theme import set_ui_density as _set_ui_density
 from app.support.ui_scale import next_scale_step as _next_scale_step
@@ -381,19 +381,70 @@ class SystemShellMixin(TraderMixinBase):
         return clamped
 
     def _toggle_theme(self):
-        """다크/라이트 테마 전환."""
+        """다크/라이트 수동 전환 (자동 추적 해제)."""
         new_theme = "light" if getattr(self, "current_theme", "dark") == "dark" else "dark"
         apply_theme(self, new_theme)
+        self.ui_theme_mode = self.current_theme
         if self.current_theme == "light":
             self.log("라이트 테마 적용")
         else:
             self.log("다크 테마 적용")
 
     def _on_theme_combo_changed(self, theme):
-        """테마 콤보박스 변경 처리."""
-        if theme in ("dark", "light") and theme != getattr(self, "current_theme", "dark"):
-            apply_theme(self, theme)
-            self.log(f"{'다크' if theme == 'dark' else '라이트'} 테마 적용")
+        """테마 모드 변경 처리 (auto는 OS 추적, dark/light은 고정)."""
+        mode = _clamp_theme_mode(theme)
+        self.ui_theme_mode = mode
+        resolved = _resolve_theme_name(mode)
+        if resolved != getattr(self, "current_theme", "dark"):
+            apply_theme(self, resolved)
+            self.log(f"{'다크' if resolved == 'dark' else '라이트'} 테마 적용")
+
+    def _apply_startup_theme(self):
+        """시작 테마 결정 (auto면 OS 추적, 수동값은 그대로)."""
+        mode = _clamp_theme_mode(
+            getattr(self, "ui_theme_mode", getattr(Config, "DEFAULT_UI_THEME_MODE", "auto"))
+        )
+        self.ui_theme_mode = mode
+        return apply_theme(self, _resolve_theme_name(mode))
+
+    def _sync_system_theme(self):
+        """OS 테마 폴링 콜백 (auto 모드에서만 재적용)."""
+        if _clamp_theme_mode(getattr(self, "ui_theme_mode", "auto")) != "auto":
+            return
+        resolved = _resolve_theme_name("auto")
+        if resolved != getattr(self, "current_theme", "dark"):
+            apply_theme(self, resolved)
+
+    def _install_system_theme_watcher(self):
+        """OS 테마 변경 감시 (srtgo colorSchemeChanged+QTimer borrow).
+
+        Qt 없이도 안전: 감시 설치 실패는 조용히 무시하고 수동 전환은
+        항상 동작한다. 중복 설치는 방지한다.
+        """
+        if getattr(self, "_theme_watcher_installed", False):
+            return
+        try:
+            hints = None
+            try:
+                from PyQt6.QtGui import QGuiApplication
+
+                hints = QGuiApplication.styleHints()
+            except Exception:
+                hints = None
+            changed = getattr(hints, "colorSchemeChanged", None)
+            if changed is not None:
+                try:
+                    changed.connect(lambda _scheme: self._sync_system_theme())
+                except Exception:
+                    pass
+            timer = QTimer(self)
+            timer.setInterval(3000)
+            timer.timeout.connect(self._sync_system_theme)
+            timer.start()
+            self._theme_watcher_timer = timer
+            self._theme_watcher_installed = True
+        except Exception:
+            pass
 
     def _on_font_scale_changed(self, scale):
         """UI 글자 크기 스핀박스 변경 처리."""
@@ -435,6 +486,47 @@ class SystemShellMixin(TraderMixinBase):
         )
         QMessageBox.information(self, "단축키 목록", shortcuts_text)
 
+    def _notice_or_box(self, level, title, body, fallback):
+        """InfoBar-first notice with modal fallback (rules section 15).
+
+        Non-blocking notices (empty export, nothing to save) go to the
+        inline InfoBar; modal QMessageBox stays for validation errors,
+        destructive confirms, and must-choose cases.
+        """
+        notify = getattr(self, "notify_bar", None)
+        if callable(notify):
+            try:
+                notify(level, title, body)
+                return
+            except Exception:
+                pass
+        fallback(self, title, body)
+
+    def _stop_ui_timers(self):
+        """상태 타이머 + OS 테마 watcher 정지 (종료 시 잔류 방지)."""
+        for attr in ("timer", "_theme_watcher_timer"):
+            timer = getattr(self, attr, None)
+            stop = getattr(timer, "stop", None)
+            if callable(stop):
+                try:
+                    stop()
+                except Exception:
+                    pass
+
+    def _quit_application(self):
+        """이벤트 루프 종료 요청 (작업관리자 프로세스 잔류 방지).
+
+        closeEvent 안에서 직접 quit()하면 창 파괴 순서가 꼬일 수 있어
+        singleShot(0)으로 미뤄 둔다. 인스턴스가 없으면 무시한다.
+        """
+        try:
+            app = QApplication.instance()
+            quit_fn = getattr(app, "quit", None)
+            if callable(quit_fn):
+                QTimer.singleShot(0, quit_fn)
+        except Exception:
+            pass
+
     def log(self, msg):
         self.sig_log.emit(msg)
         self.logger.info(msg)
@@ -443,25 +535,25 @@ class SystemShellMixin(TraderMixinBase):
         timestamp = f"[{datetime.datetime.now():%H:%M:%S}]"
 
         if "실패" in msg or "오류" in msg:
-            color = "#f85149"
-            badge_style = "color: #f85149; font-weight: bold;"
+            color = _log_level_color("error")
+            badge_style = f"color: {_log_level_color('error')}; font-weight: bold;"
             level_mark = "ERR"
         elif "경고" in msg or "손실" in msg:
-            color = "#d29922"
-            badge_style = "color: #d29922; font-weight: bold;"
+            color = _log_level_color("warning")
+            badge_style = f"color: {_log_level_color('warning')}; font-weight: bold;"
             level_mark = "WRN"
         elif "성공" in msg or "완료" in msg or "시작" in msg:
-            color = "#3fb950"
-            badge_style = "color: #3fb950; font-weight: bold;"
+            color = _log_level_color("success")
+            badge_style = f"color: {_log_level_color('success')}; font-weight: bold;"
             level_mark = "SUC"
         else:
-            color = "#e6edf3"
-            badge_style = "color: #8b949e;"
+            color = _log_level_color("info")
+            badge_style = f"color: {_log_timestamp_color()};"
             level_mark = "INF"
 
         html = f"""
         <div style="margin-bottom: 2px;">
-            <span style="color: #8b949e; font-family: monospace;">{timestamp}</span>
+            <span style="color: {_log_timestamp_color()}; font-family: monospace;">{timestamp}</span>
             <span style="{badge_style} margin-left: 4px; margin-right: 4px;">[{level_mark}]</span>
             <span style="color: {color};">{msg}</span>
         </div>
@@ -544,6 +636,8 @@ class SystemShellMixin(TraderMixinBase):
                     else:
                         self._save_trade_history()
 
+            self._stop_ui_timers()
             event.accept()
+            self._quit_application()
         finally:
             self._force_quit_requested = False

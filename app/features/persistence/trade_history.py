@@ -133,7 +133,7 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self._update_stats()
     def _export_csv(self):
         if not self.trade_history:
-            QMessageBox.information(self, "알림", "내보낼 내역이 없습니다.")
+            self._notice_or_box("info", "알림", "내보낼 내역이 없습니다.", QMessageBox.information)
             return
         filename, _ = QFileDialog.getSaveFileName(
             self,

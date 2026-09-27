@@ -51,7 +51,7 @@ class FavoritesMixin(TraderMixinBase):
         """현재 종목을 즐겨찾기에 저장"""
         codes = [c.strip() for c in self.input_codes.text().split(",") if c.strip()]
         if not codes:
-            QMessageBox.warning(self, "경고", "저장할 종목이 없습니다.")
+            self._notice_or_box("warning", "경고", "저장할 종목이 없습니다.", QMessageBox.warning)
             return
         
         name, ok = QInputDialog.getText(self, "즐겨찾기 저장", "그룹 이름:")

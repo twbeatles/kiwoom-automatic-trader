@@ -193,7 +193,7 @@ class DiagnosticsMixin(TraderMixinBase):
                     elif col == 13:
                         item.setForeground(QColor(table_status_color(_theme, "error")) if raw_guard_reason else QColor(table_status_color(_theme, "muted")))
                     elif col == 14:
-                        item.setForeground(QColor("#8b949e" if not str(text) else "#d29922"))
+                        item.setForeground(QColor(table_status_color(_theme, "muted") if not str(text) else table_status_color(_theme, "warning")))
                     elif col == 15:
                         state = raw_action_policy.lower()
                         if state in {"force_exit", "tighten_exit", "reduce_size", "block_entry"}:

@@ -48,6 +48,12 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         tabs = QTabWidget()
         self.main_tabs = tabs
         tabs.setObjectName("workspace_tabs")
+        try:
+            tabs.setDocumentMode(True)
+            tabs.setUsesScrollButtons(True)
+            tabs.setMovable(False)
+        except Exception:
+            pass
         tabs.addTab(self._create_trade_workspace(), WORKSPACE_TRADE)
         tabs.addTab(self._create_explore_workspace(), WORKSPACE_EXPLORE)
         tabs.addTab(self._create_portfolio_workspace(), WORKSPACE_PORTFOLIO)
@@ -55,10 +61,48 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         tabs.addTab(self._create_system_workspace(), WORKSPACE_SYSTEM)
         return tabs
 
+    def _is_navigation_guarded(self) -> bool:
+        """True when a workspace switch needs user confirmation.
+
+        Critical-op guard (srtgo guarded switchTo borrow): only while
+        live trading is running. Scope stays narrow so normal browsing
+        never pops a confirm dialog.
+        """
+        return bool(getattr(self, "is_running", False))
+
     def _goto_workspace(self, index):
         tabs = getattr(self, "main_tabs", None)
         if tabs is not None and 0 <= int(index) < tabs.count():
+            if not self._confirm_workspace_switch(int(index)):
+                return
             tabs.setCurrentIndex(int(index))
+
+        # -- 워크스페이스 네비게이션 가드 -------------------------------
+    def _confirm_workspace_switch(self, index) -> bool:
+        """Return True when switching to *index* may proceed.
+
+        Unguarded (idle) switches always proceed. While trading runs,
+        ask once via modal confirm (must-choose case, rules section 15);
+        a declined or undeliverable dialog blocks the switch.
+        """
+        tabs = getattr(self, "main_tabs", None)
+        try:
+            current = int(tabs.currentIndex()) if tabs is not None else -1
+        except Exception:
+            current = -1
+        if int(index) == current or not self._is_navigation_guarded():
+            return True
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+
+            answer = QMessageBox.question(
+                self,
+                "확인",
+                "자동매매 실행 중입니다. 워크스페이스를 이동할까요?",
+            )
+            return answer == QMessageBox.StandardButton.Yes
+        except Exception:
+            return False
 
     # -- 워크스페이스 -----------------------------------------------
 

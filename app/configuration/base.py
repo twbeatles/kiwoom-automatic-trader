@@ -582,6 +582,10 @@ class Config:
     # 테마 설정 (v4.3 신규)
     # =========================================================================
     DEFAULT_THEME = 'dark'  # 'dark' or 'light'
+    # Theme mode: 'auto' follows the OS (srtgo Theme.AUTO borrow),
+    # 'dark'/'light' pin a theme. Saved alongside 'theme' with parity.
+    DEFAULT_UI_THEME_MODE = 'auto'
+    UI_THEME_MODES = ('auto', 'dark', 'light')
     DEFAULT_UI_FONT_SCALE = 1.0  # Accessibility font scaling (WCAG 1.4.4)
     UI_FONT_SCALE_MIN = 0.85
     UI_FONT_SCALE_MAX = 1.5

@@ -267,6 +267,76 @@ def table_status_color(theme, role):
     return TABLE_STATUS_COLORS["dark"].get(role, "#8b949e")
 
 
+# Log-viewer level colors (single source for _append_log HTML).
+# Both themes render the log on a dark surface (dark QTextEdit bg and
+# light LOG_BG), so one dark-surface palette stays legible everywhere.
+LOG_LEVEL_COLORS = {
+    "error": "#f85149",
+    "warning": "#d29922",
+    "success": "#3fb950",
+    "info": "#e6edf3",
+    "muted": "#8b949e",
+}
+
+LOG_LEVELS = ("error", "warning", "success", "info")
+
+
+def log_level_color(level) -> str:
+    """Return the log HTML hex for *level* (unknown -> info)."""
+    return LOG_LEVEL_COLORS.get(str(level or "").lower(), LOG_LEVEL_COLORS["info"])
+
+
+def log_timestamp_color() -> str:
+    """Return the log timestamp hex (muted, dark-surface legible)."""
+    return LOG_LEVEL_COLORS["muted"]
+
+
+# Theme mode: "auto" follows the OS, "dark"/"light" pin a theme.
+# srtgo(ktrain) borrow: Theme.AUTO + darkdetect + colorSchemeChanged
+# watcher, re-expressed Qt-free (detection only; Qt wiring lives in
+# app/mixins/system_shell.py so unit tests run without PyQt6).
+UI_THEME_MODES = ("auto", "dark", "light")
+DEFAULT_UI_THEME_MODE = "auto"
+
+
+def clamp_theme_mode(value) -> str:
+    """Normalize a theme-mode name; unknown values fall back to auto."""
+    text = str(value or "").strip().lower()
+    if text in UI_THEME_MODES:
+        return text
+    return DEFAULT_UI_THEME_MODE
+
+
+def detect_os_theme():
+    """Return "dark"/"light" from the OS, or None when undetectable.
+
+    Qt-free: prefers the optional ``darkdetect`` package (same source
+    srtgo uses); never raises.
+    """
+    try:
+        import darkdetect  # type: ignore
+
+        system = darkdetect.theme()
+    except Exception:
+        return None
+    if system == "Dark":
+        return "dark"
+    if system == "Light":
+        return "light"
+    return None
+
+
+def resolve_theme_name(requested) -> str:
+    """Resolve "auto"/"dark"/"light" to a concrete "dark"/"light" theme."""
+    mode = clamp_theme_mode(requested)
+    if mode in ("dark", "light"):
+        return mode
+    detected = detect_os_theme()
+    if detected in ("dark", "light"):
+        return detected
+    return "dark"
+
+
 def check_table_status_contrast(theme):
     """Return {role: ratio} of each status color on the table background."""
     bg = TOKENS[theme][TABLE_STATUS_BG_TOKEN[theme]]

@@ -2,7 +2,7 @@
 from typing import Any, cast
 from unittest.mock import patch
 
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from app.mixins.system_shell import SystemShellMixin
 
@@ -67,6 +67,27 @@ class TestForceQuitCloseEvent(unittest.TestCase):
         self.assertFalse(event.ignored)
         self.assertEqual(trader.stop_called, 1)
         self.assertFalse(trader._force_quit_requested)
+
+
+    def test_close_stops_timers_and_quits_event_loop(self):
+        from unittest.mock import MagicMock, patch
+
+        trader = _Harness()
+        trader._force_quit_requested = True
+        fake_timer = MagicMock()
+        trader.timer = fake_timer
+        trader._theme_watcher_timer = fake_timer
+        event = _DummyEvent()
+        with patch.object(_Harness, "_quit_application") as quit_mock:
+            trader.closeEvent(cast(Any, event))
+        self.assertTrue(event.accepted)
+        self.assertEqual(fake_timer.stop.call_count, 2)
+        quit_mock.assert_called_once_with()
+
+    def test_quit_application_without_app_instance_is_noop(self):
+        trader = _Harness()
+        if QApplication.instance() is None:
+            trader._quit_application()
 
 
 if __name__ == "__main__":

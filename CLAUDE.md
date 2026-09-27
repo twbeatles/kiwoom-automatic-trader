@@ -1,5 +1,47 @@
 # Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
+## 2026-09-27 Fluent 전면 재설계(srtgo 참조) 동기화 메모
+
+1. 배경
+- srtgo(ktrain) Fluent UI를 `as-is`로 가져올 수 없음: PySide6+`qfluentwidgets` vs 본 프로젝트 PyQt6,
+  바인딩 혼용 금지(규칙 §1.1) + 동일 import namespace 충돌(`qt_binding.py` 경고) + `requirements.txt` PyQt6 고정.
+  `winui-app` 스킬은 WinUI3/C#용이라 scaffold 절차 미적용, 기존 코드베이스 관례 유지 원칙만 차용
+- 대신 PyQt6 네이티브 + 토큰 QSS + InfoBar 호스트로 동등 UX 구현 (P0-P3)
+
+2. 수정
+- P0 토큰 단일출처: `theme.LOG_LEVEL_COLORS`/`log_level_color()`/`log_timestamp_color()` 신규,
+  `system_shell._append_log` 하드코딩 hex 제거. 진단 14열 잔여 hex를 `table_status_color()`로 전환
+- P1 셸: `_goto_workspace` 중요작업 가드(`_is_navigation_guarded`+`_confirm_workspace_switch`, 실행 중에만 확인),
+  워크스페이스 탭 document/scroll-button 밀도
+- P2 테마동기화/피드백: `UI_THEME_MODES(auto/dark/light)`+`resolve_theme_name()`+`detect_os_theme()`(darkdetect 선택 의존),
+  시작 시 자동 해결 + `colorSchemeChanged`+3초 QTimer watcher, 콤보에 `auto` 추가, `theme_mode` 저장/복원 parity
+  (구 설정 `theme` 고정값은 수동 모드로 마이그레이션). 비차단 안내 2곳 InfoBar 우선(`_notice_or_box`)
+- 의존성 변경 없음: 신규 패키지 미추가 (darkdetect는 선택사항, 없어도 dark 폴백)
+
+3. 검증
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 317 passed (신규 13)
+- `python tools/refactor_verify.py`: 통과 / `python -m compileall`: 통과 / `pyright .`: 0 errors
+- 오프스크린 스모크: mode auto→dark 해결, watcher 설치, 5탭+주문도크+InfoBar, idle 이동·알림 무충돌
+
+## 2026-09-27 트레이 종료 잔류 수정 + 재빌드 동기화 메모
+
+1. 원인
+- `closeEvent`가 accept만 하고 `QApplication.quit()`을 호출하지 않아 `app.exec()`가 반환되지 않음
+  → 창이 닫혀도 이벤트 루프·타이머가 살아 작업관리자에 프로세스 잔류 (워커 스레드는 전부 daemon 확인)
+
+2. 수정
+- `system_shell`: `_stop_ui_timers()`(1초 상태 타이머 + 테마 watcher 정지) + `_quit_application()`
+  (singleShot(0) 지연 quit, 인스턴스 없으면 무시) → `closeEvent` accept 직후 호출
+- 테스트: `test_force_quit_close_event.py`에 타이머 정지·quit 스케줄 회귀 2건 추가
+
+3. 검증
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 319 passed
+- `python tools/refactor_verify.py`·`compileall`·`pyright .`(0 errors) 통과
+- 오프스크린 종료 증명: close 후 `EXEC_RETURNED 0` (수정 전이면 타임아웃)
+- 빌드: `pyinstaller --clean --distpath dist_build KiwoomTrader.spec` 성공 (50.9MB),
+  오프스크린 25초 무충돌. 구 실행 프로세스가 없어 잠금 없이 산출
+
+
 ## 2026-09-27 Fluent UI 잔여 갭 해소 동기화 메모
 
 1. 배경

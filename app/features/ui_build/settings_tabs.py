@@ -692,7 +692,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         lbl_theme.setToolTip("다크/라이트 테마 (Ctrl+T로 전환)")
         g6.addWidget(lbl_theme, 3, 0)
         self.combo_theme = NoScrollComboBox()
-        self.combo_theme.addItems(["dark", "light"])
+        self.combo_theme.addItems(["auto", "dark", "light"])
         self.combo_theme.setToolTip("UI 테마 선택")
         self.combo_theme.setAccessibleName("테마 선택")
         self.combo_theme.currentTextChanged.connect(self._on_theme_combo_changed)

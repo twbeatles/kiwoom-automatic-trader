@@ -224,5 +224,122 @@ class TestNoInlineQss(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+class TestThemeMode(unittest.TestCase):
+    def test_modes_and_defaults(self):
+        self.assertEqual(
+            theme_engine.DEFAULT_UI_THEME_MODE, "auto"
+        )
+        self.assertEqual(
+            theme_engine.UI_THEME_MODES, ("auto", "dark", "light")
+        )
+        self.assertEqual(theme_engine.clamp_theme_mode("DARK"), "dark")
+        self.assertEqual(theme_engine.clamp_theme_mode("bogus"), "auto")
+
+    def test_resolve_pinned(self):
+        self.assertEqual(theme_engine.resolve_theme_name("dark"), "dark")
+        self.assertEqual(theme_engine.resolve_theme_name("light"), "light")
+
+    def test_resolve_auto_never_raises(self):
+        resolved = theme_engine.resolve_theme_name("auto")
+        self.assertIn(resolved, ("dark", "light"))
+
+    def test_log_colors_single_source(self):
+        for level in theme_engine.LOG_LEVELS:
+            self.assertRegex(
+                theme_engine.log_level_color(level), r"^#[0-9a-f]{6}$", level
+            )
+        self.assertEqual(
+            theme_engine.log_level_color("bogus"),
+            theme_engine.LOG_LEVEL_COLORS["info"],
+        )
+        self.assertRegex(theme_engine.log_timestamp_color(), r"^#[0-9a-f]{6}$")
+
+    def test_no_hardcoded_log_hex_in_shell(self):
+        text = (REPO / "app" / "mixins" / "system_shell.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("_log_level_color(", text)
+        for hex_code in ("#f85149", "#d29922", "#3fb950", "#e6edf3", "#8b949e"):
+            self.assertNotIn(hex_code, text)
+
+    def test_no_hardcoded_status_hex_in_diagnostics(self):
+        text = (
+            REPO / "app" / "features" / "diagnostics" / "mixin.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("table_status_color(", text)
+        for hex_code in ("#8b949e", "#d29922"):
+            self.assertNotIn(hex_code, text)
+
+
+class TestNavigationGuard(unittest.TestCase):
+    def _host(self, running=False, current=0, count=5):
+        from unittest.mock import MagicMock
+
+        from app.features.ui_build.workspaces import UIBuildWorkspacesMixin
+
+        host = UIBuildWorkspacesMixin.__new__(UIBuildWorkspacesMixin)
+        host.is_running = running  # pyright: ignore[reportAttributeAccessIssue]
+        tabs = MagicMock()
+        tabs.currentIndex.return_value = current
+        tabs.count.return_value = count
+        host.main_tabs = tabs  # pyright: ignore[reportAttributeAccessIssue]
+        return host, tabs
+
+    def test_idle_switch_proceeds_without_dialog(self):
+        host, tabs = self._host(running=False, current=0)
+        host._goto_workspace(2)
+        tabs.setCurrentIndex.assert_called_once_with(2)
+
+    def test_same_tab_proceeds_while_running(self):
+        host, tabs = self._host(running=True, current=1)
+        host._goto_workspace(1)
+        tabs.setCurrentIndex.assert_called_once_with(1)
+
+    def test_running_switch_asks_and_blocks_on_no(self):
+        from PyQt6.QtWidgets import QMessageBox
+
+        from unittest.mock import patch
+
+        host, tabs = self._host(running=True, current=0)
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.No
+        ):
+            host._goto_workspace(3)
+        tabs.setCurrentIndex.assert_not_called()
+
+    def test_running_switch_proceeds_on_yes(self):
+        from PyQt6.QtWidgets import QMessageBox
+
+        from unittest.mock import patch
+
+        host, tabs = self._host(running=True, current=0)
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes
+        ):
+            host._goto_workspace(3)
+        tabs.setCurrentIndex.assert_called_once_with(3)
+
+
+class TestThemeModeParity(unittest.TestCase):
+    def test_config_defaults(self):
+        from config import Config
+
+        self.assertEqual(Config.DEFAULT_UI_THEME_MODE, "auto")
+        self.assertEqual(Config.UI_THEME_MODES, ("auto", "dark", "light"))
+
+    def test_settings_io_carries_theme_mode(self):
+        text = (
+            REPO / "app" / "features" / "persistence" / "settings_io.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"theme_mode"', text)
+        self.assertIn("ui_theme_mode", text)
+
+    def test_theme_combo_offers_auto(self):
+        text = (
+            REPO / "app" / "features" / "ui_build" / "settings_tabs.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"auto"', text)
+
+
 if __name__ == "__main__":
     unittest.main()

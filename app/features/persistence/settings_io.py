@@ -133,6 +133,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 "liquidate": True,
             },
             "theme": self.current_theme,
+            "theme_mode": str(
+                getattr(self, "ui_theme_mode", getattr(Config, "DEFAULT_UI_THEME_MODE", "auto"))
+            ),
             "ui_density": str(
                 self.combo_ui_density.currentText()
                 if hasattr(self, "combo_ui_density")
@@ -510,14 +513,18 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     self.combo_ui_density.setCurrentText(saved_density)
                 finally:
                     self.combo_ui_density.blockSignals(False)
-            saved_theme = settings.get("theme", "dark")
+            from app.support.theme import clamp_theme_mode as _clamp_theme_mode
+            from app.support.theme import resolve_theme_name as _resolve_theme_name
+            saved_mode = _clamp_theme_mode(settings.get("theme_mode", settings.get("theme", "dark")))
+            self.ui_theme_mode = saved_mode
+            saved_theme = _resolve_theme_name(saved_mode)
             from app.support.theme import apply_theme as _apply_loaded_theme
             if saved_theme != self.current_theme or saved_density != str(getattr(self, "ui_density", "")) or abs(saved_scale - float(
                 getattr(self, "ui_font_scale", saved_scale)
             )) > 1e-9:
                 _apply_loaded_theme(self, saved_theme, saved_scale, saved_density)
             if hasattr(self, "combo_theme"):
-                self.combo_theme.setCurrentText(self.current_theme)
+                self.combo_theme.setCurrentText(str(getattr(self, "ui_theme_mode", self.current_theme)))
 
             # v3+ strategy/backtest UI restore
             if hasattr(self, "combo_strategy_pack") and isinstance(settings.get("strategy_pack"), dict):
