@@ -116,6 +116,7 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
         if not isinstance(pending, dict):
             return
 
+        self._reset_pending_empty_sync(code)
         child_updated = False
         for child in self._pending_children(pending):
             child_order_no = str(child.get("order_no", "") or "").strip()
@@ -242,6 +243,32 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
         should_clear = remaining_qty <= 0 or aggregate_state not in self.ACTIVE_PENDING_STATES
         clear_state = "filled" if aggregate_state == "filled" else str(final_state or aggregate_state)
         return should_clear, clear_state
+    @staticmethod
+    def _classify_order_reject(message) -> str:
+        """주문 거부 사유 분류(transient/final/unknown). 자동 재제출은 하지 않는다."""
+        lowered = str(message or "").lower()
+        transient_tokens = (
+            "timeout", "timed out", "network", "connection", "dns",
+            "일시", "혼잡", "트래픽", "재시도", "503", "502", "500", "429",
+        )
+        if any(token in lowered for token in transient_tokens):
+            return "transient"
+        final_tokens = (
+            "잔고", "부족", "가능수량", "초과", "제한", "정지", "폐장", "휴장",
+            "단위", "주문가능", "권한", "불가",
+        )
+        if any(token in lowered for token in final_tokens):
+            return "final"
+        return "unknown"
+    def _note_order_reject(self, code: str, message) -> str:
+        """거부 분류를 universe에 기록하고 분류값을 반환한다."""
+        klass = self._classify_order_reject(message)
+        universe = getattr(self, "universe", {})
+        info = universe.get(code) if isinstance(universe, dict) else None
+        if isinstance(info, dict):
+            info["last_reject_class"] = klass
+            info["last_reject_at"] = datetime.datetime.now()
+        return klass
     def _record_order_failure(self, reason: str, code: str = ""):
         cfg = getattr(self, "config", None)
         if cfg is None or not bool(getattr(cfg, "use_order_health_guard", True)):

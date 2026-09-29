@@ -1,5 +1,19 @@
 # Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
+## 2026-09-29 감사 후속 조치(ISSUE-001~003·Phase 2/3) 동기화 메모
+
+1. 수정
+- ISSUE-001: 성공-빈 동기화 연속 3회(`PENDING_RECONCILE_EMPTY_SYNCS`) 시 ka10075 재조회 → 미확인 주문 해제·예약현금 환불, 모호하면 `sync_failed` 격리 (`position_sync.py` + 카운터 리셋 3곳, `window.py` 상태 2종)
+- ISSUE-002: 긴급청산 완료 로그 → 요청 제출 + 매도 콜백 집계 최종 보고, cleanup 비동기화(`_submit_emergency_sells`), live guard 통일, 30초 sweeper (`table.py`, `sell_flow.py`)
+- ISSUE-003: 프로필 원자 저장(tmp+replace) + 손상 시 `.bak` 보존·빈 덮어쓰기 거부 + 다이얼로그 안내 (`profile_manager.py`, `dialogs/profile_manager.py`)
+- Phase 2: 지정가 자동취소 `STALE_LIMIT_ORDER_CANCEL_SEC`(기본 0=비활성, 1초 타이머), 거부 분류(`transient/final/unknown`, 자동 재제출 없음), closeEvent 예외에도 accept+quit, 동기 저장 예외 확대
+- Phase 3: 토큰 캐시 App Key+Secret 바인딩, 외부보유 손실 감시(경고만, 자동청산 없음), README 5-워크스페이스 대응표·테스트 수 356, `PROJECT_AUDIT.md` §0 조치 부록
+
+2. 검증
+- `python -m pytest tests/unit --override-ini addopts= --tb=short`: 356 passed (신규 24, 테스트 6파일)
+- `python tools/refactor_verify.py`·`compileall`·`pyright .`(0 errors) 통과
+- 회귀 주의: 삽입 들여쓰기 실수로 `test_buy_reject_cooldown` 1회 실패 → 제품 코드 수정으로 복원(테스트 무변경)
+
 ## 2026-09-27 Fluent 좌측 내비게이션 누락 수정 동기화 메모
 
 1. 원인

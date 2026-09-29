@@ -327,6 +327,7 @@ class TradingSessionPositionsMixin(TraderMixinBase):
                 "sync_failed_reason": "",
             }
             mapping[code] = info
+            self._watch_external_loss(code, info)
 
             if hasattr(self, "strategy") and invest_amount > 0:
                 if rebuild_strategy:
@@ -487,3 +488,26 @@ class TradingSessionPositionsMixin(TraderMixinBase):
                 self.ws_client.disconnect()
         except Exception as exc:
             self.log(f"WebSocket 종료 중 오류: {exc}")
+    def _watch_external_loss(self, code: str, info) -> None:
+        """외부보유(read-only) 손실 감시. 주문 없이 경고만 남긴다."""
+        if not bool(getattr(self, "is_running", False)):
+            return
+        if not isinstance(info, dict) or int(info.get("held", 0) or 0) <= 0:
+            return
+        buy_price = float(info.get("buy_price", 0) or 0)
+        current = float(info.get("current", 0) or 0)
+        if buy_price <= 0 or current <= 0:
+            return
+        cfg = getattr(self, "config", None)
+        stop_rate = float(getattr(cfg, "loss_cut", getattr(Config, "DEFAULT_LOSS_CUT", 2.0)))
+        loss_rate = (current - buy_price) / buy_price * 100.0
+        if loss_rate > -abs(stop_rate):
+            return
+        name = str(info.get("name", code) or code)
+        log_once = getattr(self, "_log_once", None)
+        if callable(log_once):
+            log_once(
+                f"external_loss:{code}",
+                f"[외부보유 경고] {name} 손실 {loss_rate:.2f}% (손절 기준 -{abs(stop_rate):.1f}%). "
+                "외부보유는 자동 청산하지 않으니 수동 매도를 검토하세요.",
+            )

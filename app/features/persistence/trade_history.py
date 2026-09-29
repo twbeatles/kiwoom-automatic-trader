@@ -249,7 +249,7 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self._history_dirty = False
             self._history_save_pending_snapshot = None
             self._history_save_inflight = False
-        except OSError as exc:
+        except Exception as exc:
             self.logger.error(f"거래 내역 동기 저장 실패: {exc}")
             self._history_dirty = True
     def _flush_trade_history_on_exit(self):

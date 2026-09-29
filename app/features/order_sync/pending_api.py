@@ -53,6 +53,7 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
             "child_orders": children,
             "updated_at": datetime.datetime.now(),
         }
+        self._reset_pending_empty_sync(code)
         self._refresh_pending_order_aggregate(code)
         self._diag_touch_safe(
             code,
@@ -64,6 +65,7 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
         if final_state and code in self._pending_order_state:
             self._mark_pending_state(code, final_state)
         self._pending_order_state.pop(code, None)
+        self._reset_pending_empty_sync(code)
         self._diag_clear_pending_safe(code)
     def _set_manual_pending_order(
         self,

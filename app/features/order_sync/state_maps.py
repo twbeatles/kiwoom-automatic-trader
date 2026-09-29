@@ -98,6 +98,20 @@ class OrderSyncStateMapsMixin(TraderMixinBase):
             return False
         state = str(pending.get("state", "submitted") or "submitted").lower()
         return state in self.ACTIVE_PENDING_STATES
+    def _pending_empty_sync_counts(self):
+        """ISSUE-001: 성공-빈 동기화 연속 횟수 맵(lazy init)."""
+        mapping = getattr(self, "_pending_empty_sync_count", None)
+        if not isinstance(mapping, dict):
+            mapping = {}
+            self._pending_empty_sync_count = mapping
+        return mapping
+    def _reset_pending_empty_sync(self, code: str) -> None:
+        """ISSUE-001: 주문 생애주기 진전(신규/WS 이벤트/체결) 시 카운터 리셋."""
+        if not code:
+            return
+        counts = getattr(self, "_pending_empty_sync_count", None)
+        if isinstance(counts, dict):
+            counts.pop(code, None)
     @staticmethod
     def _pending_children(pending: dict) -> list[dict]:
         rows = pending.get("child_orders", []) if isinstance(pending, dict) else []

@@ -125,6 +125,9 @@ class KiwoomProTrader(
         self._log_cooldown_map: Dict[str, float] = {}
         self._holding_or_pending_count = 0
         self._sync_failed_codes: Set[str] = set()
+        # ISSUE-001: 성공-빈 동기화 연속 횟수 및 미체결 재조회 진행 집합
+        self._pending_empty_sync_count: Dict[str, int] = {}
+        self._pending_reconcile_inflight: Set[str] = set()
         self.total_equity = 0
         self._global_risk_mode = "normal"
         self._global_risk_until: Optional[datetime.datetime] = None

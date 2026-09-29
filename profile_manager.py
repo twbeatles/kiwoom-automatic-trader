@@ -26,30 +26,51 @@ class ProfileManager:
         self.profiles_path = self.data_dir / self.PROFILES_FILE
         self.profiles: Dict[str, Dict[str, Any]] = {}
         self.current_profile: Optional[str] = None
+        # ISSUE-003: 손상 파일 로드 실패 플래그 + 백업 경로
+        self._load_failed = False
+        self.corrupt_backup_path = None
         self._load_profiles()
     
     def _load_profiles(self):
-        """프로필 파일 로드"""
+        """프로필 파일 로드 (손상 시 .bak 보존 후 빈 상태로 시작)."""
+        self._load_failed = False
+        self.corrupt_backup_path = None
         try:
             if self.profiles_path.exists():
                 with open(self.profiles_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    self.profiles = data.get('profiles', {})
-                    self.current_profile = data.get('current', None)
-        except (json.JSONDecodeError, OSError):
+                    if isinstance(data, dict):
+                        profiles = data.get('profiles', {})
+                        self.profiles = profiles if isinstance(profiles, dict) else {}
+                        self.current_profile = data.get('current', None)
+                    else:
+                        raise ValueError("프로필 파일 형식이 올바르지 않습니다.")
+        except (json.JSONDecodeError, OSError, ValueError):
+            self._load_failed = True
+            try:
+                backup = self.profiles_path.with_name(self.profiles_path.name + ".bak")
+                backup.write_bytes(self.profiles_path.read_bytes())
+                self.corrupt_backup_path = backup
+            except OSError:
+                self.corrupt_backup_path = None
             self.profiles = {}
             self.current_profile = None
     
     def _save_profiles(self):
-        """프로필 파일 저장"""
+        """프로필 파일 저장 (원자적 저장 + 손상 후 빈 덮어쓰기 금지)."""
+        if bool(getattr(self, "_load_failed", False)) and not self.profiles:
+            return False
         try:
             data = {
                 'profiles': self.profiles,
                 'current': self.current_profile,
                 'updated': datetime.now().isoformat()
             }
-            with open(self.profiles_path, 'w', encoding='utf-8') as f:
+            tmp_path = self.profiles_path.with_name(self.profiles_path.name + ".tmp")
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, self.profiles_path)
+            self._load_failed = False
             return True
         except OSError:
             return False

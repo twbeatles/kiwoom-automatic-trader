@@ -33,6 +33,16 @@ class ProfileManagerDialog(QDialog):
         self.list_widget = QListWidget()
         self._refresh_list()
         self.list_widget.itemClicked.connect(self._on_select)
+        if bool(getattr(self.pm, "_load_failed", False)):
+            backup = getattr(self.pm, "corrupt_backup_path", None)
+            notice = QLabel(
+                "프로필 파일이 손상되어 빈 상태로 시작합니다. "
+                f"원본은 {backup}에 백업되었습니다. "
+                "프로필을 새로 저장하면 복구됩니다."
+            )
+            notice.setWordWrap(True)
+            notice.setProperty("hint", True)
+            layout.addWidget(notice)
         layout.addWidget(QLabel("저장된 프로필:"))
         layout.addWidget(self.list_widget)
 

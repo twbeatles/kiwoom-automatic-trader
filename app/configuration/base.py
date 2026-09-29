@@ -661,9 +661,14 @@ class Config:
     POSITION_SYNC_DEBOUNCE_MS = 200
     POSITION_SYNC_MAX_RETRIES = 5
     POSITION_SYNC_BACKOFF_MAX_MS = 5000
+    # 활성 pending이 있으면서 포지션 동기화가 연속으로 "성공-빈"일 때
+    # 미체결 조회(ka10075)로 주문 실재를 재확인하는 임계 횟수 (ISSUE-001)
+    PENDING_RECONCILE_EMPTY_SYNCS = 3
     LOG_DEDUP_SEC = 30
     TABLE_BATCH_LIMIT = 200
     ORDER_REJECT_COOLDOWN_SEC = 10
+    # 지정가 미체결 자동취소 타임아웃(초). 0이면 비활성(기본값).
+    STALE_LIMIT_ORDER_CANCEL_SEC = 0
     EXTERNAL_FLOW_REFRESH_SEC = 10
     EXTERNAL_FLOW_STALE_SEC = 30
     EXTERNAL_FLOW_ON_DEMAND_DEBOUNCE_SEC = 5

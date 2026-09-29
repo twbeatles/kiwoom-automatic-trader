@@ -579,6 +579,8 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
     def _on_buy_error(self, e, code, name):
         """Handle buy error."""
         self.log(f"BUY error [{name}]: {e}")
+        note_reject = getattr(self, "_note_order_reject", None)
+        reject_class = note_reject(code, e) if callable(note_reject) else "unknown"
         record_failure = getattr(self, "_record_order_failure", None)
         if callable(record_failure):
             record_failure("BUY_ERROR", code=code)
@@ -589,7 +591,7 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
             info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
             info["status"] = "cooldown"
-            self.log(f"BUY cooldown [{name}] {seconds}s (BUY_ERROR)")
+            self.log(f"BUY cooldown [{name}] {seconds}s (BUY_ERROR:{reject_class})")
             diag_touch = getattr(self, "_diag_touch", None)
             if callable(diag_touch):
                 diag_touch(code, sync_status="cooldown")
@@ -616,6 +618,8 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             self._sync_position_from_account(code)
         else:
             self.log(f"BUY rejected [{name}]: {result.message}")
+            note_reject = getattr(self, "_note_order_reject", None)
+            reject_class = note_reject(code, result.message) if callable(note_reject) else "unknown"
             record_failure = getattr(self, "_record_order_failure", None)
             if callable(record_failure):
                 record_failure("BUY_REJECTED", code=code)
@@ -625,7 +629,7 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
                 info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
                 info["status"] = "cooldown"
-                self.log(f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED)")
+                self.log(f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED:{reject_class})")
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):
                     diag_touch(code, sync_status="cooldown")

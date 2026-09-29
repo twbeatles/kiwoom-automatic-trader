@@ -225,6 +225,9 @@ class SystemShellMixin(TraderMixinBase):
         cleanup_manual_pending = getattr(self, "_cleanup_manual_pending_state", None)
         if callable(cleanup_manual_pending):
             cleanup_manual_pending(now)
+        sweep_stale = getattr(self, "_sweep_stale_limit_orders", None)
+        if callable(sweep_stale):
+            sweep_stale(now)
 
         self._refresh_account_info_async()
         recalc_time_targets = getattr(self, "_maybe_recalculate_time_strategy_targets", None)
@@ -637,7 +640,12 @@ class SystemShellMixin(TraderMixinBase):
                         self._save_trade_history()
 
             self._stop_ui_timers()
-            event.accept()
-            self._quit_application()
+        except Exception as exc:
+            try:
+                self.logger.error(f"종료 정리 중 오류(강제 종료 계속): {exc}")
+            except Exception:
+                pass
         finally:
             self._force_quit_requested = False
+        event.accept()
+        self._quit_application()

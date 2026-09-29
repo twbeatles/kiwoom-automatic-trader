@@ -70,6 +70,10 @@ class ExecutionSellFlowMixin(TraderMixinBase):
     def _on_sell_error(self, e, code, name):
         """Handle sell error."""
         self.log(f"SELL error [{name}]: {e}")
+        note_reject = getattr(self, "_note_order_reject", None)
+        if callable(note_reject):
+            note_reject(code, e)
+        self._note_liquidation_settlement(code, False, str(e))
         record_failure = getattr(self, "_record_order_failure", None)
         if callable(record_failure):
             record_failure("SELL_ERROR", code=code)
@@ -101,8 +105,13 @@ class ExecutionSellFlowMixin(TraderMixinBase):
             )
             self.log(f"SELL submitted: {name} {quantity} shares ({reason})")
             self._sync_position_from_account(code)
+            self._note_liquidation_settlement(code, True, f"{quantity}주 제출")
         else:
             self.log(f"SELL rejected [{name}]: {result.message}")
+            note_reject = getattr(self, "_note_order_reject", None)
+            if callable(note_reject):
+                note_reject(code, result.message)
+            self._note_liquidation_settlement(code, False, str(result.message))
             record_failure = getattr(self, "_record_order_failure", None)
             if callable(record_failure):
                 record_failure("SELL_REJECTED", code=code)
@@ -115,3 +124,33 @@ class ExecutionSellFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+    def _note_liquidation_settlement(self, code: str, ok: bool, detail: str = "") -> None:
+        """긴급청산 배치 결과 집계. 전건 결착 시 최종 보고 후 배치 해제."""
+        batch = getattr(self, "_liquidation_batch", None)
+        if not isinstance(batch, dict) or not batch or code not in batch:
+            return
+        entry = batch.get(code)
+        if not isinstance(entry, dict):
+            return
+        entry["settled"] = True
+        entry["ok"] = bool(ok)
+        entry["detail"] = str(detail or "")
+        if not all(isinstance(v, dict) and v.get("settled") for v in batch.values()):
+            return
+        total = len(batch)
+        succeeded = sum(1 for v in batch.values() if isinstance(v, dict) and v.get("ok"))
+        failed = [(c, v) for c, v in batch.items() if isinstance(v, dict) and not v.get("ok")]
+        summary = f"긴급 청산 결과: 제출 성공 {succeeded}/{total}"
+        if failed:
+            summary += " / 실패: " + ", ".join(
+                f"{v.get('name', c)}({v.get('detail', '') or '원인 미상'})" for c, v in failed
+            )
+        if hasattr(self, "log"):
+            self.log(summary)
+        telegram = getattr(self, "telegram", None)
+        if telegram is not None:
+            try:
+                telegram.send(summary)
+            except Exception:
+                pass
+        self._liquidation_batch = {}

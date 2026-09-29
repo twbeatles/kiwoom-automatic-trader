@@ -287,8 +287,9 @@ class KiwoomAuth:
             self.logger.warning(f"토큰 캐시 로드 실패: {e}")
 
     def _app_key_hash(self) -> str:
-        """App Key 식별자 해시"""
-        return hashlib.sha256(self.app_key.encode('utf-8')).hexdigest()
+        """자격증명 식별자 해시 (Secret 교체 시 캐시 무효화)."""
+        material = f"{self.app_key}:{self.secret_key or ''}"
+        return hashlib.sha256(material.encode('utf-8')).hexdigest()
 
     def test_connection(self) -> Dict[str, Any]:
         """
