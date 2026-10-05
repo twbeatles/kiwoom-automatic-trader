@@ -319,7 +319,8 @@ class TestConditionRealtimeRest(unittest.TestCase):
         self.client = _make_client()
 
     def test_request_condition_realtime_uses_search_type_1(self):
-        fake_ws = MagicMock()
+        fake_ws = _make_ws()
+        fake_ws.request_once = MagicMock()
         fake_ws.request_once.return_value = {
             "trnm": "CNSRREQ",
             "data": [{"9001": "005930", "302": "삼성전자", "10": "70000", "12": "1.5", "13": "1000"}],
@@ -336,7 +337,8 @@ class TestConditionRealtimeRest(unittest.TestCase):
         self.assertEqual(rows[0]["code"], "005930")
 
     def test_stop_condition_realtime_uses_cnsrclr(self):
-        fake_ws = MagicMock()
+        fake_ws = _make_ws()
+        fake_ws.request_once = MagicMock()
         fake_ws.request_once.return_value = {"trnm": "CNSRCLR", "return_code": 0}
         self.client.ws_client = fake_ws
 

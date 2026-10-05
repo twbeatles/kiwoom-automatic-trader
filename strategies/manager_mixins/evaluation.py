@@ -240,7 +240,9 @@ class StrategyManagerEvaluationMixin(StrategyManagerMixinBase):
             log_once("bb", f"[{info.get('name', code)}] 볼린저 상단 돌파 ({int(current):,} >= {bb_upper:,.0f}) 진입 보류")
 
         if len(high_list) >= 20:
-            p_di, m_di, adx = self.calculate_dmi(high_list, low_list, prices)
+            p_di, m_di, adx = self.calculate_dmi(
+                high_list, low_list, self._daily_indicator_closes(info)
+            )
         else:
             p_di, m_di, adx = 0.0, 0.0, 0.0
         metrics["dmi_pdi"] = float(p_di)

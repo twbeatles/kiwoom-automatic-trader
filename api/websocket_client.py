@@ -29,6 +29,7 @@ except ImportError:
     WEBSOCKETS_AVAILABLE = False
     ConnectionClosed = Exception
 
+from ._rest_helpers import _pick, _safe_float, _safe_int
 from .auth import KiwoomAuth
 from .endpoints import LIVE_WS_URL
 from .models import StockQuote, ExecutionData, IndexTick
@@ -411,6 +412,96 @@ class KiwoomWebSocketClient:
         """마지막 `0s` 장상태 스냅샷 (없으면 빈 dict — REST 프록시 폴백용)."""
         return dict(self._market_status_cache)
 
+    def get_condition_list(self) -> List[Dict[str, Any]]:
+        """조건검색식 목록 조회 (WebSocket ka10171 / CNSRLST)."""
+        result = self.request_once({"trnm": "CNSRLST"})
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 목록 조회 실패: WebSocket CNSRLST 응답이 없습니다.")
+            return []
+
+        conditions: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
+                conditions.append({
+                    "index": _safe_int(_pick(item, "seq", "index", "cond_idx")),
+                    "name": str(_pick(item, "name", "cond_nm", default="") or ""),
+                })
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                conditions.append({
+                    "index": _safe_int(item[0]),
+                    "name": str(item[1] or ""),
+                })
+        return conditions
+
+    def search_by_condition(self, condition_index: int, condition_name: str = "") -> List[Dict[str, Any]]:
+        """조건검색 실행 (WebSocket ka10172 / CNSRREQ)."""
+        del condition_name  # 공식 CNSRREQ는 seq만 사용
+        result = self.request_once({
+            "trnm": "CNSRREQ",
+            "seq": str(condition_index),
+            "search_type": "0",
+            "stex_tp": "K",
+        })
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 실행 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            return []
+
+        return self._parse_condition_stock_rows(result)
+
+    def request_condition_realtime(self, condition_index: int) -> List[Dict[str, Any]]:
+        """조건검색 실시간 요청 (ka10173: WebSocket CNSRREQ search_type=1)."""
+        result = self.request_once({
+            "trnm": "CNSRREQ",
+            "seq": str(condition_index),
+            "search_type": "1",
+            "stex_tp": "K",
+        })
+        if not isinstance(result, dict):
+            self.logger.warning("조건검색 실시간 요청 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            return []
+        return self._parse_condition_stock_rows(result)
+
+    def stop_condition_realtime(self, condition_index: int) -> bool:
+        """조건검색 실시간 해제 (ka10174: WebSocket CNSRCLR)."""
+        result = self.request_once({
+            "trnm": "CNSRCLR",
+            "seq": str(condition_index),
+        })
+        return isinstance(result, dict)
+
+    @staticmethod
+    def _parse_condition_stock_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """CNSRREQ 응답(record list/dict 혼용) → 종목 행 파싱."""
+        def stock_code(value: Any) -> str:
+            text = str(value or "").strip()
+            return text[1:] if len(text) >= 7 and text[0] in {"A", "a"} else text
+
+        stocks: List[Dict[str, Any]] = []
+        records = result.get("data") or result.get("output") or []
+        if not isinstance(records, list):
+            records = []
+        for item in records:
+            if isinstance(item, dict):
+                stocks.append({
+                    "code": stock_code(_pick(item, "9001", "stk_cd", "code")),
+                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
+                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
+                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
+                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
+                })
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                stocks.append({
+                    "code": stock_code(item[0]),
+                    "name": str(item[1] or ""),
+                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
+                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
+                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
+                })
+        return [row for row in stocks if row.get("code")]
+
     def subscribe_condition_realtime(
         self,
         condition_index: int,
@@ -418,7 +509,7 @@ class KiwoomWebSocketClient:
     ) -> Optional[Dict[str, Any]]:
         """조건검색 실시간 등록 (ka10173: CNSRREQ search_type=1).
 
-        지속 연결 중이면 REG 전문을 전송하고, 미연결이면 request_once
+        지속 연결 중이면 CNSRREQ 전문을 전송하고, 미연결이면 request_once
         스냅샷을 반환한다. 실시간 푸시는 등록 콜백으로 전달된다.
         """
         seq = str(condition_index)

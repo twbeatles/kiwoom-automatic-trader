@@ -4,6 +4,55 @@
 최종 동기화: 2026-06-10
 분석 기준: 현재 저장소 코드, README/CLAUDE/GEMINI/REAL_API_PREPARATION_GUIDE, PyInstaller spec
 
+## 2026-10-05: GitHub #3 / #4 책임 및 데이터 계약 보완
+
+- 조건검색 목록·일반 검색·실시간 초기 스냅샷·해제와 종목 응답 파싱의 구현은
+  `api/websocket_client.py`의 `KiwoomWebSocketClient`에 모았다. 일반 검색과
+  실시간 스냅샷은 하나의 `_parse_condition_stock_rows`를 공유한다.
+- `KiwoomRESTClient.get_condition_list`, `search_by_condition`,
+  `request_condition_realtime`, `stop_condition_realtime`는 기존 인자와 반환
+  형태를 유지하는 위임 래퍼다. UI의 Worker 호출 경로도 유지한다.
+- 실시간 푸시 콜백은 기존 `subscribe_condition_realtime` /
+  `unsubscribe_condition_realtime`가 담당한다. 일회성 초기 스냅샷 API와
+  지속 연결 콜백 API를 서로 대체하지 않는다.
+- 일봉 `high_history` / `low_history`에 대응하는 종가는 `daily_prices`다.
+  `price_history`는 초기 일봉 종가에 실시간 체결가가 추가되고 앞부분이
+  삭제되는 호환용 스트림이므로, 일봉 고·저가와 직접 결합하면 안 된다.
+- `_daily_indicator_closes`가 ATR·DMI의 여섯 호출 경로에 동일한 종가 선택
+  정책을 제공한다. `daily_prices` 키가 없는 이전 유니버스만
+  `price_history`로 폴백하며, 명시적인 빈 일봉 데이터는 부족 데이터로 처리한다.
+- ATR·DMI는 고가 N개에 저가 N개 이상, 이전 종가 N-1개 이상을 요구한다.
+  부족 시 기존 반환 계약인 `0` / `(0, 0, 0)`을 사용한다. 배열을 끝에서
+  자르는 것으로 시점을 추정하지 않으며, 직접 호출자는 같은 캔들 인덱스로
+  정렬한 데이터를 전달해야 한다.
+
+호환 영향: 정상 입력의 계산식과 공개 import/API는 유지한다. 체결 이력 삭제로
+왜곡되던 ATR·DMI 값은 일봉 기준으로 교정되므로 손절가와 주문 수량이 달라질 수
+있다. 일봉 배열은 기존처럼 유니버스 초기화 시 로드한 스냅샷이며 이번 변경이
+장중 일봉 갱신이나 완성된 분봉 집계기를 추가하지는 않는다.
+
+회귀 테스트: `test_indicator_history_alignment.py`(15개),
+`test_condition_search_ownership.py`(8개). 지표 테스트와 기존 전략·수량 테스트
+총 26개는 일반 unittest 실행으로 통과했다. 조건검색 신규 8개와 기존 계약 4개는
+실제 메서드 AST를 격리해 요청/파싱/위임을 검증했고 통과했다. 검증 환경의
+PyQt6·requests·pytest·pyright 설치 제한으로 전체 단위 테스트, Qt 통합 및
+실제 키움 서버 접속 검증은 수행하지 못했다. compileall 및 refactor_verify는 통과했다.
+
+완전한 개발 환경에서의 후속 검증:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest tests/unit --override-ini addopts= --tb=short
+python -m pyright .
+python tools/refactor_verify.py
+```
+
+전략 의견(#3): cooldown은 재주문 대기 가드이며 반등 신호를 뜻하지 않는다.
+기존 MTF / DMI 필터는 선택 가능한 추세 확인 수단이지만, `minute_prices`에도
+체결가가 추가되므로 엄밀한 완성 분봉 기반 반등 전략과 동일하지 않다.
+반등 확인 / 일봉 10% 하락 진입은 별도의 전략 명세·봉 데이터 정렬·비용 포함
+백테스트가 필요하므로 이번 구조 수정에서 기본 매수 정책으로 추가하지 않았다.
+
 ## 1. 요약
 
 현재 프로젝트는 엔트리 래퍼, core window, feature 패키지, 설정 패키지, 전략 엔진, API 클라이언트, 운영/검증 도구로 분리되어 있다.

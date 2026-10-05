@@ -342,7 +342,9 @@ class TestKiwoomOfficialRestContract(unittest.TestCase):
         mock_post.assert_not_called()
 
     def test_condition_list_uses_websocket_cnsrlst(self):
-        ws: Any = MagicMock()
+        ws: Any = KiwoomWebSocketClient.__new__(KiwoomWebSocketClient)
+        ws.logger = self.client.logger
+        ws.request_once = MagicMock()
         ws.request_once.return_value = {
             "trnm": "CNSRLST",
             "data": [{"seq": "1", "name": "급등주"}, ["2", "거래량폭증"]],
@@ -357,7 +359,9 @@ class TestKiwoomOfficialRestContract(unittest.TestCase):
         self.assertEqual(body["trnm"], "CNSRLST")
 
     def test_condition_search_uses_websocket_cnsrreq(self):
-        ws: Any = MagicMock()
+        ws: Any = KiwoomWebSocketClient.__new__(KiwoomWebSocketClient)
+        ws.logger = self.client.logger
+        ws.request_once = MagicMock()
         ws.request_once.return_value = {
             "trnm": "CNSRREQ",
             "data": [{"9001": "A005930", "302": "삼성전자", "10": "70000", "12": "1.2", "13": "1000"}],

@@ -156,7 +156,7 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
         info = self.trader.universe.get(code, {})
         high_list = info.get("high_history", [])
         low_list = info.get("low_history", [])
-        close_list = info.get("price_history", [])
+        close_list = self._daily_indicator_closes(info)
         if len(high_list) < 15 or len(low_list) < 15 or len(close_list) < 15:
             return self._default_position_size(code)
 

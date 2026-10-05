@@ -1,10 +1,14 @@
-from typing import Tuple
+from typing import Any, Dict, List, Tuple
 
 from config import Config
 from ._typing import StrategyManagerMixinBase
 
 
 class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
+    def _daily_indicator_closes(self, info: Dict[str, Any]) -> List[float]:
+        """Match daily high/low bars; legacy universes may omit daily_prices."""
+        return info.get("daily_prices", info.get("price_history", []))
+
     def calculate_atr_stop_loss(self, code, multiplier=2.0) -> float:
         info = self.trader.universe.get(code, {})
         current_price = info.get("current", 0)
@@ -15,7 +19,7 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         high_list = info.get("high_history", [])
         low_list = info.get("low_history", [])
-        close_list = info.get("price_history", [])
+        close_list = self._daily_indicator_closes(info)
 
         atr = self.calculate_atr(high_list, low_list, close_list, period=14)
         if atr <= 0:
@@ -61,7 +65,7 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         high_list = info.get("high_history", [])
         low_list = info.get("low_history", [])
-        close_list = info.get("price_history", [])
+        close_list = self._daily_indicator_closes(info)
 
         atr = self.calculate_atr(high_list, low_list, close_list, period=period)
         if atr <= 0:
@@ -296,7 +300,12 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         return True
 
     def calculate_atr(self, high_list, low_list, close_list, period=14):
-        if len(high_list) < period + 1:
+        # Each high/low bar needs the close of its preceding bar.
+        if (
+            len(high_list) < period + 1
+            or len(low_list) < len(high_list)
+            or len(close_list) < len(high_list) - 1
+        ):
             return 0
 
         tr_list = []
@@ -314,7 +323,11 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         return atr
 
     def calculate_dmi(self, high_list, low_list, close_list, period=14):
-        if len(high_list) < period + 1:
+        if (
+            len(high_list) < period + 1
+            or len(low_list) < len(high_list)
+            or len(close_list) < len(high_list) - 1
+        ):
             return 0, 0, 0
 
         tr_list = []
@@ -371,7 +384,7 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         info = self.trader.universe.get(code, {})
         high_list = info.get("high_history", [])
         low_list = info.get("low_history", [])
-        close_list = info.get("price_history", [])
+        close_list = self._daily_indicator_closes(info)
         if len(high_list) < 20:
             return True
 
@@ -441,7 +454,7 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         high_list = info.get("high_history", [])
         low_list = info.get("low_history", [])
-        close_list = info.get("price_history", [])
+        close_list = self._daily_indicator_closes(info)
         if len(high_list) < 15 or len(low_list) < 15 or len(close_list) < 15:
             return "normal", 1.0, 0.0
 

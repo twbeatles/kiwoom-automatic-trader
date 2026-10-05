@@ -1,4 +1,4 @@
-"""Discovery reads (SRP: conditions/rankings/flows/VI)."""
+"""REST discovery reads and compatibility facades for WebSocket conditions."""
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -9,73 +9,17 @@ from .models import VIEvent
 
 
 class RestDiscoveryMixin(RestTransport):
-    """Discovery reads (SRP: conditions/rankings/flows/VI)."""
+    """REST discovery reads and compatibility facades for WebSocket conditions."""
 
     def get_condition_list(self) -> List[Dict[str, Any]]:
-        """조건검색식 목록 조회 (WebSocket ka10171 / CNSRLST)."""
+        """Compatibility facade; condition search belongs to WebSocket."""
         ws = self._condition_ws()
-        if ws is None:
-            return []
-        result = ws.request_once({"trnm": "CNSRLST"})
-        if not isinstance(result, dict):
-            self.logger.warning("조건검색 목록 조회 실패: WebSocket CNSRLST 응답이 없습니다.")
-            return []
-
-        conditions: List[Dict[str, Any]] = []
-        records = result.get("data") or result.get("output") or []
-        if not isinstance(records, list):
-            records = []
-        for item in records:
-            if isinstance(item, dict):
-                conditions.append({
-                    "index": _safe_int(_pick(item, "seq", "index", "cond_idx")),
-                    "name": str(_pick(item, "name", "cond_nm", default="") or ""),
-                })
-            elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                conditions.append({
-                    "index": _safe_int(item[0]),
-                    "name": str(item[1] or ""),
-                })
-        return conditions
+        return ws.get_condition_list() if ws is not None else []
 
     def search_by_condition(self, condition_index: int, condition_name: str = "") -> List[Dict[str, Any]]:
-        """조건검색 실행 (WebSocket ka10172 / CNSRREQ)."""
-        del condition_name  # 공식 CNSRREQ는 seq만 사용
+        """Preserve existing UI/caller signature while delegating to WebSocket."""
         ws = self._condition_ws()
-        if ws is None:
-            return []
-        result = ws.request_once({
-            "trnm": "CNSRREQ",
-            "seq": str(condition_index),
-            "search_type": "0",
-            "stex_tp": "K",
-        })
-        if not isinstance(result, dict):
-            self.logger.warning("조건검색 실행 실패: WebSocket CNSRREQ 응답이 없습니다.")
-            return []
-
-        stocks: List[Dict[str, Any]] = []
-        records = result.get("data") or result.get("output") or []
-        if not isinstance(records, list):
-            records = []
-        for item in records:
-            if isinstance(item, dict):
-                stocks.append({
-                    "code": self._stk_cd(_pick(item, "9001", "stk_cd", "code")),
-                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
-                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
-                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
-                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
-                })
-            elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                stocks.append({
-                    "code": self._stk_cd(item[0]),
-                    "name": str(item[1] or ""),
-                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
-                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
-                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
-                })
-        return [row for row in stocks if row.get("code")]
+        return ws.search_by_condition(condition_index, condition_name) if ws is not None else []
 
     def get_volume_ranking(self, market: str = "0", count: int = 30) -> List[Dict[str, Any]]:
         """
@@ -320,53 +264,16 @@ class RestDiscoveryMixin(RestTransport):
         return trend
 
     def request_condition_realtime(self, condition_index: int) -> List[Dict[str, Any]]:
-        """조건검색 실시간 요청 (ka10173: WebSocket CNSRREQ search_type=1)."""
+        """Compatibility facade for the initial realtime condition snapshot."""
         ws = self._condition_ws()
-        if ws is None:
-            return []
-        result = ws.request_once({
-            "trnm": "CNSRREQ",
-            "seq": str(condition_index),
-            "search_type": "1",
-            "stex_tp": "K",
-        })
-        if not isinstance(result, dict):
-            self.logger.warning("조건검색 실시간 요청 실패: WebSocket CNSRREQ 응답이 없습니다.")
-            return []
-        return self._parse_condition_stock_rows(result)
+        return ws.request_condition_realtime(condition_index) if ws is not None else []
 
     def stop_condition_realtime(self, condition_index: int) -> bool:
-        """조건검색 실시간 해제 (ka10174: WebSocket CNSRCLR)."""
+        """Compatibility facade for the one-shot condition cancellation."""
         ws = self._condition_ws()
-        if ws is None:
-            return False
-        result = ws.request_once({
-            "trnm": "CNSRCLR",
-            "seq": str(condition_index),
-        })
-        return isinstance(result, dict)
+        return ws.stop_condition_realtime(condition_index) if ws is not None else False
 
     def _parse_condition_stock_rows(self, result: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """CNSRREQ 응답(record list/dict 혼용) → 종목 행 파싱."""
-        stocks: List[Dict[str, Any]] = []
-        records = result.get("data") or result.get("output") or []
-        if not isinstance(records, list):
-            records = []
-        for item in records:
-            if isinstance(item, dict):
-                stocks.append({
-                    "code": self._stk_cd(_pick(item, "9001", "stk_cd", "code")),
-                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
-                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
-                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
-                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
-                })
-            elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                stocks.append({
-                    "code": self._stk_cd(item[0]),
-                    "name": str(item[1] or ""),
-                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
-                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
-                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
-                })
-        return [row for row in stocks if row.get("code")]
+        """Keep the legacy parser entry point; implementation lives with WS."""
+        from .websocket_client import KiwoomWebSocketClient
+        return KiwoomWebSocketClient._parse_condition_stock_rows(result)
