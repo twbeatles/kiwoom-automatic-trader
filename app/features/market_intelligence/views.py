@@ -11,7 +11,8 @@ import re
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
+
 
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
@@ -52,7 +53,8 @@ from app.support.ui_text import (
     populate_combo,
     set_combo_value,
 )
-from app.support.widgets import NoScrollComboBox, NoScrollSpinBox
+from app.support.widgets import NoScrollComboBox, NoScrollSpinBox, update_plain_text_panel
+
 from config import Config
 from data.providers import AIProvider, DartProvider, MacroProvider, NaverTrendProvider, NewsProvider
 from app.mixins._typing import TraderMixinBase
@@ -111,17 +113,33 @@ class MarketIntelViewsMixin(TraderMixinBase):
         table = getattr(self, "market_intel_table", None)
         if table is None:
             return ""
-        selected = table.selectedItems()
-        if not selected:
+        row = -1
+        selected = table.selectedItems() if hasattr(table, "selectedItems") else []
+        if selected:
+            row_fn = getattr(selected[0], "row", None)
+            if callable(row_fn):
+                try:
+                    row = int(cast(Any, row_fn)())
+                except Exception:
+                    row = -1
+        elif hasattr(table, "currentRow") and callable(table.currentRow):
+            try:
+                row = int(cast(Any, table.currentRow)())
+            except Exception:
+                row = -1
+        if row < 0:
             return ""
-        return str(getattr(self, "_market_intel_row_to_code", {}).get(selected[0].row(), "") or "")
+        return str(getattr(self, "_market_intel_row_to_code", {}).get(row, "") or "")
+
+
     def _render_selected_market_intel_detail(self):
         panel = getattr(self, "market_intel_detail_panel", None)
         if panel is None:
             return
         code = self._selected_market_intel_code()
         if not code:
-            panel.setPlainText("선택된 종목이 없습니다.")
+            self._last_rendered_market_intel_code = ""
+            update_plain_text_panel(panel, "선택된 종목이 없습니다.", preserve_scroll=False)
             return
         info = self._market_intel_entity(code)
         state = self._ensure_market_intel_state(info)
@@ -160,7 +178,13 @@ class MarketIntelViewsMixin(TraderMixinBase):
             "공시:",
             *disclosures,
         ]
-        panel.setPlainText("\n".join(detail))
+        last_code = getattr(self, "_last_rendered_market_intel_code", None)
+        code_changed = (code != last_code)
+        self._last_rendered_market_intel_code = code
+
+        full_text = "\n".join(detail)
+        update_plain_text_panel(panel, full_text, preserve_scroll=not code_changed)
+
     def _on_market_intel_selection_changed(self):
         self._render_selected_market_intel_detail()
     def _on_market_intel_refresh_selected(self):
@@ -505,7 +529,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             return
         record = self._selected_market_replay_event_record()
         if not record:
-            panel.setPlainText("선택된 이벤트가 없습니다.")
+            update_plain_text_panel(panel, "선택된 이벤트가 없습니다.", preserve_scroll=False)
             return
         payload = self._market_replay_payload(record)
         detail = [
@@ -521,14 +545,14 @@ class MarketIntelViewsMixin(TraderMixinBase):
             "원본 payload:",
             json.dumps(payload, ensure_ascii=False, indent=2) if payload else "{}",
         ]
-        panel.setPlainText("\n".join(detail))
+        update_plain_text_panel(panel, "\n".join(detail), preserve_scroll=False)
     def _render_selected_market_replay_audit_detail(self):
         panel = getattr(self, "market_replay_audit_detail_panel", None)
         if panel is None:
             return
         record = self._selected_market_replay_audit_record()
         if not record:
-            panel.setPlainText("선택된 감사 로그가 없습니다.")
+            update_plain_text_panel(panel, "선택된 감사 로그가 없습니다.", preserve_scroll=False)
             return
         detail = [
             f"시각: {record.get('ts', '')}",
@@ -542,7 +566,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             "원본 snapshot:",
             json.dumps(record, ensure_ascii=False, indent=2),
         ]
-        panel.setPlainText("\n".join(detail))
+        update_plain_text_panel(panel, "\n".join(detail), preserve_scroll=False)
     def _refresh_intel_timeline(self, event_records=None, audit_records=None):
         """이벤트+감사 JSONL 기록을 하나의 통합 타임라인으로 병합 표시 (읽기 전용)."""
         table = getattr(self, "market_replay_timeline_table", None)
@@ -594,9 +618,10 @@ class MarketIntelViewsMixin(TraderMixinBase):
                     if isinstance(source, dict):
                         record = source
         if not record:
-            panel.setPlainText("선택된 타임라인 항목이 없습니다.")
+            update_plain_text_panel(panel, "선택된 타임라인 항목이 없습니다.", preserve_scroll=False)
             return
-        panel.setPlainText(json.dumps(record, ensure_ascii=False, indent=2))
+        update_plain_text_panel(panel, json.dumps(record, ensure_ascii=False, indent=2), preserve_scroll=False)
+
     def _on_intel_timeline_selection_changed(self):
         self._render_selected_intel_timeline_detail()
     def _on_market_replay_event_selection_changed(self):

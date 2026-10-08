@@ -2,7 +2,7 @@
 
 > 키움증권 REST API 기반 자동매매 프로그램 (v4.5)
 >
-> **최종 업데이트**: 2026-06-10
+> **최종 업데이트**: 2026-10-08
 
 ---
 
@@ -178,7 +178,25 @@ pyinstaller --clean KiwoomTrader.spec
 
 ---
 
+## 2026-10-08 상세 패널 스크롤 보존 및 주기적 갱신 안정화 (#5)
+
+1. 상세 패널 스크롤 초기화 방지
+- UI 플러시 타이머(`UI_REFRESH_INTERVAL_MS = 100`)에 의한 주기적 갱신 시 `QPlainTextEdit.setPlainText()`가 스크롤 위치를 0으로 강제 초기화하던 현상 해결.
+- `app/support/widgets.py`의 `update_plain_text_panel(panel, new_text, preserve_scroll=True)` 도입: 내용 동일 시 no-op 차단, 내용 변경 시 `verticalScrollBar.value()` 보존 및 복원.
+- 종목 변경 시(`code_changed=True`)에는 새 종목 정보이므로 상단(0)부터 자연스럽게 표시.
+
+2. 진단/인텔리전스 패널 렌더링 최적화
+- `DiagnosticsMixin`: 1회 렌더링당 기본 정보와 드릴다운 정보로 2회 연속 `setPlainText`를 호출하던 비효율을 1회 통합 텍스트 구성 및 `update_plain_text_panel` 호출로 일원화.
+- `MarketIntelViewsMixin`: 행 선택 추적 안전성 보강 및 상세/리플레이 패널 전반에 스크롤 보존 갱신 적용.
+
+3. 검증 기준
+- `tests/unit/test_detail_panel_scroll_preserve.py` 신규 단위 테스트 7개 추가.
+- 전체 386개 단위 테스트 통과, `pyright .` 0 errors, `refactor_verify.py` 전체 일치 통과.
+
+---
+
 ## 2026-05-17 실행 안전장치/패키징/문서 동기화
+
 
 1. 실행 모드
 - 기본값은 `signal_only`입니다.

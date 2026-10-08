@@ -1,7 +1,7 @@
 """Diagnostics table and detail panel behavior for KiwoomProTrader."""
 
 import datetime
-from typing import Any, Dict, cast
+from typing import Any, Dict, List, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -19,6 +19,8 @@ from app.support.ui_text import (
     display_status,
 )
 from config import Config
+from app.support.widgets import update_plain_text_panel
+
 
 
 def _dict_or_empty(value: object) -> Dict[str, Any]:
@@ -253,7 +255,8 @@ class DiagnosticsMixin(TraderMixinBase):
             return
         code = self._selected_diagnostic_code()
         if not code:
-            panel.setPlainText("선택된 종목이 없습니다.")
+            self._last_rendered_diagnostic_code = ""
+            update_plain_text_panel(panel, "선택된 종목이 없습니다.", preserve_scroll=False)
             return
 
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
@@ -288,17 +291,25 @@ class DiagnosticsMixin(TraderMixinBase):
             f"수량 배수: {market_intel.get('size_multiplier', 1.0)}",
             f"마지막 이벤트 ID: {market_intel.get('last_event_id', '')}",
         ]
-        panel.setPlainText("\n".join(detail))
-        self._render_diagnostic_drilldown(code, info, market_intel, pending)
-    def _render_diagnostic_drilldown(self, code, info, market_intel, pending):
-        """진단 드릴다운: PnL/비중/노출 + 외부 읽기전용/sync_failed 안내 (읽기 전용)."""
-        panel = getattr(self, "diag_detail_panel", None)
-        if panel is None:
-            return
+        extra_lines = self._get_diagnostic_drilldown_lines(code, info, market_intel, pending)
+        if extra_lines:
+            detail.extend(extra_lines)
+
+        last_code = getattr(self, "_last_rendered_diagnostic_code", None)
+        code_changed = (code != last_code)
+        self._last_rendered_diagnostic_code = code
+
+        full_text = "\n".join(detail)
+        update_plain_text_panel(panel, full_text, preserve_scroll=not code_changed)
+
+    def _get_diagnostic_drilldown_lines(
+        self, code: str, info: Dict[str, Any], market_intel: Dict[str, Any], pending: Dict[str, Any]
+    ) -> List[str]:
+        """진단 드릴다운 라인 생성: PnL/비중/노출 + 외부 읽기전용/sync_failed 안내."""
         try:
             from app.support.portfolio_summary import compute_portfolio_summary, position_eval
         except Exception:
-            return
+            return []
         universe = getattr(self, "universe", {})
         if not isinstance(universe, dict):
             universe = {}
@@ -317,17 +328,29 @@ class DiagnosticsMixin(TraderMixinBase):
             guidance = "sync_failed: 자동 주문 차단 중. '동기화 실패 해제 요청'은 재동기화 성공 시에만 복구됩니다."
         else:
             guidance = "추적 위치: 유니버스."
-        extra = [
+        return [
             f"평가금액: {snap['eval_amount']:,.0f} / 투자금: {snap['invest_amount']:,.0f}",
             f"평가손익: {snap['unrealized_pnl']:+,.0f} ({snap['profit_rate']:+.2f}%)",
             f"포트폴리오 비중: {weight:.2f}% (전체 평가 {summary['eval_total']:,.0f})",
             f"시장/섹터: {info.get('market_type', '')} / {info.get('sector', '')}",
             guidance,
         ]
+
+    def _render_diagnostic_drilldown(self, code, info, market_intel, pending):
+        """진단 드릴다운: 하위 호환성 유지 메서드."""
+        panel = getattr(self, "diag_detail_panel", None)
+        if panel is None:
+            return
+        extra = self._get_diagnostic_drilldown_lines(code, info, market_intel, pending)
+        if not extra:
+            return
         to_text = getattr(panel, "toPlainText", None)
         if not callable(to_text):
             return
-        panel.setPlainText(str(to_text()) + "\n" + "\n".join(extra))
+        current = str(to_text())
+        if extra[0] not in current:
+            update_plain_text_panel(panel, current + "\n" + "\n".join(extra), preserve_scroll=True)
+
     def _on_diagnostic_selection_changed(self):
         self._render_selected_diagnostic_detail()
     def _on_diagnostic_resync_selected(self):
