@@ -4,6 +4,7 @@
 실시간 시세 및 체결 데이터 수신을 담당합니다.
 """
 
+import inspect
 import json
 import logging
 import asyncio
@@ -28,6 +29,32 @@ try:
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
     ConnectionClosed = Exception
+
+
+def _connect_kwargs(headers: Dict[str, str], connect_fn: Optional[Callable[..., Any]] = None) -> Dict[str, Any]:
+    """헤더 dict를 현재 websockets 버전용 connect() kwarg로 감싼다."""
+    target = connect_fn if connect_fn is not None else ws_connect
+    return {_headers_kw_for(target): headers}
+
+
+def _headers_kw_for(connect_fn: Optional[Callable[..., Any]]) -> str:
+    """websockets 버전에 맞는 헤더 인자명을 반환한다.
+
+    websockets 14부터 ``extra_headers``가 ``additional_headers``로 바뀌어
+    구 인자명은 14+에서 TypeError를 일으킨다. 연결 함수의 시그니처를 보고
+    지원하는 쪽을 고르고, 판별이 안 되면 신 인자명을 기본값으로 쓴다.
+    """
+    if connect_fn is None:
+        return "additional_headers"
+    try:
+        params = inspect.signature(connect_fn).parameters
+    except (TypeError, ValueError):
+        return "additional_headers"
+    if "additional_headers" in params:
+        return "additional_headers"
+    if "extra_headers" in params:
+        return "extra_headers"
+    return "additional_headers"
 
 from ._rest_helpers import _pick, _safe_float, _safe_int
 from .auth import KiwoomAuth
@@ -210,7 +237,7 @@ class KiwoomWebSocketClient:
                 
                 async with connect_fn(
                     self.ws_url,
-                    extra_headers=headers,
+                    **_connect_kwargs(headers, connect_fn),
                     ping_interval=30,
                     ping_timeout=10
                 ) as ws:
@@ -1037,7 +1064,7 @@ class KiwoomWebSocketClient:
         deadline = time.monotonic() + max(1.0, float(timeout or 15.0))
         async with ws_connect(
             self.ws_url,
-            extra_headers=headers,
+            **_connect_kwargs(headers),
             ping_interval=None,
             ping_timeout=None,
             close_timeout=3,

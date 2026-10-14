@@ -1,5 +1,5 @@
 -r requirements.txt
-pytest>=8.0.0
-pyright>=1.1.350
-pyinstaller>=6.0.0
-pytest-qt>=4.4.0
+pytest>=9
+pyright>=1.1.390
+pyinstaller>=6.10
+pytest-qt>=4.5

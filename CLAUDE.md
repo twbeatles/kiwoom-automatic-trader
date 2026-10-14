@@ -1,5 +1,27 @@
 # Kiwoom Pro Algo-Trader - Claude AI 개발 가이드
 
+## 2026-10-14 의존성 전면 업그레이드 동기화 메모
+
+1. 수정
+- `requirements.txt`: `PyQt6>=6.8,<6.12`, `requests>=2.32`, `websockets>=15,<18`,
+  `keyring>=25`, `python-dateutil>=2.9` (실측 설치 버전 반영, 메이저 포함)
+- `requirements-dev.txt`: `pytest>=9`, `pyright>=1.1.390`, `pyinstaller>=6.10`,
+  `pytest-qt>=4.5`
+- `api/websocket_client.py`: websockets 14의 `extra_headers`→`additional_headers`
+  변경 대응. 시그니처 감지 헬퍼(`_connect_kwargs`/`_headers_kw_for`)로 2개 호출부
+  (`_connect_and_listen`, `_request_once_async`) 교체, 구버전은 `extra_headers` 폴백
+- 테스트: `tests/unit/test_websocket_headers_compat.py` 신규 5건
+  (신/구 인자명 선택 + 신버전 스타일 fake 연결 1회성 요청 회귀)
+- 설치 환경 websockets 16.1.1→17.2 상향 (`pip --outdated` 잔여 유일 건)
+
+2. 검증
+- `python -m pytest tests/unit`: 391 passed, 30 subtests passed (17.2에서 재확인)
+- `pip install --dry-run -r requirements.txt -r requirements-dev.txt`: 해석 깨끗
+- `pyright api/websocket_client.py`: 28 errors로 변경 전과 동일 (신규 파일 0 errors)
+- `KiwoomTrader.spec` hiddenimports·`collect_submodules`(89개) 수집 정상,
+  `websockets.client`는 17.2에서도 import 가능이라 spec 무변경
+- 주의: `google-genai`(앱 무관)가 websockets<17을 요구해 pip 충돌 경고가 남음
+
 ## 2026-09-29 감사 후속 조치(ISSUE-001~003·Phase 2/3) 동기화 메모
 
 1. 수정
