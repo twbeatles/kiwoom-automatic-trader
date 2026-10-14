@@ -18,6 +18,8 @@ Kiwoom Pro Algo-Trader v4.5 - PyInstaller Build Specification
 2026-09-14: 키움 공식 REST/WebSocket 계약 정렬(주문 body, 순위 ka10030/ka10027, 조건검색 CNSRLST/CNSRREQ, 업종 ka20001).
 """
 
+import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -219,6 +221,15 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
+# Python 3.15 abi3t: cryptography _rust.pyd links python3t.dll
+# (<prefix>\abi3t-compat), which PyInstaller does not auto-collect.
+# Without it the frozen exe dies with "DLL load failed while importing _rust".
+_py3t_dll = os.path.join(sys.base_prefix, 'abi3t-compat', 'python3t.dll')
+_py3t_dest = 'python3t.dll'
+if os.path.isfile(_py3t_dll) and not any(
+        (b[0] or '').lower() == _py3t_dest for b in a.binaries):
+    a.binaries.append((_py3t_dest, _py3t_dll, 'BINARY'))
 
 # ============================================================================
 # PYZ (Python ZIP archive) 단계
