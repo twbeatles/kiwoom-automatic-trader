@@ -20,6 +20,8 @@
 - `pyright api/websocket_client.py`: 28 errors로 변경 전과 동일 (신규 파일 0 errors)
 - `KiwoomTrader.spec` hiddenimports·`collect_submodules`(89개) 수집 정상,
   `websockets.client`는 17.2에서도 import 가능이라 spec 무변경
+- 빌드: `pyinstaller --clean --noconfirm --distpath dist_build KiwoomTrader.spec` 성공
+  (49.5MB, `dist_build/KiwoomTrader_v4.5.exe`), 누락 hiddenimport 없음(mypyc 등 서드파티 노이즈만)
 - 주의: `google-genai`(앱 무관)가 websockets<17을 요구해 pip 충돌 경고가 남음
 
 ## 2026-09-29 감사 후속 조치(ISSUE-001~003·Phase 2/3) 동기화 메모
