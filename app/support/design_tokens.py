@@ -1,6 +1,6 @@
 """Desktop design tokens (DESKTOP_UI_DESIGN_RULES §§5-7).
 
-Qt-free pure constants + tiny helpers so unit tests run without PyQt6.
+Qt-free pure constants + tiny helpers so unit tests run without PySide6.
 Layout/spacing/typography live here; semantic color *keys* map onto the
 existing ``app.support.theme.TOKENS`` palettes (no second color system).
 

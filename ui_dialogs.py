@@ -4,7 +4,7 @@ Dialog confirmations and tooling for Kiwoom Pro Algo-Trader.
 
 import os
 
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from dialogs import (
     HelpDialog,

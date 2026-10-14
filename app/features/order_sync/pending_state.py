@@ -4,7 +4,7 @@ import datetime
 from collections import deque
 from typing import Iterable, Set
 
-from PyQt6.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 from api.models import ExecutionData
 from app.support.worker import Worker

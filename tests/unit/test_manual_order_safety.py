@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from api.models import Position
 from app.mixins.dialogs_profiles import DialogsProfilesMixin

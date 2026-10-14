@@ -13,8 +13,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
     QGridLayout,
@@ -128,7 +128,7 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
         if hasattr(self, "config"):
             self.config.market_intelligence = cfg
     def _create_market_intelligence_settings_tab(self):
-        from PyQt6.QtWidgets import QCheckBox
+        from PySide6.QtWidgets import QCheckBox
 
         cfg = self._market_intelligence_config()
         widget = QWidget()

@@ -31,7 +31,7 @@ def collect_signal_names(class_node: ast.ClassDef) -> Set[str]:
         if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
             continue
         func = node.value.func
-        if isinstance(func, ast.Name) and func.id == "pyqtSignal":
+        if isinstance(func, ast.Name) and func.id == "Signal":
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     signals.add(target.id)

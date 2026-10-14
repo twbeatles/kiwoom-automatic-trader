@@ -13,7 +13,7 @@ import re
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QListWidget,
     QMessageBox,

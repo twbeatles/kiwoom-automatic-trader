@@ -1,13 +1,13 @@
 # 🚀 Kiwoom Pro Algo-Trader v4.5
 
 > **키움증권 REST API 기반 프리미엄 주식 자동매매 & 알고리즘 트레이딩 도우미**  
-> 직관적인 PyQt6 GUI 대시보드, 13종의 퀀트 전략 및 보조지표, 다중 안전 가드(Fail-Closed), 실시간 시장 인텔리전스(뉴스·공시·매크로)를 지원합니다.
+> 직관적인 PySide6 GUI 대시보드, 13종의 퀀트 전략 및 보조지표, 다중 안전 가드(Fail-Closed), 실시간 시장 인텔리전스(뉴스·공시·매크로)를 지원합니다.
 
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-4.5-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-green.svg)
-![PyQt6](https://img.shields.io/badge/PyQt6-6.5+-orange.svg)
+![PySide6](https://img.shields.io/badge/PySide6-6.12.0-orange.svg)
 ![API](https://img.shields.io/badge/Kiwoom-REST%20API-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)
 
@@ -52,7 +52,7 @@
 - **다중 계층 퀀트 전략**: 래리 윌리엄스 변동성 돌파를 기본으로 RSI, MACD, 볼린저밴드, DMI, 거래량, 다중 시간대(MTF), 종합 진입 점수 시스템을 결합합니다.
 - **시장 인텔리전스 결합**: 네이버 뉴스, OpenDART 공시, 검색 트렌드, FRED 거시경제를 실시간 수집·점수화하여 리스크를 방어합니다.
 - **OS 레벨 자격증명 보안**: Windows 자격 증명 관리자(Keyring)를 통해 API Secret을 안전하게 암호화 보관합니다.
-- **모던 다크 테마 UI**: PyQt6 기반의 미려한 반응형 인터페이스, 시스템 트레이 백그라운드 구동, 윈도우 시작 시 자동 실행을 지원합니다.
+- **모던 다크 테마 UI**: PySide6 기반의 미려한 반응형 인터페이스, 시스템 트레이 백그라운드 구동, 윈도우 시작 시 자동 실행을 지원합니다.
 
 ---
 

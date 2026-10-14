@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.core.window import KiwoomProTrader
 from app.support.ui_scale import configure_high_dpi_scaling

@@ -6,7 +6,7 @@ SOLID 분할 구조의 composite: 수동주문(`app.features.dialogs.manual_orde
 공개 API·import 경로·patch seam(`QMessageBox`, `ManualOrderDialog` 등)은 그대로 유지된다.
 """
 
-from PyQt6.QtWidgets import QDialog, QInputDialog, QMessageBox  # noqa: F401 (seam compat)
+from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox  # noqa: F401 (seam compat)
 from app.support.ui_text import combo_value, set_combo_value  # noqa: F401 (seam compat)
 from app.support.worker import Worker  # noqa: F401 (seam compat)
 from config import Config  # noqa: F401 (seam compat)

@@ -35,10 +35,10 @@ datas = [(str(icon_file), '.')] if icon_file.exists() else []
 # 숨겨진 imports (자동 감지 안 되는 모듈)
 # ============================================================================
 hiddenimports = [
-    # PyQt6 필수 모듈
-    'PyQt6.QtCore',
-    'PyQt6.QtGui',
-    'PyQt6.QtWidgets',
+    # PySide6 필수 모듈
+    'PySide6.QtCore',
+    'PySide6.QtGui',
+    'PySide6.QtWidgets',
 
     # 네트워크 모듈
     'websockets',

@@ -368,7 +368,7 @@ python -m pytest -q tests/unit
 4. 패키징/무시 규칙 동기화
 - `KiwoomTrader.spec` hiddenimports에 `app.mixins._typing`이 포함됩니다.
 - `.gitignore`는 `pyrightconfig.json`을 예외로 유지합니다.
-- 현재 워크스페이스에서 `pyright .`를 다시 실행하려면 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성이 필요합니다.
+- 현재 워크스페이스에서 `pyright .`를 다시 실행하려면 `PySide6`, `requests`, `websockets`, `urllib3`, `keyring` 로컬 의존성이 필요합니다.
 
 ---
 

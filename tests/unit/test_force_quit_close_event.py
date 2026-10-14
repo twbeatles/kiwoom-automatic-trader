@@ -2,7 +2,7 @@
 from typing import Any, cast
 from unittest.mock import patch
 
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.mixins.system_shell import SystemShellMixin
 

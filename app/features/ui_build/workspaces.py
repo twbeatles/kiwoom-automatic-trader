@@ -5,8 +5,8 @@
 로직(Worker 비동기)과 위젯 속성 이름은 그대로 유지된다. 매매 로직 변경 없음.
 """
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QComboBox,
     QDockWidget,
     QFormLayout,
@@ -85,7 +85,7 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
             pass
 
     def _create_fluent_nav(self):
-        """좌측 Fluent 내비게이션 레일 (PyQt6 네이티브, 규칙 §9/§27.1)."""
+        """좌측 Fluent 내비게이션 레일 (PySide6 네이티브, 규칙 §9/§27.1)."""
         parent = self if isinstance(self, QWidget) else None
         rail = FluentNavRail(list(WORKSPACE_LABELS), parent)
         try:
@@ -158,7 +158,7 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         if int(index) == current or not self._is_navigation_guarded():
             return True
         try:
-            from PyQt6.QtWidgets import QMessageBox
+            from PySide6.QtWidgets import QMessageBox
 
             answer = QMessageBox.question(
                 self,

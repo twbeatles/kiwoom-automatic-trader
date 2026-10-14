@@ -3,8 +3,8 @@
 # pyright: reportWildcardImportFromLibrary=false
 import json
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import *
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import *
 
 from app.support.backtest_runner import backtest_result_to_dict, metric_rows, run_backtest_from_files
 from app.support.ui_text import (

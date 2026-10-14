@@ -8,7 +8,7 @@ Tokenized dark/light QSS with WCAG 2.1 AA support:
 - screen-reader names via :func:`apply_accessibility_names`
 
 Qt-free: pure string building + duck-typed host access, so unit tests
-run without PyQt6.
+run without PySide6.
 
 HiDPI notes: font sizes are emitted in ``pt`` (not ``px``) so OS text
 scaling applies, and content paddings grow with ``ui_font_scale`` and
@@ -294,7 +294,7 @@ def log_timestamp_color() -> str:
 # Theme mode: "auto" follows the OS, "dark"/"light" pin a theme.
 # srtgo(ktrain) borrow: Theme.AUTO + darkdetect + colorSchemeChanged
 # watcher, re-expressed Qt-free (detection only; Qt wiring lives in
-# app/mixins/system_shell.py so unit tests run without PyQt6).
+# app/mixins/system_shell.py so unit tests run without PySide6).
 UI_THEME_MODES = ("auto", "dark", "light")
 DEFAULT_UI_THEME_MODE = "auto"
 

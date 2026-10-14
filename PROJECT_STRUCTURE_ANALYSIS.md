@@ -35,7 +35,7 @@
 `test_condition_search_ownership.py`(8개). 지표 테스트와 기존 전략·수량 테스트
 총 26개는 일반 unittest 실행으로 통과했다. 조건검색 신규 8개와 기존 계약 4개는
 실제 메서드 AST를 격리해 요청/파싱/위임을 검증했고 통과했다. 검증 환경의
-PyQt6·requests·pytest·pyright 설치 제한으로 전체 단위 테스트, Qt 통합 및
+PySide6·requests·pytest·pyright 설치 제한으로 전체 단위 테스트, Qt 통합 및
 실제 키움 서버 접속 검증은 수행하지 못했다. compileall 및 refactor_verify는 통과했다.
 
 완전한 개발 환경에서의 후속 검증:

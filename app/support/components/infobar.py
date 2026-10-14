@@ -1,6 +1,6 @@
-"""Non-modal InfoBar host (srtgo ktrain §27.4 borrow, PyQt6-only).
+"""Non-modal InfoBar host (srtgo ktrain §27.4 borrow, PySide6-only).
 
-QFluentWidgets is intentionally NOT added (project binding is PyQt6 and
+QFluentWidgets is intentionally NOT added (project binding is PySide6 and
 the package shares one import namespace per binding — conflict risk per
 rules §1.1). This host gives the same UX split: non-blocking success /
 warning / error banners inline; modal QMessageBox stays reserved for
@@ -9,8 +9,8 @@ destructive / must-choose cases (§15).
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,

@@ -4,8 +4,8 @@ from collections import deque
 import datetime
 from typing import Any, Deque, Dict, List, Optional, Set, cast
 
-from PyQt6.QtCore import QThreadPool, QTimer, Qt, pyqtSignal
-from PyQt6.QtWidgets import QMainWindow
+from PySide6.QtCore import QThreadPool, QTimer, Qt, Signal
+from PySide6.QtWidgets import QMainWindow
 
 from config import Config, TradingConfig
 from profile_manager import ProfileManager
@@ -47,10 +47,10 @@ class KiwoomProTrader(
     DiagnosticsMixin,
     QMainWindow,
 ):
-    sig_log = pyqtSignal(str)
-    sig_execution = pyqtSignal(object)
-    sig_order_execution = pyqtSignal(object)
-    sig_update_table = pyqtSignal()
+    sig_log = Signal(str)
+    sig_execution = Signal(object)
+    sig_order_execution = Signal(object)
+    sig_update_table = Signal()
 
     def __init__(self):
         super().__init__()

@@ -1,13 +1,13 @@
 """Background worker utilities for thread pool execution."""
 
-from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 
 class WorkerSignals(QObject):
-    result = pyqtSignal(object)
-    finished = pyqtSignal(object)
-    error = pyqtSignal(Exception)
-    progress = pyqtSignal(int)
+    result = Signal(object)
+    finished = Signal(object)
+    error = Signal(Exception)
+    progress = Signal(int)
 
 class Worker(QRunnable):
     def __init__(self, fn, *args, **kwargs):
@@ -17,7 +17,7 @@ class Worker(QRunnable):
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
-    @pyqtSlot()
+    @Slot()
     def run(self):
         try:
             result = self.fn(*self.args, **self.kwargs)

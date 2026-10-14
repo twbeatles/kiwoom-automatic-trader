@@ -3,9 +3,9 @@
 import datetime
 from typing import Any, Dict, List, cast
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QTableWidgetItem
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QTableWidgetItem
 
 from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase

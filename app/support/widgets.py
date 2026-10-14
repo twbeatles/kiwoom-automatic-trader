@@ -2,7 +2,7 @@
 
 from typing import Any, cast
 
-from PyQt6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
 
 

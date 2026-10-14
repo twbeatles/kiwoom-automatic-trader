@@ -12,7 +12,7 @@ import threading
 import time
 from typing import Any, Optional, Callable, Dict, List, Set, cast
 from dataclasses import dataclass
-from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal
+from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 
 ws_connect: Optional[Callable[..., Any]] = None
 try:
@@ -81,7 +81,7 @@ class SubscriptionInfo:
 
 
 class _MainThreadDispatcher(QObject):
-    invoke = pyqtSignal(object, tuple)
+    invoke = Signal(object, tuple)
 
     def __init__(self):
         super().__init__()

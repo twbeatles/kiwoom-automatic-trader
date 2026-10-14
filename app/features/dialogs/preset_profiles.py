@@ -1,6 +1,6 @@
 """Preset/profile/schedule dialogs (SRP: open-apply-log only)."""
 
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from app.mixins._typing import TraderMixinBase
 from ui_dialogs import PresetDialog, ProfileManagerDialog, ScheduleDialog

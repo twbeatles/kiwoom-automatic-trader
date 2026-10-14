@@ -1,7 +1,7 @@
-"""PyQt6-native Fluent-style navigation rail (no qfluentwidgets dependency).
+"""PySide6-native Fluent-style navigation rail (no qfluentwidgets dependency).
 
 DESKTOP_UI_DESIGN_RULES Strict KTrain Profile (§9/§27.1)은 좌측 Fluent
-Navigation을 요구하지만, 본 프로젝트는 PyQt6 고정 + qfluentwidgets 미도입
+Navigation을 요구하지만, 본 프로젝트는 PySide6 고정 + qfluentwidgets 미도입
 결정(동일 import namespace 충돌, 규칙 §4)을 유지한다. 이 레일은 금지 패턴인
 "QTabWidget 전체-앱 내비게이션"을 대체하는 동등 UX다: 상단 워크스페이스 목록
 + 하단 빠른 동작, QTabWidget(탭바 숨김)과 양방향 동기화.
@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QListWidget, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFrame, QListWidget, QPushButton, QVBoxLayout, QWidget
 
 NAV_ACTION_ORDER_TICKET = "order_ticket"
 NAV_ACTION_THEME = "theme"
@@ -31,8 +31,8 @@ class FluentNavRail(QFrame):
     시그널을 방출하지 않아 탭-레일 동기화 루프가 생기지 않는다.
     """
 
-    requested = pyqtSignal(int)
-    action_triggered = pyqtSignal(str)
+    requested = Signal(int)
+    action_triggered = Signal(str)
 
     def __init__(self, labels: Sequence[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)

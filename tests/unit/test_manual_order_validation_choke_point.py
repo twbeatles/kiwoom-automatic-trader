@@ -7,7 +7,7 @@ order["validated"] = True 플래그를 부여하고, 플래그가 없으면 Work
 import unittest
 from unittest.mock import patch
 
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from api.models import Position
 from app.mixins.dialogs_profiles import DialogsProfilesMixin

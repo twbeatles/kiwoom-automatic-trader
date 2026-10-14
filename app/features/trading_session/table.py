@@ -5,9 +5,9 @@ import datetime
 import time
 from typing import Any, Deque, Dict, List, Literal, Optional, Tuple, overload
 
-from PyQt6.QtCore import QCoreApplication, Qt, QTimer
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
+from PySide6.QtCore import QCoreApplication, Qt, QTimer
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 
 from app.support.worker import Worker
 from config import Config
@@ -171,7 +171,7 @@ class TradingSessionTableMixin(TraderMixinBase):
                 self._liquidation_batch = {}
                 return
             try:
-                from PyQt6.QtCore import QTimer as _QTimer
+                from PySide6.QtCore import QTimer as _QTimer
 
                 _QTimer.singleShot(30000, self._sweep_liquidation_batch)
             except Exception:

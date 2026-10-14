@@ -1,6 +1,6 @@
 """Market data tabs mixin for KiwoomProTrader."""
 
-from PyQt6.QtWidgets import QPushButton, QTableWidgetItem
+from PySide6.QtWidgets import QPushButton, QTableWidgetItem
 
 from app.support.worker import Worker
 from ._typing import TraderMixinBase

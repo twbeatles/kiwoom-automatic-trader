@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog, QPushButton, QTabWidget, QTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QPushButton, QTabWidget, QTextEdit, QVBoxLayout
 
 from config import Config
 

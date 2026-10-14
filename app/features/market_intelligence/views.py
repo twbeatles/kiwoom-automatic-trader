@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
     QGridLayout,
@@ -686,7 +686,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
         self.market_replay_event_table.itemSelectionChanged.connect(self._on_market_replay_event_selection_changed)
         event_header = self.market_replay_event_table.horizontalHeader()
         if event_header is not None:
-            from PyQt6.QtWidgets import QHeaderView
+            from PySide6.QtWidgets import QHeaderView
 
             event_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         event_layout.addWidget(self.market_replay_event_table)
@@ -707,7 +707,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
         self.market_replay_audit_table.itemSelectionChanged.connect(self._on_market_replay_audit_selection_changed)
         audit_header = self.market_replay_audit_table.horizontalHeader()
         if audit_header is not None:
-            from PyQt6.QtWidgets import QHeaderView
+            from PySide6.QtWidgets import QHeaderView
 
             audit_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         audit_layout.addWidget(self.market_replay_audit_table)
@@ -778,7 +778,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
         self.market_intel_table.setHorizontalHeaderLabels(cols)
         header = self.market_intel_table.horizontalHeader()
         if header is not None:
-            from PyQt6.QtWidgets import QHeaderView
+            from PySide6.QtWidgets import QHeaderView
 
             header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.market_intel_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

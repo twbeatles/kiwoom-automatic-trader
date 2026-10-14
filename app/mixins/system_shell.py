@@ -7,9 +7,9 @@ import sys
 import winreg
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QTextCursor
-from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from config import Config
 from app.support.components.helpers import set_trading_badge
@@ -429,7 +429,7 @@ class SystemShellMixin(TraderMixinBase):
         try:
             hints = None
             try:
-                from PyQt6.QtGui import QGuiApplication
+                from PySide6.QtGui import QGuiApplication
 
                 hints = QGuiApplication.styleHints()
             except Exception:

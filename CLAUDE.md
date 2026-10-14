@@ -3,7 +3,7 @@
 ## 2026-10-14 의존성 전면 업그레이드 동기화 메모
 
 1. 수정
-- `requirements.txt`: `PyQt6>=6.8,<6.12`, `requests>=2.32`, `websockets>=15,<18`,
+- `requirements.txt`: `PySide6==6.12.0`, `requests>=2.32`, `websockets>=15,<18`,
   `keyring>=25`, `python-dateutil>=2.9` (실측 설치 버전 반영, 메이저 포함)
 - `requirements-dev.txt`: `pytest>=9`, `pyright>=1.1.390`, `pyinstaller>=6.10`,
   `pytest-qt>=4.5`
@@ -45,9 +45,9 @@
   상단 QTabWidget으로 남김 → 규칙 §9/§27.1 금지 패턴 그대로라 좌측 Fluent 메뉴가 없음.
   오프스크린 실창 증명: 메뉴바 5종·탭 5종은 보이나 레일 없음
 - 진짜 `MSFluentWindow` 이식은 불가: 환경에 `PySide6-Fluent-Widgets`가 설치되어 있어
-  PyQt6 앱과 동일 `qfluentwidgets` namespace 충돌 (규칙 §4), `requirements.txt` PyQt6 고정 유지
+  PySide6 앱과 동일 `qfluentwidgets` namespace 충돌 (규칙 §4), `requirements.txt` PySide6 고정 유지
 
-2. 수정 (PyQt6 네이티브, 신규 의존성 없음)
+2. 수정 (PySide6 네이티브, 신규 의존성 없음)
 - 신규 `app/support/components/fluent_nav.py`: `FluentNavRail` (상단 5 워크스페이스 + 하단 주문티켓/테마 버튼,
   `WORKSPACE_LABELS` 단일 출처, 클릭/Enter만 이동·방향키 탐색은 이동 없음, 동기화 역방출 없음)
 - `workspaces.py`: 탭바 숨김(`_hide_workspace_tab_bar`, QTabWidget은 페이지 스택으로만 사용) +
@@ -64,10 +64,10 @@
 ## 2026-09-27 Fluent 전면 재설계(srtgo 참조) 동기화 메모
 
 1. 배경
-- srtgo(ktrain) Fluent UI를 `as-is`로 가져올 수 없음: PySide6+`qfluentwidgets` vs 본 프로젝트 PyQt6,
-  바인딩 혼용 금지(규칙 §1.1) + 동일 import namespace 충돌(`qt_binding.py` 경고) + `requirements.txt` PyQt6 고정.
+- srtgo(ktrain) Fluent UI를 `as-is`로 가져올 수 없음: PySide6+`qfluentwidgets` vs 본 프로젝트 PySide6,
+  바인딩 혼용 금지(규칙 §1.1) + 동일 import namespace 충돌(`qt_binding.py` 경고) + `requirements.txt` PySide6 고정.
   `winui-app` 스킬은 WinUI3/C#용이라 scaffold 절차 미적용, 기존 코드베이스 관례 유지 원칙만 차용
-- 대신 PyQt6 네이티브 + 토큰 QSS + InfoBar 호스트로 동등 UX 구현 (P0-P3)
+- 대신 PySide6 네이티브 + 토큰 QSS + InfoBar 호스트로 동등 UX 구현 (P0-P3)
 
 2. 수정
 - P0 토큰 단일출처: `theme.LOG_LEVEL_COLORS`/`log_level_color()`/`log_timestamp_color()` 신규,
@@ -108,7 +108,7 @@
 1. 배경
 - 2026-09-26 Fluent 개편 후 잔여 갭 감사: 사용자 노출 라벨의 이모지 5곳, 라이트 테마 표 셀 색상 대비 미달
 - 참조: `DESKTOP_UI_DESIGN_RULES.md` (§§7/8/19) + srtgo(ktrain) Fluent 패턴 (Navigation/InfoBar/SettingCard/테마 모듈)
-- Qt 바인딩은 기존 PyQt6 유지 (§1.1): qfluentwidgets 미도입, PyQt6 네이티브 + 토큰 QSS + InfoBar 호스트로 동등 UX 구현
+- Qt 바인딩은 기존 PySide6 유지 (§1.1): qfluentwidgets 미도입, PySide6 네이티브 + 토큰 QSS + InfoBar 호스트로 동등 UX 구현
 
 2. 수정
 - §19: 워크스페이스 이동 메뉴 → `WORKSPACE_LABELS` 단일 출처 참조, 즐겨찾기 콤보 `⭐` 접두 제거,
@@ -445,7 +445,7 @@ python -m pytest -q tests/unit
 
 4. 전략/백테스트 동기화
 - `strategy_manager.py`와 `strategies/pack.py`에 `news_risk_guard`, `disclosure_event_guard`, `macro_regime_guard`, `theme_heat_filter`, `intel_fresh_guard`가 추가되었습니다.
-- 당시(2026-03-24) 검증 기준으로 `python -m pytest tests/unit --disable-warnings`는 `90 passed in 0.53s`였으며, 현재 최신 수치는 상단 2026-03-25 섹션을 기준으로 확인합니다. `pyright .` 재실행에는 `PyQt6`, `requests`, `websockets`, `urllib3`, `keyring` 설치가 필요합니다.
+- 당시(2026-03-24) 검증 기준으로 `python -m pytest tests/unit --disable-warnings`는 `90 passed in 0.53s`였으며, 현재 최신 수치는 상단 2026-03-25 섹션을 기준으로 확인합니다. `pyright .` 재실행에는 `PySide6`, `requests`, `websockets`, `urllib3`, `keyring` 설치가 필요합니다.
 - `backtest/engine.py`는 `BacktestIntelligenceEvent` sidecar replay를 지원합니다.
 
 5. 패키징/로그

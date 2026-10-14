@@ -1,13 +1,13 @@
 """Small shared UI helpers: secondary text, validation, status badges.
 
 Colors come from the central theme via dynamic properties (no per-page
-hex, DESKTOP_UI_DESIGN_RULES §§7/9). PyQt6 is a hard project dependency,
+hex, DESKTOP_UI_DESIGN_RULES §§7/9). PySide6 is a hard project dependency,
 so this module imports it directly like app/support/widgets.py.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 
 def _repolish(widget: QWidget) -> None:

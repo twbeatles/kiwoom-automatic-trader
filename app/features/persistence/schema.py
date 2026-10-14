@@ -27,9 +27,9 @@ except ModuleNotFoundError:
             return None
 
     keyring = _NoopKeyring()
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 
 from app.support.ui_text import combo_value, set_combo_value
 from app.support.worker import Worker

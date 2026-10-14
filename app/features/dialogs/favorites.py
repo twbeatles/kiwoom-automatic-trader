@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-from PyQt6.QtWidgets import QDialog, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
 from config import Config
 from app.mixins._typing import TraderMixinBase

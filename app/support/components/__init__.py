@@ -1,4 +1,4 @@
-"""Reusable Fluent-style components on pure PyQt6 (no new dependency).
+"""Reusable Fluent-style components on pure PySide6 (no new dependency).
 
 srtgo(ktrain) patterns borrowed per DESKTOP_UI_DESIGN_RULES §27:
 section title + secondary text, empty states, status badges, non-modal

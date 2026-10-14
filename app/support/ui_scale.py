@@ -1,6 +1,6 @@
 """HiDPI/display-scale helpers for Kiwoom Pro Algo-Trader.
 
-Qt-free pure logic (unit-testable without PyQt6):
+Qt-free pure logic (unit-testable without PySide6):
 
 - :func:`recommended_font_scale` maps a screen's devicePixelRatio /
   logical DPI to a ``ui_font_scale`` value in [0.85, 1.5].
@@ -8,7 +8,7 @@ Qt-free pure logic (unit-testable without PyQt6):
   density for the same inputs.
 - :func:`configure_high_dpi_scaling` enables Qt's fractional-scale
   rounding policy (``PassThrough``) so 125%/150%/175% OS scales are
-  honoured instead of being rounded away. Safe to call when PyQt6 is
+  honoured instead of being rounded away. Safe to call when PySide6 is
   missing (reports ``"unavailable"``).
 
 Thresholds follow common Windows display-scale buckets:
@@ -109,8 +109,8 @@ def configure_high_dpi_scaling() -> str:
     or ``"unavailable"`` (Qt not importable). Never raises.
     """
     try:
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
     except Exception:
         return "unavailable"
     try:

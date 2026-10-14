@@ -3,7 +3,7 @@ import threading
 import time
 import unittest
 
-from PyQt6.QtCore import QCoreApplication, QThread
+from PySide6.QtCore import QCoreApplication, QThread
 
 from api.websocket_client import KiwoomWebSocketClient, _main_thread_dispatcher
 
