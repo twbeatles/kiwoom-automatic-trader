@@ -1,8 +1,6 @@
 """Persistence/settings mixin for KiwoomProTrader."""
 
 import copy
-import csv
-import datetime
 import json
 import os
 from pathlib import Path
@@ -27,12 +25,8 @@ except ModuleNotFoundError:
             return None
 
     keyring = _NoopKeyring()
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 
 from app.support.ui_text import combo_value, set_combo_value
-from app.support.worker import Worker
 from config import Config
 from app.mixins._typing import TraderMixinBase
 

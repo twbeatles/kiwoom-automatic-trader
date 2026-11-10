@@ -1,6 +1,6 @@
 """Market-data reads (SRP: quotes/charts/orderbook/index)."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ._rest_helpers import _pick, _payload_dict, _payload_records, _safe_float, _safe_int

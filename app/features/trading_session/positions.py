@@ -3,13 +3,9 @@
 from collections import deque
 import datetime
 import time
-from typing import Any, Deque, Dict, List, Literal, Optional, Tuple, overload
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QCoreApplication, Qt, QTimer
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 
-from app.support.worker import Worker
 from config import Config
 from app.mixins._typing import TraderMixinBase
 

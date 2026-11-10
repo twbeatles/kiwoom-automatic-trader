@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, List
 
 from backtest.engine import BacktestBar, BacktestConfig, BacktestResult, EventDrivenBacktestEngine, PositionState
 

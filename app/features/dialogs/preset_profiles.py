@@ -29,7 +29,7 @@ class PresetProfilesMixin(TraderMixinBase):
         dialog = ProfileManagerDialog(self, self.profile_manager, current_settings)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_settings:
             self._apply_settings(dialog.selected_settings)
-            self.log(f"👤 프로필 적용됨")
+            self.log("👤 프로필 적용됨")
 
     def _open_schedule(self):
         """예약 매매 다이얼로그 열기"""

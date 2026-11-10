@@ -2,59 +2,14 @@
 
 from __future__ import annotations
 
-import copy
 import datetime
-import hashlib
-import html
 import json
-import re
 import time
-from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QFormLayout,
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPlainTextEdit,
-    QPushButton,
-    QScrollArea,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
 
-from app.support.ui_text import (
-    AI_PROVIDER_CHOICES,
-    REPLAY_AUDIT_CHOICES,
-    REPLAY_SCOPE_CHOICES,
-    combo_value,
-    display_action_policy,
-    display_allowed,
-    display_event_severity,
-    display_event_type,
-    display_exit_policy,
-    display_market_state,
-    display_news_sentiment,
-    display_regime,
-    display_replay_scope,
-    display_source_health,
-    display_source_name,
-    display_status,
-    display_yes_no,
-    populate_combo,
-    set_combo_value,
-)
-from app.support.widgets import NoScrollComboBox, NoScrollSpinBox
 from config import Config
-from data.providers import AIProvider, DartProvider, MacroProvider, NaverTrendProvider, NewsProvider
 from app.mixins._typing import TraderMixinBase
 
 

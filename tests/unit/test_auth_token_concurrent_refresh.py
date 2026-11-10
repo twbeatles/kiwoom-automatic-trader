@@ -7,7 +7,6 @@ import tempfile
 import threading
 import unittest
 from typing import List, Optional
-from unittest.mock import patch
 
 from api.auth import KiwoomAuth
 
@@ -24,7 +23,6 @@ def _make_auth_with_spy(tmpdir, app_key="appkey", secret_key="secretkey"):
     """
     call_count = {"n": 0}
     count_lock = threading.Lock()
-    original_request = KiwoomAuth._request_new_token
 
     auth = KiwoomAuth(app_key, secret_key, is_mock=True, cache_dir=tmpdir)
     # 캐시된 토큰을 무효화하여 항상 새 발급 경로를 타도록 한다.

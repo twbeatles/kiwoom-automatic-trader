@@ -1,25 +1,11 @@
 """UI construction mixin for KiwoomProTrader."""
 
 # pyright: reportWildcardImportFromLibrary=false
-import json
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import *
 
-from app.support.backtest_runner import backtest_result_to_dict, metric_rows, run_backtest_from_files
-from app.support.ui_text import (
-    ASSET_SCOPE_CHOICES,
-    BACKTEST_TIMEFRAME_CHOICES,
-    DAILY_LOSS_BASIS_CHOICES,
-    EXECUTION_MODE_CHOICES,
-    EXECUTION_POLICY_CHOICES,
-    PORTFOLIO_MODE_CHOICES,
-    STRATEGY_CHOICES,
-    populate_combo,
-)
-from app.support.worker import Worker
-from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
-from config import Config
+from app.support.widgets import NoScrollComboBox
 from app.support.components.helpers import mark_secondary
 from app.support.components.infobar import InfoBarHost
 from app.support.design_tokens import FORM_ROW_GAP, GROUP_GAP, SPACE_SM, SPACE_XS

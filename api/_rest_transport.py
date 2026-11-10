@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import requests
 from requests.adapters import HTTPAdapter

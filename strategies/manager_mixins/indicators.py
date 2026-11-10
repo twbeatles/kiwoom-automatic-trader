@@ -311,9 +311,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         tr_list = []
         for i in range(1, len(high_list)):
             h = high_list[i]
-            l = low_list[i]
+            low = low_list[i]
             prev_c = close_list[i - 1]
-            tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
+            tr = max(h - low, abs(h - prev_c), abs(low - prev_c))
             tr_list.append(tr)
 
         if len(tr_list) < period:
@@ -335,16 +335,16 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         m_dm_list = []
         for i in range(1, len(high_list)):
             h = high_list[i]
-            l = low_list[i]
+            low = low_list[i]
             prev_c = close_list[i - 1]
 
-            tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
+            tr = max(h - low, abs(h - prev_c), abs(low - prev_c))
             tr_list.append(tr)
 
             prev_h = high_list[i - 1]
             prev_l = low_list[i - 1]
             up_move = h - prev_h
-            down_move = prev_l - l
+            down_move = prev_l - low
 
             if up_move > down_move and up_move > 0:
                 p_dm_list.append(up_move)

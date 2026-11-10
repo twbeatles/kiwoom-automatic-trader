@@ -5,9 +5,7 @@ Sound Notifier for Kiwoom Pro Algo-Trader
 
 import threading
 import queue
-import os
 from typing import Any, Optional
-from pathlib import Path
 
 winsound: Any | None = None
 try:

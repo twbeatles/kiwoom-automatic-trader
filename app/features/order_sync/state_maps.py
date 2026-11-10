@@ -1,13 +1,8 @@
 """Order/execution sync mixin for KiwoomProTrader."""
 
 import datetime
-from collections import deque
-from typing import Iterable, Set
 
-from PySide6.QtCore import QTimer
 
-from api.models import ExecutionData
-from app.support.worker import Worker
 from config import Config
 from app.mixins._typing import TraderMixinBase
 

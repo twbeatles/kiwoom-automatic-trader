@@ -4,7 +4,7 @@ from collections import deque
 import datetime
 from typing import Any, Deque, Dict, List, Optional, Set, cast
 
-from PySide6.QtCore import QThreadPool, QTimer, Qt, Signal
+from PySide6.QtCore import QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import QMainWindow
 
 from config import Config, TradingConfig

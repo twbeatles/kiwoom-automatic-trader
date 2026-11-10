@@ -13,6 +13,10 @@ import time
 from typing import Any, Optional, Callable, Dict, List, Set, cast
 from dataclasses import dataclass
 from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
+from ._rest_helpers import _pick, _safe_float, _safe_int
+from .auth import KiwoomAuth
+from .endpoints import LIVE_WS_URL
+from .models import ExecutionData, IndexTick
 
 ws_connect: Optional[Callable[..., Any]] = None
 try:
@@ -55,11 +59,6 @@ def _headers_kw_for(connect_fn: Optional[Callable[..., Any]]) -> str:
     if "extra_headers" in params:
         return "extra_headers"
     return "additional_headers"
-
-from ._rest_helpers import _pick, _safe_float, _safe_int
-from .auth import KiwoomAuth
-from .endpoints import LIVE_WS_URL
-from .models import StockQuote, ExecutionData, IndexTick
 
 
 def _ws_int(value: Any, default: int = 0) -> int:

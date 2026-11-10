@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ._rest_helpers import (
-    _as_records, _order_no_from_result, _parse_order_side,
+    _parse_order_side,
     _pick, _payload_dict, _payload_records, _safe_float, _safe_int,
 )
 from ._rest_transport import RestTransport

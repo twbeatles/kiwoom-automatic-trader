@@ -1,11 +1,9 @@
 """Persistence/settings mixin for KiwoomProTrader."""
 
-import copy
 import csv
 import datetime
 import json
 import os
-from pathlib import Path
 
 try:
     import keyring
@@ -31,11 +29,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 
-from app.support.ui_text import combo_value, set_combo_value
 from app.support.worker import Worker
 from config import Config
-from dark_theme import DARK_STYLESHEET
-from light_theme import LIGHT_STYLESHEET
 from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase
 

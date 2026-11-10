@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections import deque
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Callable, Deque, Dict, Iterable, List, Optional  # noqa: F401
 
 from ._intel_events import BacktestIntelEventsMixin

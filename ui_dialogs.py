@@ -2,7 +2,7 @@
 Dialog confirmations and tooling for Kiwoom Pro Algo-Trader.
 """
 
-import os
+import os  # noqa: F401 # patched by tests/unit/test_preset_io_errors.py ("ui_dialogs.os.path.exists")
 
 from PySide6.QtWidgets import QMessageBox
 

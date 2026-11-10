@@ -105,7 +105,6 @@ STATUS_LABELS = {
     "sync_failed": "동기화 실패",
     "submitted": "접수",
     "partial_fill": "부분 체결",
-    "partial": "부분 수집",
     "rejected": "거절",
     "done": "완료",
     "normal": "정상",

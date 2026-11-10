@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Deque, Dict, Optional
 
 from ._metrics import BacktestMetricsMixin
-from .models import BacktestBar, BacktestIntelligenceEvent, PositionState
+from .models import BacktestBar, PositionState
 
 
 class BacktestPolicyMixin(BacktestMetricsMixin):

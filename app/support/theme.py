@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from app.support.ui_scale import DEFAULT_DENSITY, DENSITY_NAMES, clamp_density
+from app.support.ui_scale import DEFAULT_DENSITY, clamp_density
 
 THEME_NAMES = ("dark", "light")
 

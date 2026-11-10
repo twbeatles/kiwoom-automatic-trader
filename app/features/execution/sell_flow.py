@@ -1,12 +1,5 @@
 """Execution engine mixin for KiwoomProTrader."""
 
-import datetime
-import json
-import time
-from collections import deque
-from pathlib import Path
-
-from api.models import ExecutionData
 from app.support.execution_policy import ExecutionPolicy
 from app.support.worker import Worker
 from config import Config
@@ -19,8 +12,6 @@ class ExecutionSellFlowMixin(TraderMixinBase):
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
         raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
         info = raw_info if isinstance(raw_info, dict) else {}
-        external_positions = getattr(self, "external_positions", {})
-        is_external = code not in self.universe and isinstance(external_positions, dict) and code in external_positions
         name = info.get("name", code)
         buy_price = info.get("buy_price", 0)
 

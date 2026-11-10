@@ -1,16 +1,12 @@
 """Trading session lifecycle mixin for KiwoomProTrader."""
 
-from collections import deque
 import datetime
 import time
-from typing import Any, Deque, Dict, List, Literal, Optional, Tuple, overload
+from typing import Any, Dict, List, Tuple
 
-from PySide6.QtCore import QCoreApplication, Qt, QTimer
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
+from PySide6.QtCore import QCoreApplication
 
 from app.support.worker import Worker
-from config import Config
 from app.mixins._typing import TraderMixinBase
 
 

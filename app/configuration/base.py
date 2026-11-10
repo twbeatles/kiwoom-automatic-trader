@@ -5,7 +5,7 @@ REST API 기반 + 확장 기능 설정
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Dict, Set, Optional
+from typing import Any, List, Dict, Set
 
 
 _BASE_PATH = Path(__file__).resolve().parents[2]

@@ -3,9 +3,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from api.auth import KiwoomAuth
-from api.models import (
-    DepositDetail, ExecutedOrder, TickCandle, SectorQuote, VIEvent
-)
 from api.rest_client import KiwoomRESTClient
 from api.websocket_client import KiwoomWebSocketClient
 

@@ -5,7 +5,7 @@ API 응답 및 요청에 사용되는 데이터 구조를 정의합니다.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import List
 from enum import Enum
 
 

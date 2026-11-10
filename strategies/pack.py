@@ -21,7 +21,6 @@ class StrategyPackEngine:
     def evaluate(self, context: StrategyContext) -> StrategyResult:
         cfg = context.config
         info = context.info
-        prices = info.get("price_history", [])
         current = float(info.get("current", 0) or 0)
         target = float(info.get("target", 0) or 0)
 
