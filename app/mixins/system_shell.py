@@ -36,7 +36,7 @@ class SystemShellMixin(TraderMixinBase):
 
         log_file = Path(Config.LOG_DIR) / f"trader_{datetime.datetime.now():%Y%m%d}.log"
         existing_paths = {
-            Path(getattr(handler, "baseFilename"))
+            Path(getattr(handler, "baseFilename"))  # noqa: B009 -- logging.Handler base lacks baseFilename; guarded by isinstance+sentinel below, direct access trips pyright
             for handler in self.logger.handlers
             if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None)
         }

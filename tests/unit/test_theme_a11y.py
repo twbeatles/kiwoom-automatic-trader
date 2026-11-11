@@ -131,8 +131,8 @@ class TestFontScaling(unittest.TestCase):
         base = _font_sizes(build_stylesheet("dark", 1.0))
         big = _font_sizes(build_stylesheet("dark", 1.25))
         self.assertEqual(len(base), len(big))
-        self.assertTrue(all(b >= a for a, b in zip(base, big)))
-        self.assertTrue(any(b > a for a, b in zip(base, big)))
+        self.assertTrue(all(b >= a for a, b in zip(base, big, strict=True)))
+        self.assertTrue(any(b > a for a, b in zip(base, big, strict=True)))
 
     def test_clamp_bounds_and_invalid(self):
         self.assertEqual(clamp_font_scale(99.0), FONT_SCALE_MAX)

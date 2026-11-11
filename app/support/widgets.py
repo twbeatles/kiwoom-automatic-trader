@@ -45,8 +45,8 @@ def update_plain_text_panel(
             current_text = to_text()
         except Exception:
             current_text = None
-    elif hasattr(panel, "text") and isinstance(getattr(panel, "text"), str):
-        current_text = getattr(panel, "text")
+    elif hasattr(panel, "text") and isinstance(getattr(panel, "text"), str):  # noqa: B009 -- panel: object duck-typing; hasattr guard load-bearing, direct access trips pyright
+        current_text = getattr(panel, "text")  # noqa: B009 -- see above
 
     if current_text is not None and current_text == new_text:
         return False

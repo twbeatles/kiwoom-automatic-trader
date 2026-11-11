@@ -1,7 +1,5 @@
-# Ruff staged rollout - S2_IMPORT (S1 PASS).
-# S3 (B) / S4 (UP) intentionally deferred.
+# Ruff staged rollout: S1 -> S2 (I) -> S3 (B); S4 (UP) deferred.
 # fixable defense restored after the S2 I001 bulk (previewed, gated).
-# (previewed, gated) and restored immediately after.
 # Third-party star imports (PySide6.QtWidgets) in ui_build: F403/F405
 # silenced — all 260 use-sites resolve in installed PySide6, 0 missing.
 # Owner action retained: replace with explicit imports.
@@ -11,7 +9,7 @@
 line-length = 88
 
 [lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "B"]
 fixable = []
 
 [lint.per-file-ignores]

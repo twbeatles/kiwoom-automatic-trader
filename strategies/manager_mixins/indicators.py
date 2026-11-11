@@ -240,7 +240,7 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         ema_fast = ema(prices, Config.DEFAULT_MACD_FAST)
         ema_slow = ema(prices, Config.DEFAULT_MACD_SLOW)
-        macd = [f - s for f, s in zip(ema_fast, ema_slow)]
+        macd = [f - s for f, s in zip(ema_fast, ema_slow, strict=True)]
         signal = ema(macd, Config.DEFAULT_MACD_SIGNAL)
         histogram = macd[-1] - signal[-1]
         return macd[-1], signal[-1], histogram

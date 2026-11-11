@@ -259,7 +259,7 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         theme_heat_map: Dict[str, float] = {}
         sector_negative_counts: Dict[str, int] = {}
         macro_modes: List[str] = []
-        for code, info in entities.items():
+        for _code, info in entities.items():
             state = self._ensure_market_intel_state(info)
             news_scores.append(float(state.get("news_score", 0.0) or 0.0))
             macro_modes.append(str(state.get("macro_regime", "neutral") or "neutral"))

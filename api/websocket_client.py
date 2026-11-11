@@ -103,7 +103,7 @@ def _main_thread_dispatcher() -> Optional[_MainThreadDispatcher]:
         return None
     dispatcher = _MainThreadDispatcher()
     dispatcher.moveToThread(app.thread())
-    setattr(app, "_kiwoom_ws_dispatcher", dispatcher)
+    setattr(app, "_kiwoom_ws_dispatcher", dispatcher)  # noqa: B010 -- dynamic attach on QCoreApplication (no declared attr; direct assignment trips pyright); paired with getattr sentinel above
     return dispatcher
 
 
