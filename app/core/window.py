@@ -1,32 +1,30 @@
 """Main window class assembled from mixins."""
 
-from collections import deque
 import datetime
+from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Set, cast
 
 from PySide6.QtCore import QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import QMainWindow
 
+from api import KiwoomAuth, KiwoomRESTClient, KiwoomWebSocketClient
+from app.features.diagnostics import DiagnosticsMixin
+from app.features.execution import ExecutionEngineMixin
+from app.features.market_intelligence import MarketIntelligenceMixin
+from app.features.order_sync import OrderSyncMixin
+from app.features.persistence import PersistenceSettingsMixin
+from app.features.trading_session import TradingSessionMixin
+from app.features.ui_build import UIBuildMixin
+from app.mixins.api_account import APIAccountMixin
+from app.mixins.dialogs_profiles import DialogsProfilesMixin
+from app.mixins.market_data_tabs import MarketDataTabsMixin
+from app.mixins.system_shell import SystemShellMixin
+from app.support.ui_text import combo_value
 from config import Config, TradingConfig
 from profile_manager import ProfileManager
 from sound_notifier import SoundNotifier
 from strategies.manager import StrategyManager
 from telegram_notifier import TelegramNotifier
-
-from api import KiwoomAuth, KiwoomRESTClient, KiwoomWebSocketClient
-
-from app.support.ui_text import combo_value
-from app.mixins.api_account import APIAccountMixin
-from app.mixins.dialogs_profiles import DialogsProfilesMixin
-from app.features.execution import ExecutionEngineMixin
-from app.mixins.market_data_tabs import MarketDataTabsMixin
-from app.features.market_intelligence import MarketIntelligenceMixin
-from app.features.order_sync import OrderSyncMixin
-from app.features.persistence import PersistenceSettingsMixin
-from app.mixins.system_shell import SystemShellMixin
-from app.features.trading_session import TradingSessionMixin
-from app.features.ui_build import UIBuildMixin
-from app.features.diagnostics import DiagnosticsMixin
 
 
 def _dict_or_empty(value: object) -> Dict[str, Any]:

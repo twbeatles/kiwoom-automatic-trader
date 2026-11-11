@@ -5,13 +5,13 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import *
 
-from app.support.widgets import NoScrollComboBox
+from app.mixins._typing import TraderMixinBase
 from app.support.components.helpers import mark_secondary
 from app.support.components.infobar import InfoBarHost
 from app.support.design_tokens import FORM_ROW_GAP, GROUP_GAP, SPACE_SM, SPACE_XS
 from app.support.theme import apply_accessibility_names, apply_theme
 from app.support.ui_scale import recommended_density
-from app.mixins._typing import TraderMixinBase
+from app.support.widgets import NoScrollComboBox
 
 
 class UIBuildLayoutMixin(TraderMixinBase):

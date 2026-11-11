@@ -2,7 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.support.backtest_runner import backtest_result_to_dict, load_backtest_bars_csv, run_backtest_from_files
+from app.support.backtest_runner import (
+    backtest_result_to_dict,
+    load_backtest_bars_csv,
+    run_backtest_from_files,
+)
 
 
 class TestBacktestRunner(unittest.TestCase):

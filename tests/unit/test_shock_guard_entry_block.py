@@ -1,8 +1,8 @@
 ﻿import datetime
 import unittest
 
-from config import TradingConfig
 from app.mixins.execution_engine import ExecutionEngineMixin
+from config import TradingConfig
 
 
 class _Harness(ExecutionEngineMixin):

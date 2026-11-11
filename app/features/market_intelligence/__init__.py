@@ -1,10 +1,10 @@
 """Canonical MarketIntelligenceMixin feature package."""
 
-from .state import MarketIntelStateMixin
-from .settings_ui import MarketIntelSettingsUIMixin
-from .scoring_policy import MarketIntelScoringPolicyMixin
 from .audit import MarketIntelAuditMixin
 from .runtime import MarketIntelRuntimeMixin
+from .scoring_policy import MarketIntelScoringPolicyMixin
+from .settings_ui import MarketIntelSettingsUIMixin
+from .state import MarketIntelStateMixin
 from .views import MarketIntelViewsMixin
 
 

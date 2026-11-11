@@ -10,7 +10,6 @@ from typing import List, Optional
 
 from api.auth import KiwoomAuth
 
-
 _TOKEN_VALUE = "token-from-server"
 
 

@@ -1,9 +1,9 @@
 import unittest
 
+from api.models import OrderResult
 from app.mixins.execution_engine import ExecutionEngineMixin
 from app.mixins.order_sync import OrderSyncMixin
 from app.mixins.trading_session import TradingSessionMixin
-from api.models import OrderResult
 
 
 class _REST:

@@ -8,8 +8,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGridLayout,
@@ -25,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.mixins._typing import TraderMixinBase
 from app.support.ui_text import (
     REPLAY_AUDIT_CHOICES,
     REPLAY_SCOPE_CHOICES,
@@ -43,10 +43,12 @@ from app.support.ui_text import (
     display_yes_no,
     populate_combo,
 )
-from app.support.widgets import NoScrollComboBox, NoScrollSpinBox, update_plain_text_panel
-
+from app.support.widgets import (
+    NoScrollComboBox,
+    NoScrollSpinBox,
+    update_plain_text_panel,
+)
 from config import Config
-from app.mixins._typing import TraderMixinBase
 
 
 class MarketIntelViewsMixin(TraderMixinBase):

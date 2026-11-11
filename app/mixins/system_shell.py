@@ -11,14 +11,19 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
-from config import Config
-from app.support.components.helpers import set_trading_badge
-from app.support.theme import apply_theme, clamp_theme_mode as _clamp_theme_mode, log_level_color as _log_level_color, log_timestamp_color as _log_timestamp_color, resolve_theme_name as _resolve_theme_name
-from app.support.theme import set_ui_font_scale as _set_ui_font_scale
-from app.support.theme import set_ui_density as _set_ui_density
-from app.support.ui_scale import next_scale_step as _next_scale_step
 from app.features.ui_build.workspaces import WORKSPACE_LABELS
+from app.support.components.helpers import set_trading_badge
+from app.support.theme import apply_theme
+from app.support.theme import clamp_theme_mode as _clamp_theme_mode
+from app.support.theme import log_level_color as _log_level_color
+from app.support.theme import log_timestamp_color as _log_timestamp_color
+from app.support.theme import resolve_theme_name as _resolve_theme_name
+from app.support.theme import set_ui_density as _set_ui_density
+from app.support.theme import set_ui_font_scale as _set_ui_font_scale
+from app.support.ui_scale import next_scale_step as _next_scale_step
+from config import Config
 from ui_dialogs import HelpDialog
+
 from ._typing import TraderMixinBase
 
 

@@ -7,7 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
-from backtest.engine import BacktestBar, BacktestConfig, BacktestResult, EventDrivenBacktestEngine, PositionState
+from backtest.engine import (
+    BacktestBar,
+    BacktestConfig,
+    BacktestResult,
+    EventDrivenBacktestEngine,
+    PositionState,
+)
 
 
 def _first_value(row: Dict[str, Any], *keys: str) -> Any:

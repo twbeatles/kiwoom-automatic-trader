@@ -11,7 +11,6 @@ from refactor_introspection import (
     resolve_class,
 )
 
-
 CLASS_NAME = "KiwoomProTrader"
 DEFAULT_SOURCE = "키움증권 자동매매.py"
 DEFAULT_OUTPUT = "docs/refactor/baseline_manifest.json"

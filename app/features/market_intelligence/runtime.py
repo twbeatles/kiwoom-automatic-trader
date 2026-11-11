@@ -8,9 +8,9 @@ from typing import Any, Dict, List
 
 from PySide6.QtCore import QTimer
 
+from app.mixins._typing import TraderMixinBase
 from config import Config
 from data.providers import DartProvider, MacroProvider, NaverTrendProvider, NewsProvider
-from app.mixins._typing import TraderMixinBase
 
 
 class MarketIntelRuntimeMixin(TraderMixinBase):

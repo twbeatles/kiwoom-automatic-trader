@@ -5,7 +5,6 @@ from typing import Any, cast
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
 
-
 class NoScrollSpinBox(QSpinBox):
     def wheelEvent(self, e):
         # 마우스 휠로 값 변경 방지 (항상 부모에게 이벤트 전달 -> 스크롤 가능)

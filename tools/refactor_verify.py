@@ -5,8 +5,12 @@ import sys
 from pathlib import Path
 from typing import Dict, Set, Tuple
 
-from refactor_introspection import collect_inherited_methods, collect_signal_names, read_text, resolve_class
-
+from refactor_introspection import (
+    collect_inherited_methods,
+    collect_signal_names,
+    read_text,
+    resolve_class,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 PRE_LARGE_SPLIT_PATH = ROOT_DIR / "docs/refactor/pre_large_split_manifest.json"

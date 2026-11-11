@@ -6,9 +6,8 @@ from typing import Any, Dict, List, Tuple
 
 from PySide6.QtCore import QCoreApplication
 
-from app.support.worker import Worker
 from app.mixins._typing import TraderMixinBase
-
+from app.support.worker import Worker
 
 BackgroundUniversePayload = Tuple[List[str], Dict[str, Dict[str, Any]], List[str]]
 

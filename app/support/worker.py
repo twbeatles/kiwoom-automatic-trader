@@ -2,7 +2,6 @@
 
 from PySide6.QtCore import QCoreApplication, QObject, QRunnable, Signal, Slot
 
-
 # QThreadPool releases auto-deleted runnables before queued GUI callbacks run.
 # Keep their signal objects alive until the GUI has consumed the outcome.
 _pending_signals = set()

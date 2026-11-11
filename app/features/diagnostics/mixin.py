@@ -7,8 +7,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QTableWidgetItem
 
-from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase
+from app.support.theme import table_status_color
 from app.support.ui_text import (
     display_action_policy,
     display_exit_policy,
@@ -18,9 +18,8 @@ from app.support.ui_text import (
     display_source_health,
     display_status,
 )
-from config import Config
 from app.support.widgets import update_plain_text_panel
-
+from config import Config
 
 
 def _dict_or_empty(value: object) -> Dict[str, Any]:
@@ -307,7 +306,10 @@ class DiagnosticsMixin(TraderMixinBase):
     ) -> List[str]:
         """진단 드릴다운 라인 생성: PnL/비중/노출 + 외부 읽기전용/sync_failed 안내."""
         try:
-            from app.support.portfolio_summary import compute_portfolio_summary, position_eval
+            from app.support.portfolio_summary import (
+                compute_portfolio_summary,
+                position_eval,
+            )
         except Exception:
             return []
         universe = getattr(self, "universe", {})

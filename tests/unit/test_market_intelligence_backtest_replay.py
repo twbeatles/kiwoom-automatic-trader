@@ -1,11 +1,16 @@
-import unittest
-from datetime import datetime, timedelta
-from pathlib import Path
 import json
 import shutil
 import tempfile
+import unittest
+from datetime import datetime, timedelta
+from pathlib import Path
 
-from backtest.engine import BacktestBar, BacktestConfig, BacktestIntelligenceEvent, EventDrivenBacktestEngine
+from backtest.engine import (
+    BacktestBar,
+    BacktestConfig,
+    BacktestIntelligenceEvent,
+    EventDrivenBacktestEngine,
+)
 
 
 class TestMarketIntelligenceBacktestReplay(unittest.TestCase):

@@ -1,6 +1,7 @@
 from typing import Dict, Optional, Tuple
 
 from config import Config
+
 from ._typing import StrategyManagerMixinBase
 
 

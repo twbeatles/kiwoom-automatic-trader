@@ -4,15 +4,17 @@
 실시간 시세 및 체결 데이터 수신을 담당합니다.
 """
 
+import asyncio
 import inspect
 import json
 import logging
-import asyncio
 import threading
 import time
-from typing import Any, Optional, Callable, Dict, List, Set, cast
 from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Set, cast
+
 from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
+
 from ._rest_helpers import _pick, _safe_float, _safe_int
 from .auth import KiwoomAuth
 from .endpoints import LIVE_WS_URL

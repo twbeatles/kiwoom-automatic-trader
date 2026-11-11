@@ -1,8 +1,8 @@
 """Canonical PersistenceSettingsMixin feature package."""
 
 from .schema import PersistenceSchemaMixin
-from .trade_history import PersistenceTradeHistoryMixin
 from .settings_io import PersistenceSettingsIOMixin
+from .trade_history import PersistenceTradeHistoryMixin
 
 
 class PersistenceSettingsMixin(PersistenceSchemaMixin, PersistenceTradeHistoryMixin, PersistenceSettingsIOMixin):

@@ -1,14 +1,12 @@
 """Trading session lifecycle mixin for KiwoomProTrader."""
 
-from collections import deque
 import datetime
 import time
+from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-
-from config import Config
 from app.mixins._typing import TraderMixinBase
-
+from config import Config
 
 BackgroundUniversePayload = Tuple[List[str], Dict[str, Dict[str, Any]], List[str]]
 

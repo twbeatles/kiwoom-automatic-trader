@@ -29,7 +29,6 @@ from app.support.components.fluent_nav import (
     FluentNavRail,
 )
 
-
 # 최상위 워크스페이스 라벨 (표시 순서 고정, 규칙 §19: emoji 아이콘 금지)
 WORKSPACE_TRADE = "매매"
 WORKSPACE_EXPLORE = "종목 탐색"

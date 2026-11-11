@@ -5,7 +5,6 @@ Strategy Manager v4.5
 
 from typing import Any, Dict
 
-from .pack import StrategyPackEngine
 from strategies.manager_mixins import (
     StrategyManagerEvaluationMixin,
     StrategyManagerIndicatorMixin,
@@ -14,6 +13,8 @@ from strategies.manager_mixins import (
     StrategyManagerPortfolioRiskMixin,
     StrategyManagerSignalFilterMixin,
 )
+
+from .pack import StrategyPackEngine
 
 
 class StrategyManager(

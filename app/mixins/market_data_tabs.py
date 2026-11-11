@@ -3,6 +3,7 @@
 from PySide6.QtWidgets import QPushButton, QTableWidgetItem
 
 from app.support.worker import Worker
+
 from ._typing import TraderMixinBase
 
 

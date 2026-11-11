@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from ._rest_helpers import _pick, _payload_records, _safe_float, _safe_int
+from ._rest_helpers import _payload_records, _pick, _safe_float, _safe_int
 from ._rest_transport import RestTransport
 from .models import VIEvent
 

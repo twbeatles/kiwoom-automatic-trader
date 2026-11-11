@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 import os
+import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List
 from zipfile import ZipFile
-import xml.etree.ElementTree as ET
 
 import requests
 

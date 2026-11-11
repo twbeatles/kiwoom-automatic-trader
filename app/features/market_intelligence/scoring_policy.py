@@ -8,10 +8,9 @@ import re
 import time
 from typing import Any, Dict, List
 
-
+from app.mixins._typing import TraderMixinBase
 from config import Config
 from data.providers import AIProvider
-from app.mixins._typing import TraderMixinBase
 
 
 class MarketIntelScoringPolicyMixin(TraderMixinBase):

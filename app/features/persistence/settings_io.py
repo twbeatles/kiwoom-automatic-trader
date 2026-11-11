@@ -26,9 +26,9 @@ except ModuleNotFoundError:
 
     keyring = _NoopKeyring()
 
+from app.mixins._typing import TraderMixinBase
 from app.support.ui_text import combo_value, set_combo_value
 from config import Config
-from app.mixins._typing import TraderMixinBase
 
 
 class PersistenceSettingsIOMixin(TraderMixinBase):

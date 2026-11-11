@@ -1,5 +1,13 @@
 from PySide6.QtCore import QTime
-from PySide6.QtWidgets import QCheckBox, QDialog, QFormLayout, QHBoxLayout, QPushButton, QTimeEdit, QVBoxLayout
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QPushButton,
+    QTimeEdit,
+    QVBoxLayout,
+)
 
 
 class ScheduleDialog(QDialog):

@@ -4,8 +4,8 @@
 
 from PySide6.QtWidgets import *
 
-from app.support.widgets import NoScrollComboBox
 from app.mixins._typing import TraderMixinBase
+from app.support.widgets import NoScrollComboBox
 
 
 class UIBuildMarketTabsMixin(TraderMixinBase):

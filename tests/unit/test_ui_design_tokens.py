@@ -298,9 +298,9 @@ class TestNavigationGuard(unittest.TestCase):
         tabs.setCurrentIndex.assert_called_once_with(1)
 
     def test_running_switch_asks_and_blocks_on_no(self):
-        from PySide6.QtWidgets import QMessageBox
-
         from unittest.mock import patch
+
+        from PySide6.QtWidgets import QMessageBox
 
         host, tabs = self._host(running=True, current=0)
         with patch.object(
@@ -310,9 +310,9 @@ class TestNavigationGuard(unittest.TestCase):
         tabs.setCurrentIndex.assert_not_called()
 
     def test_running_switch_proceeds_on_yes(self):
-        from PySide6.QtWidgets import QMessageBox
-
         from unittest.mock import patch
+
+        from PySide6.QtWidgets import QMessageBox
 
         host, tabs = self._host(running=True, current=0)
         with patch.object(

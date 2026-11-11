@@ -5,8 +5,8 @@ import json
 import time
 from pathlib import Path
 
-from config import Config
 from app.mixins._typing import TraderMixinBase
+from config import Config
 
 
 class ExecutionModeLifecycleMixin(TraderMixinBase):

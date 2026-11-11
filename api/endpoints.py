@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 LIVE_REST_BASE_URL = "https://api.kiwoom.com"
 MOCK_REST_BASE_URL = "https://mockapi.kiwoom.com"
 LIVE_WS_URL = "wss://api.kiwoom.com:10000/api/dostk/websocket"

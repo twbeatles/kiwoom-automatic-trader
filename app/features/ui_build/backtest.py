@@ -5,9 +5,13 @@ import json
 
 from PySide6.QtWidgets import *
 
-from app.support.backtest_runner import backtest_result_to_dict, metric_rows, run_backtest_from_files
-from app.support.worker import Worker
 from app.mixins._typing import TraderMixinBase
+from app.support.backtest_runner import (
+    backtest_result_to_dict,
+    metric_rows,
+    run_backtest_from_files,
+)
+from app.support.worker import Worker
 
 
 class UIBuildBacktestMixin(TraderMixinBase):

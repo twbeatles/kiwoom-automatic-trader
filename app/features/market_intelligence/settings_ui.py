@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
@@ -14,14 +13,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.mixins._typing import TraderMixinBase
+from app.support.components.helpers import mark_secondary
 from app.support.ui_text import (
     AI_PROVIDER_CHOICES,
     combo_value,
     populate_combo,
 )
-from app.support.components.helpers import mark_secondary
 from app.support.widgets import NoScrollComboBox, NoScrollSpinBox
-from app.mixins._typing import TraderMixinBase
 
 
 class MarketIntelSettingsUIMixin(TraderMixinBase):

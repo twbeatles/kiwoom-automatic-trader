@@ -6,8 +6,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
-from config import Config
 from app.mixins._typing import TraderMixinBase
+from config import Config
 from ui_dialogs import StockSearchDialog
 
 

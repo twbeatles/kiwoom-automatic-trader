@@ -2,8 +2,8 @@ import datetime
 import unittest
 
 from app.mixins.persistence_settings import PersistenceSettingsMixin
-from app.mixins.trading_session import TradingSessionMixin
 from app.mixins.system_shell import SystemShellMixin
+from app.mixins.trading_session import TradingSessionMixin
 
 
 class _TradingDayHarness(TradingSessionMixin):

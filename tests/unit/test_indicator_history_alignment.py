@@ -4,8 +4,8 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 from config import Config, TradingConfig
-from strategy_manager import StrategyManager
 from strategies.manager_mixins.indicators import StrategyManagerIndicatorMixin
+from strategy_manager import StrategyManager
 
 
 class TestIndicatorBounds(unittest.TestCase):

@@ -29,10 +29,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 
+from app.mixins._typing import TraderMixinBase
+from app.support.theme import table_status_color
 from app.support.worker import Worker
 from config import Config
-from app.support.theme import table_status_color
-from app.mixins._typing import TraderMixinBase
 
 
 class PersistenceTradeHistoryMixin(TraderMixinBase):

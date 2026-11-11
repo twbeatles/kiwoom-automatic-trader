@@ -5,10 +5,9 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 from PySide6.QtWidgets import QMessageBox
 
+from app.mixins._typing import TraderMixinBase
 from app.support.worker import Worker
 from config import Config
-from app.mixins._typing import TraderMixinBase
-
 
 BackgroundUniversePayload = Tuple[List[str], Dict[str, Dict[str, Any]], List[str]]
 

@@ -24,6 +24,7 @@ from app.support.components.helpers import (
 from app.support.worker import Worker
 from config import Config
 from telegram_notifier import TelegramNotifier
+
 from ._typing import TraderMixinBase
 
 

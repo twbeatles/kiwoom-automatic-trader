@@ -1,6 +1,6 @@
 ﻿from .execution_policy import ExecutionPolicy
-from .worker import Worker, WorkerSignals
 from .widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
+from .worker import Worker, WorkerSignals
 
 __all__ = [
     "ExecutionPolicy",

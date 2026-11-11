@@ -4,6 +4,7 @@ from typing import Dict, Optional, Tuple
 
 from config import Config
 from strategies import StrategyContext
+
 from ._typing import StrategyManagerMixinBase
 
 

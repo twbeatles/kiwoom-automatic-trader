@@ -3,8 +3,8 @@ Sound Notifier for Kiwoom Pro Algo-Trader
 사운드 알림 시스템
 """
 
-import threading
 import queue
+import threading
 from typing import Any, Optional
 
 winsound: Any | None = None

@@ -3,7 +3,8 @@
 from typing import Any, Dict, Optional
 
 from ._rest_helpers import (
-    _order_no_from_result, _parse_order_side,
+    _order_no_from_result,
+    _parse_order_side,
     _trde_tp,
 )
 from ._rest_transport import RestTransport

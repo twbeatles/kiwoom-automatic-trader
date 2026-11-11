@@ -2,7 +2,6 @@
 
 import datetime
 
-
 from app.mixins._typing import TraderMixinBase
 
 

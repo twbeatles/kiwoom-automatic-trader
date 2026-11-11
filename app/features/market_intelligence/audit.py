@@ -8,9 +8,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
-from config import Config
 from app.mixins._typing import TraderMixinBase
+from config import Config
 
 
 class MarketIntelAuditMixin(TraderMixinBase):

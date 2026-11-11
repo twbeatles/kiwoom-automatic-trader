@@ -26,8 +26,8 @@ except ModuleNotFoundError:
 
     keyring = _NoopKeyring()
 
-from config import Config
 from app.mixins._typing import TraderMixinBase
+from config import Config
 
 
 class PersistenceSchemaMixin(TraderMixinBase):

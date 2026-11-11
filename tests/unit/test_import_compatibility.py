@@ -6,18 +6,26 @@ from app.features.persistence import PersistenceSettingsMixin
 from app.features.trading_session import BackgroundUniversePayload, TradingSessionMixin
 from app.features.ui_build import UIBuildMixin
 from app.main_window import KiwoomProTrader as CompatKiwoomProTrader
-from app.mixins.execution_engine import ExecutionEngineMixin as CompatExecutionEngineMixin
-from app.mixins.market_intelligence import MarketIntelligenceMixin as CompatMarketIntelligenceMixin
+from app.mixins.execution_engine import (
+    ExecutionEngineMixin as CompatExecutionEngineMixin,
+)
+from app.mixins.market_intelligence import (
+    MarketIntelligenceMixin as CompatMarketIntelligenceMixin,
+)
 from app.mixins.order_sync import OrderSyncMixin as CompatOrderSyncMixin
-from app.mixins.persistence_settings import PersistenceSettingsMixin as CompatPersistenceSettingsMixin
+from app.mixins.persistence_settings import (
+    PersistenceSettingsMixin as CompatPersistenceSettingsMixin,
+)
 from app.mixins.trading_session import (
     BackgroundUniversePayload as CompatBackgroundUniversePayload,
+)
+from app.mixins.trading_session import (
     TradingSessionMixin as CompatTradingSessionMixin,
 )
 from app.mixins.ui_build import UIBuildMixin as CompatUIBuildMixin
 from config import Config, TradingConfig
-from strategy_manager import StrategyManager
 from strategies.manager import StrategyManager as CanonicalStrategyManager
+from strategy_manager import StrategyManager
 
 
 def test_public_import_paths_remain_compatible():

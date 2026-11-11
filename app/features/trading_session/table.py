@@ -6,10 +6,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 
-from config import Config
-from app.support.theme import table_status_color
 from app.mixins._typing import TraderMixinBase
-
+from app.support.theme import table_status_color
+from config import Config
 
 BackgroundUniversePayload = Tuple[List[str], Dict[str, Dict[str, Any]], List[str]]
 

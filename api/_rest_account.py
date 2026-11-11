@@ -5,7 +5,11 @@ from typing import Any, Dict, List, Optional
 
 from ._rest_helpers import (
     _parse_order_side,
-    _pick, _payload_dict, _payload_records, _safe_float, _safe_int,
+    _payload_dict,
+    _payload_records,
+    _pick,
+    _safe_float,
+    _safe_int,
 )
 from ._rest_transport import RestTransport
 from .models import AccountInfo, DepositDetail, ExecutedOrder, OpenOrder, Position

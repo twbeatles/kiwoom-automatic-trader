@@ -7,6 +7,11 @@ SOLID 분할 구조의 composite: 수동주문(`app.features.dialogs.manual_orde
 """
 
 from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox  # noqa: F401 (seam compat)
+
+from app.features.dialogs.favorites import FavoritesMixin  # noqa: F401
+from app.features.dialogs.manual_orders import ManualOrdersMixin  # noqa: F401
+from app.features.dialogs.preset_profiles import PresetProfilesMixin  # noqa: F401
+from app.features.dialogs.settings_snapshot import SettingsSnapshotMixin  # noqa: F401
 from app.support.ui_text import combo_value, set_combo_value  # noqa: F401 (seam compat)
 from app.support.worker import Worker  # noqa: F401 (seam compat)
 from config import Config  # noqa: F401 (seam compat)
@@ -19,10 +24,6 @@ from ui_dialogs import (  # noqa: F401 (seam compat)
     ScheduleDialog,
     StockSearchDialog,
 )
-from app.features.dialogs.favorites import FavoritesMixin  # noqa: F401
-from app.features.dialogs.manual_orders import ManualOrdersMixin  # noqa: F401
-from app.features.dialogs.preset_profiles import PresetProfilesMixin  # noqa: F401
-from app.features.dialogs.settings_snapshot import SettingsSnapshotMixin  # noqa: F401
 
 
 class DialogsProfilesMixin(

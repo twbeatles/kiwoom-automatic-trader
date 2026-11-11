@@ -3,8 +3,8 @@
 import copy
 from typing import Any, Dict
 
-from app.support.ui_text import combo_value, set_combo_value
 from app.mixins._typing import TraderMixinBase
+from app.support.ui_text import combo_value, set_combo_value
 from config import Config
 
 

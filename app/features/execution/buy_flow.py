@@ -4,10 +4,10 @@ import datetime
 from collections import deque
 
 from api.models import ExecutionData
+from app.mixins._typing import TraderMixinBase
 from app.support.execution_policy import ExecutionPolicy
 from app.support.worker import Worker
 from config import Config
-from app.mixins._typing import TraderMixinBase
 
 
 class ExecutionBuyFlowMixin(TraderMixinBase):

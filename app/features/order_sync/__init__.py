@@ -1,10 +1,10 @@
 """Canonical OrderSyncMixin feature package."""
 
-from .state_maps import OrderSyncStateMapsMixin
-from .pending_state import OrderSyncPendingStateMixin
-from .realtime import OrderSyncRealtimeMixin
 from .pending_api import OrderSyncPendingApiMixin
+from .pending_state import OrderSyncPendingStateMixin
 from .position_sync import OrderSyncPositionSyncMixin
+from .realtime import OrderSyncRealtimeMixin
+from .state_maps import OrderSyncStateMapsMixin
 
 
 class OrderSyncMixin(OrderSyncStateMapsMixin, OrderSyncPendingStateMixin, OrderSyncRealtimeMixin, OrderSyncPendingApiMixin, OrderSyncPositionSyncMixin):

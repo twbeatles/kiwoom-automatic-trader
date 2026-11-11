@@ -18,7 +18,6 @@ from api.auth import KiwoomAuth
 from api.rest_client import KiwoomRESTClient
 from api.websocket_client import KiwoomWebSocketClient
 
-
 PRE_EXISTING_REST_METHODS = [
     "__init__", "_condition_ws", "_create_session", "_index_market_tp",
     "_order_no_from_result", "_parse_market_type", "_parse_order_side",

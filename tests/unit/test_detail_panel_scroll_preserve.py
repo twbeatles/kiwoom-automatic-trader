@@ -2,9 +2,10 @@
 
 import unittest
 from unittest.mock import MagicMock
-from app.support.widgets import update_plain_text_panel
+
 from app.features.diagnostics.mixin import DiagnosticsMixin
 from app.features.market_intelligence.views import MarketIntelViewsMixin
+from app.support.widgets import update_plain_text_panel
 
 
 class _MockScrollBar:

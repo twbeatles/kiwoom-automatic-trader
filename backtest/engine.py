@@ -14,7 +14,11 @@ from typing import Any, Callable, Deque, Dict, Iterable, List, Optional  # noqa:
 
 from ._intel_events import BacktestIntelEventsMixin
 from .models import (  # noqa: F401
-    BacktestBar, BacktestConfig, BacktestIntelligenceEvent, BacktestResult, PositionState,
+    BacktestBar,
+    BacktestConfig,
+    BacktestIntelligenceEvent,
+    BacktestResult,
+    PositionState,
 )
 
 

@@ -2,6 +2,7 @@ import time
 from typing import Optional
 
 from config import Config
+
 from ._typing import StrategyManagerMixinBase
 
 

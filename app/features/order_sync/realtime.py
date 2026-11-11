@@ -2,7 +2,6 @@
 
 import datetime
 
-
 from api.models import ExecutionData
 from app.mixins._typing import TraderMixinBase
 

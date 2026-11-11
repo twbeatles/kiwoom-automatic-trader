@@ -4,8 +4,8 @@ from typing import Any, Dict
 
 from PySide6.QtWidgets import QDialog, QMessageBox
 
-from app.support.worker import Worker
 from app.mixins._typing import TraderMixinBase
+from app.support.worker import Worker
 from config import Config
 
 

@@ -3,9 +3,14 @@ import unittest
 from pathlib import Path
 
 from api.auth import KiwoomAuth
-from api.endpoints import LIVE_REST_BASE_URL, LIVE_WS_URL, MOCK_REST_BASE_URL, MOCK_WS_URL
+from api.endpoints import (
+    LIVE_REST_BASE_URL,
+    LIVE_WS_URL,
+    MOCK_REST_BASE_URL,
+    MOCK_WS_URL,
+)
 from api.rest_client import KiwoomRESTClient
-from api.websocket_client import KiwoomWebSocketClient, WEBSOCKETS_AVAILABLE
+from api.websocket_client import WEBSOCKETS_AVAILABLE, KiwoomWebSocketClient
 from config import Config
 
 

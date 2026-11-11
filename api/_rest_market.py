@@ -3,7 +3,13 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ._rest_helpers import _pick, _payload_dict, _payload_records, _safe_float, _safe_int
+from ._rest_helpers import (
+    _payload_dict,
+    _payload_records,
+    _pick,
+    _safe_float,
+    _safe_int,
+)
 from ._rest_transport import RestTransport
 from .models import DailyOHLC, OrderBook, SectorQuote, StockQuote, TickCandle
 

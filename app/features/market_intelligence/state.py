@@ -9,13 +9,12 @@ import html
 import re
 from typing import Any, Dict, List
 
-
+from app.mixins._typing import TraderMixinBase
 from app.support.ui_text import (
     display_source_name,
     display_status,
 )
 from config import Config
-from app.mixins._typing import TraderMixinBase
 
 
 class MarketIntelStateMixin(TraderMixinBase):

@@ -4,6 +4,8 @@
 
 from PySide6.QtWidgets import *
 
+from app.mixins._typing import TraderMixinBase
+from app.support.components.helpers import mark_secondary
 from app.support.ui_text import (
     ASSET_SCOPE_CHOICES,
     BACKTEST_TIMEFRAME_CHOICES,
@@ -16,8 +18,6 @@ from app.support.ui_text import (
 )
 from app.support.widgets import NoScrollComboBox, NoScrollDoubleSpinBox, NoScrollSpinBox
 from config import Config
-from app.support.components.helpers import mark_secondary
-from app.mixins._typing import TraderMixinBase
 
 
 class UIBuildSettingsTabsMixin(TraderMixinBase):
