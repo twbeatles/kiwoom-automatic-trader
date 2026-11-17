@@ -18,6 +18,7 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
             return int(float(text))
         except (ValueError, TypeError):
             return default
+
     def _set_pending_order(
         self,
         code: str,
@@ -54,12 +55,14 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
             pending_reason=reason,
             pending_until=pending_until,
         )
+
     def _clear_pending_order(self, code: str, final_state: str = ""):
         if final_state and code in self._pending_order_state:
             self._mark_pending_state(code, final_state)
         self._pending_order_state.pop(code, None)
         self._reset_pending_empty_sync(code)
         self._diag_clear_pending_safe(code)
+
     def _set_manual_pending_order(
         self,
         code: str,
@@ -72,8 +75,14 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
     ):
         if not code:
             return
-        has_live_order = bool(order_no) or int(submitted_qty or 0) > 0 or int(reserved_cash or 0) > 0
-        pending_until = None if has_live_order else datetime.datetime.now() + datetime.timedelta(seconds=5)
+        has_live_order = (
+            bool(order_no) or int(submitted_qty or 0) > 0 or int(reserved_cash or 0) > 0
+        )
+        pending_until = (
+            None
+            if has_live_order
+            else datetime.datetime.now() + datetime.timedelta(seconds=5)
+        )
         self._manual_pending_map()[code] = {
             "side": side,
             "reason": reason,
@@ -87,9 +96,13 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
             "reserved_cash": max(0, int(reserved_cash or 0)),
             "updated_at": datetime.datetime.now(),
         }
+
     def _clear_manual_pending_order(self, code: str):
         self._manual_pending_map().pop(code, None)
-    def _apply_manual_pending_fill(self, code: str, fill_qty: int) -> tuple[str, int, int]:
+
+    def _apply_manual_pending_fill(
+        self, code: str, fill_qty: int
+    ) -> tuple[str, int, int]:
         pending = self._manual_pending_map().get(code)
         if not isinstance(pending, dict):
             return "", 0, 0
@@ -104,11 +117,20 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
         pending["remaining_qty"] = max(0, remaining_before - applied)
         expected = max(0, int(pending.get("expected_price", 0) or 0))
         reserved_before = max(0, int(pending.get("reserved_cash", 0) or 0))
-        reserved_consumed = min(reserved_before, expected * applied) if expected > 0 else 0
+        reserved_consumed = (
+            min(reserved_before, expected * applied) if expected > 0 else 0
+        )
         pending["reserved_cash"] = max(0, reserved_before - reserved_consumed)
-        pending["state"] = "filled" if int(pending.get("remaining_qty", 0) or 0) <= 0 else "partial"
+        pending["state"] = (
+            "filled" if int(pending.get("remaining_qty", 0) or 0) <= 0 else "partial"
+        )
         pending["updated_at"] = datetime.datetime.now()
-        return str(pending.get("state", "")), int(pending.get("remaining_qty", 0) or 0), reserved_consumed
+        return (
+            str(pending.get("state", "")),
+            int(pending.get("remaining_qty", 0) or 0),
+            reserved_consumed,
+        )
+
     def _cleanup_manual_pending_state(self, now: datetime.datetime | None = None):
         state = self._manual_pending_map()
         if not state:
@@ -120,7 +142,8 @@ class OrderSyncPendingApiMixin(TraderMixinBase):
             if pending.get("until")
             and pending.get("until") <= now_dt
             and int(pending.get("reserved_cash", 0) or 0) <= 0
-            and str(pending.get("state", "submitted") or "submitted").lower() not in self.ACTIVE_PENDING_STATES
+            and str(pending.get("state", "submitted") or "submitted").lower()
+            not in self.ACTIVE_PENDING_STATES
         ]
         for code in expired_codes:
             state.pop(code, None)

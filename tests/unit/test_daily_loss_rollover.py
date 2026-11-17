@@ -119,7 +119,11 @@ class _BasisHarness(SystemShellMixin):
         self.config = type(
             "Cfg",
             (),
-            {"max_daily_loss": 3.0, "daily_loss_basis": basis, "sync_history_flush_on_exit": True},
+            {
+                "max_daily_loss": 3.0,
+                "daily_loss_basis": basis,
+                "sync_history_flush_on_exit": True,
+            },
         )()
 
     def _refresh_account_info_async(self):
@@ -142,7 +146,9 @@ class TestDailyLossRollover(unittest.TestCase):
     def test_rollover_resets_daily_metrics_on_date_change(self):
         trader = _TradingDayHarness()
 
-        trader._rollover_daily_metrics(now=datetime.datetime(2026, 2, 19, 9, 0, 0), reset_baseline=False)
+        trader._rollover_daily_metrics(
+            now=datetime.datetime(2026, 2, 19, 9, 0, 0), reset_baseline=False
+        )
 
         self.assertEqual(trader._trading_day, datetime.date(2026, 2, 19))
         self.assertEqual(trader.daily_realized_profit, 0)
@@ -155,7 +161,9 @@ class TestDailyLossRollover(unittest.TestCase):
         trader.daily_realized_profit = 0
         trader._trading_day = datetime.date(2026, 2, 19)
 
-        trader._rollover_daily_metrics(now=datetime.datetime(2026, 2, 19, 9, 1, 0), reset_baseline=True)
+        trader._rollover_daily_metrics(
+            now=datetime.datetime(2026, 2, 19, 9, 1, 0), reset_baseline=True
+        )
 
         self.assertEqual(trader.daily_initial_deposit, 1000000)
 

@@ -24,7 +24,11 @@ class TestMarketIntelligenceScoring(unittest.TestCase):
     def test_news_scoring_deduplicates_and_tracks_velocity(self):
         trader = _Harness()
         now = datetime.datetime.now(datetime.timezone.utc)
-        info = {"name": "삼성전자", "aliases": ["SAMSUNG"], "market_intel": dict(Config.DEFAULT_MARKET_INTEL_STATE)}
+        info = {
+            "name": "삼성전자",
+            "aliases": ["SAMSUNG"],
+            "market_intel": dict(Config.DEFAULT_MARKET_INTEL_STATE),
+        }
         items = [
             {"title": "삼성전자 대규모 수주 계약", "published_at": now},
             {"title": "삼성전자 대규모 수주 계약", "published_at": now},
@@ -44,7 +48,13 @@ class TestMarketIntelligenceScoring(unittest.TestCase):
     def test_dart_high_risk_event_is_blocking(self):
         trader = _Harness()
         result = trader._score_dart_events(
-            [{"report_nm": "유상증자 결정", "rcept_no": "20260324000123", "rcept_dt": "20260324"}]
+            [
+                {
+                    "report_nm": "유상증자 결정",
+                    "rcept_no": "20260324000123",
+                    "rcept_dt": "20260324",
+                }
+            ]
         )
 
         self.assertEqual(result["risk_level"], "high")

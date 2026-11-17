@@ -4,6 +4,7 @@ _open_manual_order 는 _validate_manual_order_request 를 통과한 주문에만
 order["validated"] = True 플래그를 부여하고, 플래그가 없으면 Worker 실행 직전에
 주문을 차단한다. 이 테스트는 검증 통과 주문만 실행되고, 플래그 누락 시 차단됨을 고정한다.
 """
+
 import unittest
 from unittest.mock import patch
 
@@ -41,7 +42,15 @@ class _RESTSpy:
         return None
 
     def get_positions(self, _account):
-        return [Position(code="005930", quantity=2, available_qty=2, buy_price=1000, buy_amount=2000)]
+        return [
+            Position(
+                code="005930",
+                quantity=2,
+                available_qty=2,
+                buy_price=1000,
+                buy_amount=2000,
+            )
+        ]
 
 
 class _DummyThreadPool:
@@ -119,10 +128,17 @@ class TestManualOrderValidationChokePoint(unittest.TestCase):
     def test_validated_order_is_executed(self):
         """검증 통과 주문은 validated=True 가 세팅되고 실제 주문이 실행된다."""
         trader = _Harness()
-        sell_order = {"code": "005930", "type": "매도", "qty": 1, "price_type": "시장가", "price": 0}
+        sell_order = {
+            "code": "005930",
+            "type": "매도",
+            "qty": 1,
+            "price_type": "시장가",
+            "price": 0,
+        }
 
         with patch(
-            "app.mixins.dialogs_profiles.ManualOrderDialog", side_effect=lambda *_args: _DialogStub(sell_order)
+            "app.mixins.dialogs_profiles.ManualOrderDialog",
+            side_effect=lambda *_args: _DialogStub(sell_order),
         ):
             trader._open_manual_order()
 
@@ -139,10 +155,17 @@ class TestManualOrderValidationChokePoint(unittest.TestCase):
         """
         trader = _Harness()
         # 유니버스에 없는 종목(검증 실패 유도)
-        bad_order = {"code": "999999", "type": "매수", "qty": 1, "price_type": "시장가", "price": 0}
+        bad_order = {
+            "code": "999999",
+            "type": "매수",
+            "qty": 1,
+            "price_type": "시장가",
+            "price": 0,
+        }
 
         with patch(
-            "app.mixins.dialogs_profiles.ManualOrderDialog", side_effect=lambda *_args: _DialogStub(bad_order)
+            "app.mixins.dialogs_profiles.ManualOrderDialog",
+            side_effect=lambda *_args: _DialogStub(bad_order),
         ):
             trader._open_manual_order()
 
@@ -171,7 +194,9 @@ class TestManualOrderValidationChokePoint(unittest.TestCase):
         if not bool(order.get("validated", False)):
             trader.log("❌ 수동 주문 차단: 검증을 통과하지 않은 요청입니다.")
         else:
-            trader.rest_client.buy_market(trader.current_account, order["code"], order["qty"])
+            trader.rest_client.buy_market(
+                trader.current_account, order["code"], order["qty"]
+            )
 
         self.assertEqual(trader.rest_client.calls, [])
         self.assertTrue(any("검증을 통과하지 않은" in m for m in trader.logs))

@@ -142,6 +142,7 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
             self._sync_fluent_nav(int(index))
 
         # -- 워크스페이스 네비게이션 가드 -------------------------------
+
     def _confirm_workspace_switch(self, index) -> bool:
         """Return True when switching to *index* may proceed.
 
@@ -175,7 +176,9 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel("주문은 우측 주문 티켓 또는 매매 메뉴 > 수동 주문(Ctrl+O)에서 실행합니다.")
+        hint = QLabel(
+            "주문은 우측 주문 티켓 또는 매매 메뉴 > 수동 주문(Ctrl+O)에서 실행합니다."
+        )
         hint.setWordWrap(True)
         hint.setProperty("hint", True)
         layout.addWidget(hint)
@@ -237,7 +240,9 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
         """인텔리전스: 설정 + 현황 + 리플레이."""
         sub = QTabWidget()
         if hasattr(self, "_create_market_intelligence_settings_tab"):
-            sub.addTab(self._create_market_intelligence_settings_tab(), "인텔리전스 설정")
+            sub.addTab(
+                self._create_market_intelligence_settings_tab(), "인텔리전스 설정"
+            )
         if hasattr(self, "_create_market_intelligence_tab"):
             sub.addTab(self._create_market_intelligence_tab(), "인텔리전스 현황")
         if hasattr(self, "_create_market_replay_tab"):
@@ -297,7 +302,9 @@ class UIBuildWorkspacesMixin(TraderMixinBase):
 
         self.ticket_price_type = QComboBox()
         self.ticket_price_type.addItems(["시장가", "지정가"])
-        self.ticket_price_type.currentIndexChanged.connect(self._on_ticket_price_type_changed)
+        self.ticket_price_type.currentIndexChanged.connect(
+            self._on_ticket_price_type_changed
+        )
         form.addRow("가격구분:", self.ticket_price_type)
 
         self.ticket_price = QSpinBox()

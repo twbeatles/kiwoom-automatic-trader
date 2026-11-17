@@ -125,7 +125,9 @@ class APIAccountMixin(TraderMixinBase):
 
             mark_invalid(self.input_app_key, not app_key)
             mark_invalid(self.input_secret, not secret_key)
-            QMessageBox.warning(self, "경고", "API 연동을 위해 App Key와 Secret Key를 입력해주세요.")
+            QMessageBox.warning(
+                self, "경고", "API 연동을 위해 App Key와 Secret Key를 입력해주세요."
+            )
             return
 
         mark_invalid(self.input_app_key, False)
@@ -158,7 +160,9 @@ class APIAccountMixin(TraderMixinBase):
             )
         accounts = rest_client.get_account_list()
         if not accounts:
-            raise RuntimeError("계좌 목록이 비어 있습니다. 계좌 권한/연결 상태를 확인해주세요.")
+            raise RuntimeError(
+                "계좌 목록이 비어 있습니다. 계좌 권한/연결 상태를 확인해주세요."
+            )
         return {
             "auth": auth,
             "rest_client": rest_client,
@@ -193,13 +197,17 @@ class APIAccountMixin(TraderMixinBase):
 
             self._stop_telegram_notifier()
             if self.chk_use_telegram.isChecked():
-                self.telegram = TelegramNotifier(self.input_tg_token.text(), self.input_tg_chat.text())
+                self.telegram = TelegramNotifier(
+                    self.input_tg_token.text(), self.input_tg_chat.text()
+                )
                 self.telegram.send("Kiwoom Trader 연결됨")
         except Exception as exc:
             self._reset_connection_state()
             self._set_connection_status("API 연결 실패", "disconnected")
             self.log(f"API 연결 후처리 실패: {exc}")
-            QMessageBox.warning(self, "연결 실패", f"연결 후처리 중 오류가 발생했습니다.\n{exc}")
+            QMessageBox.warning(
+                self, "연결 실패", f"연결 후처리 중 오류가 발생했습니다.\n{exc}"
+            )
         finally:
             self._finalize_connect_ui()
 
@@ -216,14 +224,27 @@ class APIAccountMixin(TraderMixinBase):
             )
         elif any(token in lower_message for token in ("1501", "api-id", "api id")):
             user_guide = "REST 요청에 api-id(TR 코드)가 없습니다. 최신 버전은 모든 조회/주문 요청에 api-id를 자동 주입합니다."
-        elif any(token in lower_message for token in ("401", "403", "invalid", "unauthorized", "forbidden", "auth")):
+        elif any(
+            token in lower_message
+            for token in ("401", "403", "invalid", "unauthorized", "forbidden", "auth")
+        ):
             user_guide = "인증에 실패했습니다. App Key/Secret Key를 다시 확인해주세요."
-        elif any(token in lower_message for token in ("계좌 목록", "accounts", "empty account")):
+        elif any(
+            token in lower_message
+            for token in ("계좌 목록", "accounts", "empty account")
+        ):
             user_guide = "계좌 목록을 가져오지 못했습니다. API 계좌 권한/상품 신청 상태를 확인해주세요."
-        elif any(token in lower_message for token in ("timeout", "network", "connection", "dns", "timed out")):
-            user_guide = "네트워크 연결에 실패했습니다. 인터넷/방화벽 상태를 확인해주세요."
+        elif any(
+            token in lower_message
+            for token in ("timeout", "network", "connection", "dns", "timed out")
+        ):
+            user_guide = (
+                "네트워크 연결에 실패했습니다. 인터넷/방화벽 상태를 확인해주세요."
+            )
         else:
-            user_guide = "API 연결 중 오류가 발생했습니다. 로그를 확인하고 다시 시도해주세요."
+            user_guide = (
+                "API 연결 중 오류가 발생했습니다. 로그를 확인하고 다시 시도해주세요."
+            )
 
         self.log(f"API 연결 실패: {message}")
         QMessageBox.warning(self, "연결 실패", f"{user_guide}\n\n원인: {message}")
@@ -258,7 +279,9 @@ class APIAccountMixin(TraderMixinBase):
         self._last_profit_sign = None
         if hasattr(self, "_reserved_cash_by_code"):
             self._reserved_cash_by_code.clear()
-        if hasattr(self, "external_positions") and isinstance(self.external_positions, dict):
+        if hasattr(self, "external_positions") and isinstance(
+            self.external_positions, dict
+        ):
             self.external_positions.clear()
         if hasattr(self, "_diagnostics_by_code"):
             self._diagnostics_by_code.clear()
@@ -287,8 +310,12 @@ class APIAccountMixin(TraderMixinBase):
         self._last_account_refresh_ts = now_ts
 
         worker = Worker(self.rest_client.get_account_info, account)
-        worker.signals.result.connect(lambda info, acc=account: self._on_account_info_result(acc, info))
-        worker.signals.error.connect(lambda error, acc=account: self._on_account_info_error(acc, error))
+        worker.signals.result.connect(
+            lambda info, acc=account: self._on_account_info_result(acc, info)
+        )
+        worker.signals.error.connect(
+            lambda error, acc=account: self._on_account_info_error(acc, error)
+        )
         self.threadpool.start(worker)
 
     def _on_account_info_result(self, account: str, info):
@@ -296,7 +323,9 @@ class APIAccountMixin(TraderMixinBase):
         if account != self.current_account or not info:
             return
 
-        available_amount = int(getattr(info, "available_amount", 0) or getattr(info, "deposit", 0) or 0)
+        available_amount = int(
+            getattr(info, "available_amount", 0) or getattr(info, "deposit", 0) or 0
+        )
         total_eval_amount = int(getattr(info, "total_eval_amount", 0) or 0)
         computed_equity = available_amount + max(0, total_eval_amount)
         if computed_equity <= 0:
@@ -316,12 +345,20 @@ class APIAccountMixin(TraderMixinBase):
         # 일일 기준 예수금이 비어 있으면 즉시 확보 (start_trading 시점 정합성 보장)
         if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0:
             cfg = getattr(self, "config", None)
-            basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
-            basis_amount = self.total_equity if basis == "total_equity" else int(self.deposit)
+            basis = str(
+                getattr(
+                    cfg,
+                    "daily_loss_basis",
+                    getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+                )
+            )
+            basis_amount = (
+                self.total_equity if basis == "total_equity" else int(self.deposit)
+            )
             if basis_amount <= 0:
                 basis_amount = int(self.deposit)
             self.daily_initial_deposit = basis_amount
-            
+
         self.lbl_deposit.setText(
             f"예수금(V) {self.virtual_deposit:,} 원 / (실) {self.deposit:,} 원 / 총자산 {self.total_equity:,} 원"
         )
@@ -399,7 +436,10 @@ class APIAccountMixin(TraderMixinBase):
         btn_cancel.clicked.connect(dialog.reject)
         btn_ok.clicked.connect(dialog.accept)
 
-        ok = dialog.exec() == QDialog.DialogCode.Accepted and input_phrase.text().strip() == phrase
+        ok = (
+            dialog.exec() == QDialog.DialogCode.Accepted
+            and input_phrase.text().strip() == phrase
+        )
         timer.stop()
 
         if not ok:

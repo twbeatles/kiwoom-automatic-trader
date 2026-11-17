@@ -4,6 +4,7 @@
 - get_open_orders 가 ka10075 응답을 OpenOrder 리스트로 파싱한다.
 - 파싱 실패/빈 응답 시 예외를 전가하지 않고 빈 리스트를 반환한다.
 """
+
 import unittest
 from typing import cast
 
@@ -26,7 +27,16 @@ class _Client(KiwoomRESTClient):
         self.raise_exc = raise_exc
         self.requested = []
 
-    def _request(self, method, endpoint, tr_code=None, data=None, params=None, cont_yn="N", next_key=""):
+    def _request(
+        self,
+        method,
+        endpoint,
+        tr_code=None,
+        data=None,
+        params=None,
+        cont_yn="N",
+        next_key="",
+    ):
         self.requested.append((method, endpoint, tr_code, data))
         if self.raise_exc is not None:
             raise self.raise_exc
@@ -126,7 +136,12 @@ class TestOpenOrdersRestAdapter(unittest.TestCase):
                 "output": [
                     {"ord_no": "", "stk_cd": "005930", "ord_qty": "1"},  # 주문번호 없음
                     {"ord_no": "O444", "stk_cd": "", "ord_qty": "1"},  # 종목 없음
-                    {"ord_no": "O555", "stk_cd": "005930", "ord_qty": "1", "ord_tp": "1"},
+                    {
+                        "ord_no": "O555",
+                        "stk_cd": "005930",
+                        "ord_qty": "1",
+                        "ord_tp": "1",
+                    },
                 ],
             }
         )

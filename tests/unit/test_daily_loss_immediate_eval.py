@@ -3,6 +3,7 @@
 매도 체결 누적(_add_trade) 직후 _check_daily_loss_limit 가 호출되어,
 다음 timer tick 을 기다리지 않고 daily_loss_triggered 가 True 로 전환되는지 확인.
 """
+
 import unittest
 
 
@@ -35,7 +36,9 @@ class _Harness:
         self.daily_loss_triggered = False
         self.daily_realized_profit = 0
         self.daily_initial_deposit = 1_000_000
-        self.config = type("Cfg", (), {"max_daily_loss": 3.0, "daily_loss_basis": "total_equity"})()
+        self.config = type(
+            "Cfg", (), {"max_daily_loss": 3.0, "daily_loss_basis": "total_equity"}
+        )()
         self.chk_use_risk = _DummyCheck(checked=True)
         self.spin_max_loss = _DummySpin(value=3.0)
         self.stop_called = False
@@ -61,7 +64,13 @@ class _Harness:
             return
         loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
         max_loss_spin = getattr(self, "spin_max_loss", None)
-        max_loss = float(getattr(self.config, "max_daily_loss", max_loss_spin.value() if max_loss_spin else 0))
+        max_loss = float(
+            getattr(
+                self.config,
+                "max_daily_loss",
+                max_loss_spin.value() if max_loss_spin else 0,
+            )
+        )
         if loss_rate <= -max_loss:
             self.daily_loss_triggered = True
             self.log(
@@ -73,9 +82,9 @@ class _Harness:
         """거래내역 추가 + 매도 시 즉시 한도 평가(실제 trade_history.py 와 동일 패턴)."""
         self.trade_history.append(record)
         if record.get("type") == "매도":
-            self.daily_realized_profit = int(getattr(self, "daily_realized_profit", 0) or 0) + int(
-                record.get("profit", 0) or 0
-            )
+            self.daily_realized_profit = int(
+                getattr(self, "daily_realized_profit", 0) or 0
+            ) + int(record.get("profit", 0) or 0)
             check_fn = getattr(self, "_check_daily_loss_limit", None)
             if callable(check_fn):
                 check_fn()

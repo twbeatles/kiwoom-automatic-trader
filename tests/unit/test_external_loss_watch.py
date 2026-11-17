@@ -1,4 +1,5 @@
 """Phase-3: external holding loss watch (alert only, no orders)."""
+
 import unittest
 
 from app.features.trading_session.positions import TradingSessionPositionsMixin

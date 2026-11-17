@@ -1,4 +1,5 @@
 """키움 REST API 확장 메서드 (예수금 상세, 당일 체결, 틱 차트, 지수, VI) 단위 테스트."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -88,8 +89,8 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
                     "exec_tm": "102000",
                     "fee": "90",
                     "tax": "1200",
-                }
-            ]
+                },
+            ],
         }
         mock_post.return_value = mock_resp
 
@@ -131,7 +132,7 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
                     "cntr_tp": "+1",
                     "acc_vol": "500000",
                 }
-            ]
+            ],
         }
         mock_post.return_value = mock_resp
 
@@ -168,7 +169,7 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
                     "base_prc": "70,000",
                     "dev_rt": "7.14",
                 }
-            ]
+            ],
         }
         mock_post.return_value = mock_resp
 

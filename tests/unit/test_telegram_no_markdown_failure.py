@@ -3,6 +3,7 @@
 parse_mode='Markdown' 이 제거되었으므로, 특수문자(_, *, `)가 포함된 메시지도
 data 에 parse_mode 키 없이 text 만 전송되어야 한다.
 """
+
 import unittest
 from unittest.mock import MagicMock, patch
 

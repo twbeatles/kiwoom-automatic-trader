@@ -20,7 +20,9 @@ class TradingSessionTableMixin(TraderMixinBase):
         info = self.universe.get(code, {})
         profit_rate = 0.0
         if info.get("held", 0) > 0 and info.get("buy_price", 0) > 0:
-            profit_rate = (info["current"] - info["buy_price"]) / info["buy_price"] * 100
+            profit_rate = (
+                (info["current"] - info["buy_price"]) / info["buy_price"] * 100
+            )
 
         data = [
             info.get("name", code),
@@ -48,7 +50,10 @@ class TradingSessionTableMixin(TraderMixinBase):
                 if profit_rate > 0:
                     item.setForeground(QColor(table_status_color(_theme, "profit_up")))
                 elif profit_rate < 0:
-                    item.setForeground(QColor(table_status_color(_theme, "profit_down")))
+                    item.setForeground(
+                        QColor(table_status_color(_theme, "profit_down"))
+                    )
+
     def _refresh_table(self):
         if not self.universe or not self._dirty_codes:
             return
@@ -69,19 +74,24 @@ class TradingSessionTableMixin(TraderMixinBase):
 
         if len(self._code_to_row) != len(self.universe):
             self.table.setRowCount(len(self.universe))
-            self._code_to_row = {code: idx for idx, code in enumerate(self.universe.keys())}
+            self._code_to_row = {
+                code: idx for idx, code in enumerate(self.universe.keys())
+            }
 
         self.table.setUpdatesEnabled(False)
         try:
             for code in codes_to_update:
                 row = self._code_to_row.get(code)
                 if row is None:
-                    self._code_to_row = {c: idx for idx, c in enumerate(self.universe.keys())}
+                    self._code_to_row = {
+                        c: idx for idx, c in enumerate(self.universe.keys())
+                    }
                     row = self._code_to_row.get(code)
                 if row is not None:
                     self._update_row(row, code)
         finally:
             self.table.setUpdatesEnabled(True)
+
     def _emergency_liquidate(self):
         """긴급 전체 청산."""
         if not self.is_connected:
@@ -103,7 +113,9 @@ class TradingSessionTableMixin(TraderMixinBase):
             QMessageBox.StandardButton.No,
         )
         if confirm == QMessageBox.StandardButton.Yes:
-            live_guard_required = getattr(self, "_manual_order_live_guard_required", None)
+            live_guard_required = getattr(
+                self, "_manual_order_live_guard_required", None
+            )
             if callable(live_guard_required) and bool(live_guard_required()):
                 confirm_guard = getattr(self, "_confirm_live_trading_guard", None)
                 if callable(confirm_guard) and not bool(confirm_guard()):
@@ -127,6 +139,7 @@ class TradingSessionTableMixin(TraderMixinBase):
             if not submitted[0]:
                 self._cleanup_active_orders("emergency_liquidate")
                 _proceed()
+
     def _submit_emergency_sells(self):
         """긴급청산 매도 제출. 결과는 매도 콜백에서 집계 보고한다."""
         if getattr(self, "_emergency_sells_token", None) is not None:
@@ -173,12 +186,15 @@ class TradingSessionTableMixin(TraderMixinBase):
                 pass
         finally:
             self._emergency_sells_token = None
+
     def _sweep_liquidation_batch(self):
         """장시간 미결착 긴급청산 항목을 타임아웃으로 마감."""
         batch = getattr(self, "_liquidation_batch", None)
         if not isinstance(batch, dict) or not batch:
             return
-        pending = [c for c, v in batch.items() if isinstance(v, dict) and not v.get("settled")]
+        pending = [
+            c for c, v in batch.items() if isinstance(v, dict) and not v.get("settled")
+        ]
         if not pending:
             return
         for code in pending:

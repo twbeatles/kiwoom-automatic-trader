@@ -45,13 +45,20 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
 
         worker = Worker(self.rest_client.get_positions, self.current_account)
         worker.signals.result.connect(
-            lambda positions, codes=request_codes: self._on_position_sync_result(codes, positions)
+            lambda positions, codes=request_codes: self._on_position_sync_result(
+                codes, positions
+            )
         )
-        worker.signals.error.connect(lambda e, codes=request_codes: self._on_position_sync_error(codes, e))
+        worker.signals.error.connect(
+            lambda e, codes=request_codes: self._on_position_sync_error(codes, e)
+        )
         self.threadpool.start(worker)
+
     def _on_position_sync_result(self, code: Iterable[str], positions):
         if positions is None:
-            self._on_position_sync_error(code, RuntimeError("계좌 포지션 조회 결과가 비어 있습니다."))
+            self._on_position_sync_error(
+                code, RuntimeError("계좌 포지션 조회 결과가 비어 있습니다.")
+            )
             return
 
         self._position_sync_pending.discard("__batch__")
@@ -68,9 +75,13 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         positions_by_code = {getattr(pos, "code", ""): pos for pos in positions or []}
         now = datetime.datetime.now()
         self._update_order_health_mode(now)
-        sync_external_positions = getattr(self, "_sync_external_positions_from_account_positions", None)
+        sync_external_positions = getattr(
+            self, "_sync_external_positions_from_account_positions", None
+        )
         if callable(sync_external_positions):
-            sync_external_positions(list(positions or []), rebuild_strategy=False, now_dt=now)
+            sync_external_positions(
+                list(positions or []), rebuild_strategy=False, now_dt=now
+            )
 
         for code_item in target_codes:
             info = self.universe.get(code_item)
@@ -83,7 +94,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 self._sync_failed_codes.discard(code_item)
                 info["sync_failed_reason"] = ""
                 if hasattr(self, "log"):
-                    self.log(f"[복구] {info.get('name', code_item)} 포지션 동기화가 정상 복구되었습니다.")
+                    self.log(
+                        f"[복구] {info.get('name', code_item)} 포지션 동기화가 정상 복구되었습니다."
+                    )
 
             prev_held = int(info.get("held", 0))
             prev_buy_price = int(info.get("buy_price", 0))
@@ -92,7 +105,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
 
             if matched:
                 new_held = max(0, int(getattr(matched, "quantity", 0)))
-                new_available_qty = max(0, int(getattr(matched, "available_qty", new_held)))
+                new_available_qty = max(
+                    0, int(getattr(matched, "available_qty", new_held))
+                )
                 new_buy_price = int(getattr(matched, "buy_price", 0))
                 new_invest_amount = int(getattr(matched, "buy_amount", 0))
             else:
@@ -106,10 +121,16 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
 
             if delta > 0:
                 buy_qty = delta
-                fill_price = self._to_int(exec_event.get("price", 0)) if exec_event.get("side") == "buy" else 0
+                fill_price = (
+                    self._to_int(exec_event.get("price", 0))
+                    if exec_event.get("side") == "buy"
+                    else 0
+                )
                 if fill_price <= 0:
                     fill_price = new_buy_price or int(info.get("current", 0))
-                expected_price = self._to_int(pending.get("expected_price", 0)) if pending else 0
+                expected_price = (
+                    self._to_int(pending.get("expected_price", 0)) if pending else 0
+                )
                 if expected_price <= 0:
                     expected_price = int(info.get("current", 0) or fill_price)
                 self._record_slippage_bps(expected_price, fill_price, code_item)
@@ -132,28 +153,54 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 if self.sound:
                     self.sound.play_buy()
                 # Keep remaining reservation for partial fills; only consume filled portion.
-                pending_state, remaining_qty, reserved_consumed = self._apply_pending_fill(code_item, buy_qty)
-                reserve_amount = reserved_consumed if reserved_consumed > 0 else max(0, expected_price * buy_qty)
-                self._consume_reserved_cash_safe(code_item, amount=reserve_amount, reason="BUY_FILLED_PARTIAL")
+                pending_state, remaining_qty, reserved_consumed = (
+                    self._apply_pending_fill(code_item, buy_qty)
+                )
+                reserve_amount = (
+                    reserved_consumed
+                    if reserved_consumed > 0
+                    else max(0, expected_price * buy_qty)
+                )
+                self._consume_reserved_cash_safe(
+                    code_item, amount=reserve_amount, reason="BUY_FILLED_PARTIAL"
+                )
                 if pending_state == "filled" or remaining_qty <= 0:
-                    self._release_reserved_cash_safe(code_item, reason="BUY_FILLED_DONE", refund=False)
+                    self._release_reserved_cash_safe(
+                        code_item, reason="BUY_FILLED_DONE", refund=False
+                    )
                     self._clear_pending_order(code_item, final_state="filled")
 
             elif delta < 0:
                 sell_qty = -delta
-                fill_price = self._to_int(exec_event.get("price", 0)) if exec_event.get("side") == "sell" else 0
+                fill_price = (
+                    self._to_int(exec_event.get("price", 0))
+                    if exec_event.get("side") == "sell"
+                    else 0
+                )
                 if fill_price <= 0:
                     fill_price = int(info.get("current", 0))
-                expected_price = self._to_int(pending.get("expected_price", 0)) if pending else 0
+                expected_price = (
+                    self._to_int(pending.get("expected_price", 0)) if pending else 0
+                )
                 if expected_price <= 0:
                     expected_price = int(info.get("current", 0) or fill_price)
                 self._record_slippage_bps(expected_price, fill_price, code_item)
                 amount = max(0, fill_price * sell_qty)
-                profit = (fill_price - prev_buy_price) * sell_qty if prev_buy_price > 0 else 0
-                reason = pending.get("reason", "체결동기화") if pending else "체결동기화"
+                profit = (
+                    (fill_price - prev_buy_price) * sell_qty
+                    if prev_buy_price > 0
+                    else 0
+                )
+                reason = (
+                    pending.get("reason", "체결동기화") if pending else "체결동기화"
+                )
                 prev_invest_amount = int(info.get("invest_amount", 0) or 0)
                 if prev_held > 0:
-                    unit_cost = prev_invest_amount / prev_held if prev_invest_amount > 0 else float(prev_buy_price)
+                    unit_cost = (
+                        prev_invest_amount / prev_held
+                        if prev_invest_amount > 0
+                        else float(prev_buy_price)
+                    )
                     cost_decrease = max(0, int(round(unit_cost * sell_qty)))
                 else:
                     cost_decrease = max(0, int(prev_buy_price * sell_qty))
@@ -171,13 +218,21 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                     }
                 )
                 self.strategy.update_consecutive_results(profit > 0)
-                self.strategy.update_market_investment(code_item, amount, is_buy=False, cost_amount=cost_decrease)
-                self.strategy.update_sector_investment(code_item, amount, is_buy=False, cost_amount=cost_decrease)
+                self.strategy.update_market_investment(
+                    code_item, amount, is_buy=False, cost_amount=cost_decrease
+                )
+                self.strategy.update_sector_investment(
+                    code_item, amount, is_buy=False, cost_amount=cost_decrease
+                )
                 if self.sound:
                     self.sound.play_sell() if profit > 0 else self.sound.play_loss()
                 if self.telegram:
-                    self.telegram.send(f"매도 체결: {info.get('name', code_item)} {sell_qty}주 손익: {profit:+,}원")
-                pending_state, remaining_qty, _ = self._apply_pending_fill(code_item, sell_qty)
+                    self.telegram.send(
+                        f"매도 체결: {info.get('name', code_item)} {sell_qty}주 손익: {profit:+,}원"
+                    )
+                pending_state, remaining_qty, _ = self._apply_pending_fill(
+                    code_item, sell_qty
+                )
                 if pending_state == "filled" or remaining_qty <= 0:
                     self._clear_pending_order(code_item, final_state="filled")
 
@@ -201,9 +256,15 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 info["partial_profit_levels"] = set()
                 info["entry_origin"] = "watch"
                 info["time_stop_eligible"] = True
-                if prev_held > 0 and hasattr(self, "chk_use_cooldown") and self.chk_use_cooldown.isChecked():
+                if (
+                    prev_held > 0
+                    and hasattr(self, "chk_use_cooldown")
+                    and self.chk_use_cooldown.isChecked()
+                ):
                     cooldown_minutes = int(self.spin_cooldown_min.value())
-                    info["cooldown_until"] = now + datetime.timedelta(minutes=cooldown_minutes)
+                    info["cooldown_until"] = now + datetime.timedelta(
+                        minutes=cooldown_minutes
+                    )
                     info["status"] = "cooldown"
 
             cooldown_until = info.get("cooldown_until")
@@ -235,9 +296,13 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         else:
             external_positions = getattr(self, "external_positions", {})
             manual_pending_state = getattr(self, "_manual_pending_state", {})
-            held_count = sum(1 for v in self.universe.values() if int(v.get("held", 0)) > 0)
+            held_count = sum(
+                1 for v in self.universe.values() if int(v.get("held", 0)) > 0
+            )
             if isinstance(external_positions, dict):
-                held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
+                held_count += sum(
+                    1 for v in external_positions.values() if int(v.get("held", 0)) > 0
+                )
             pending_buy = sum(
                 1
                 for c, state in self._pending_order_state.items()
@@ -247,9 +312,12 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                     (
                         self.universe.get(c, {})
                         if c in self.universe
-                        else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                        else external_positions.get(c, {})
+                        if isinstance(external_positions, dict)
+                        else {}
                     ).get("held", 0)
-                ) == 0
+                )
+                == 0
             )
             manual_pending_buy = sum(
                 1
@@ -260,11 +328,16 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                     (
                         self.universe.get(c, {})
                         if c in self.universe
-                        else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                        else external_positions.get(c, {})
+                        if isinstance(external_positions, dict)
+                        else {}
                     ).get("held", 0)
-                ) == 0
+                )
+                == 0
             )
-            self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
+            self._holding_or_pending_count = (
+                held_count + pending_buy + manual_pending_buy
+            )
 
         if self._position_sync_batch and not self._position_sync_scheduled:
             self._position_sync_scheduled = True
@@ -273,6 +346,7 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
 
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _on_position_sync_error(self, code: Iterable[str], error: Exception):
         if isinstance(code, str):
             failed_codes: Set[str] = {code} if code else set()
@@ -285,7 +359,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 self._position_sync_batch.add(code)
         else:
             self._position_sync_batch.update(c for c in code if c)
-        self._position_sync_retry_count = int(getattr(self, "_position_sync_retry_count", 0)) + 1
+        self._position_sync_retry_count = (
+            int(getattr(self, "_position_sync_retry_count", 0)) + 1
+        )
         max_retries = max(1, int(getattr(Config, "POSITION_SYNC_MAX_RETRIES", 5)))
 
         for code_item in failed_codes:
@@ -308,7 +384,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                     self._mark_pending_state(code_item, "sync_failed")
                     self._clear_pending_order(code_item, final_state="sync_failed")
                 if side == "buy":
-                    self._release_reserved_cash_safe(code_item, reason="SYNC_FAILED", refund=True)
+                    self._release_reserved_cash_safe(
+                        code_item, reason="SYNC_FAILED", refund=True
+                    )
                 manual_side = str(manual_pending.get("side", ""))
                 if manual_side == "buy":
                     refund_amount = int(manual_pending.get("reserved_cash", 0) or 0)
@@ -345,7 +423,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
             self._position_sync_batch.clear()
             self._position_sync_scheduled = False
             self._position_sync_retry_count = 0
-            self.logger.warning(f"포지션동기화 재시도 초과로 배치를 폐기합니다. ({dropped}건: {error})")
+            self.logger.warning(
+                f"포지션동기화 재시도 초과로 배치를 폐기합니다. ({dropped}건: {error})"
+            )
             recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
             if callable(recompute_count):
                 recompute_count()
@@ -354,9 +434,15 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 external_positions = getattr(self, "external_positions", {})
                 pending_state = getattr(self, "_pending_order_state", {})
                 manual_pending_state = getattr(self, "_manual_pending_state", {})
-                held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
+                held_count = sum(
+                    1 for v in universe.values() if int(v.get("held", 0)) > 0
+                )
                 if isinstance(external_positions, dict):
-                    held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
+                    held_count += sum(
+                        1
+                        for v in external_positions.values()
+                        if int(v.get("held", 0)) > 0
+                    )
                 pending_buy = sum(
                     1
                     for c, state in pending_state.items()
@@ -366,9 +452,12 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                         (
                             universe.get(c, {})
                             if c in universe
-                            else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                            else external_positions.get(c, {})
+                            if isinstance(external_positions, dict)
+                            else {}
                         ).get("held", 0)
-                    ) == 0
+                    )
+                    == 0
                 )
                 manual_pending_buy = sum(
                     1
@@ -379,12 +468,19 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                         (
                             universe.get(c, {})
                             if c in universe
-                            else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                            else external_positions.get(c, {})
+                            if isinstance(external_positions, dict)
+                            else {}
                         ).get("held", 0)
-                    ) == 0
+                    )
+                    == 0
                 )
-                self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
-            if hasattr(self, "sig_update_table") and not hasattr(self, "_ui_flush_timer"):
+                self._holding_or_pending_count = (
+                    held_count + pending_buy + manual_pending_buy
+                )
+            if hasattr(self, "sig_update_table") and not hasattr(
+                self, "_ui_flush_timer"
+            ):
                 self.sig_update_table.emit()
             return
 
@@ -393,7 +489,8 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
             int(getattr(Config, "POSITION_SYNC_BACKOFF_MAX_MS", 5000)),
         )
         delay_ms = min(
-            int(Config.POSITION_SYNC_DEBOUNCE_MS) * (2 ** (self._position_sync_retry_count - 1)),
+            int(Config.POSITION_SYNC_DEBOUNCE_MS)
+            * (2 ** (self._position_sync_retry_count - 1)),
             backoff_cap_ms,
         )
         self.logger.warning(
@@ -402,6 +499,7 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         if self._position_sync_batch and not self._position_sync_scheduled:
             self._position_sync_scheduled = True
             QTimer.singleShot(delay_ms, lambda: self._sync_position_from_account(""))
+
     # =====================================================================
     # ISSUE-001: 성공-빈 동기화 vs 활성 pending 정합 조정
     # =====================================================================
@@ -425,6 +523,7 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 self._schedule_pending_reconcile(code)
         else:
             self._reset_pending_empty_sync(code)
+
     def _schedule_pending_reconcile(self, code: str) -> None:
         """미체결 조회(ka10075)로 브로커 측 주문 실재를 재확인한다."""
         if not bool(getattr(self, "is_running", False)):
@@ -456,11 +555,18 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         inflight.add(code)
         worker = Worker(get_orders, account)
         worker.signals.result.connect(
-            lambda orders, c=code, o=order_no: self._on_pending_reconcile_result(c, o, orders)
+            lambda orders, c=code, o=order_no: self._on_pending_reconcile_result(
+                c, o, orders
+            )
         )
-        worker.signals.error.connect(lambda err, c=code: self._on_pending_reconcile_error(c, err))
+        worker.signals.error.connect(
+            lambda err, c=code: self._on_pending_reconcile_error(c, err)
+        )
         starter(worker)
-    def _on_pending_reconcile_result(self, code: str, expected_order_no: str, orders) -> None:
+
+    def _on_pending_reconcile_result(
+        self, code: str, expected_order_no: str, orders
+    ) -> None:
         inflight = getattr(self, "_pending_reconcile_inflight", None)
         if isinstance(inflight, set):
             inflight.discard(code)
@@ -469,11 +575,19 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         if not self._pending_is_active(pending) or not isinstance(pending, dict):
             self._reset_pending_empty_sync(code)
             return
-        if str(pending.get("order_no", "") or "").strip() != str(expected_order_no or "").strip():
+        if (
+            str(pending.get("order_no", "") or "").strip()
+            != str(expected_order_no or "").strip()
+        ):
             return
-        rows = [o for o in (orders or []) if o is not None] if isinstance(orders, (list, tuple)) else []
+        rows = (
+            [o for o in (orders or []) if o is not None]
+            if isinstance(orders, (list, tuple))
+            else []
+        )
         still_open = any(
-            str(getattr(o, "order_no", "") or "").strip() == str(expected_order_no or "").strip()
+            str(getattr(o, "order_no", "") or "").strip()
+            == str(expected_order_no or "").strip()
             and str(getattr(o, "code", "") or "").strip() == str(code or "").strip()
             for o in rows
         )
@@ -483,13 +597,17 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         if rows:
             self._release_stale_pending(code, "RECONCILED_NOT_OPEN")
         else:
-            self._isolate_stale_pending(code, "미체결 조회에서 주문 미확인(연속 빈 동기화)")
+            self._isolate_stale_pending(
+                code, "미체결 조회에서 주문 미확인(연속 빈 동기화)"
+            )
+
     def _on_pending_reconcile_error(self, code: str, error: Exception) -> None:
         inflight = getattr(self, "_pending_reconcile_inflight", None)
         if isinstance(inflight, set):
             inflight.discard(code)
         if hasattr(self, "logger"):
             self.logger.warning(f"미체결 재조회 실패 [{code}]: {error}")
+
     def _release_stale_pending(self, code: str, reason: str) -> None:
         """브로커에 없는 주문으로 확정 -> pending 해제 + 매수 예약현금 환불."""
         pending_state = getattr(self, "_pending_order_state", {})
@@ -501,7 +619,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         info = universe.get(code) if isinstance(universe, dict) else None
         name = str(info.get("name", code) or code) if isinstance(info, dict) else code
         if side == "buy":
-            self._release_reserved_cash_safe(code, reason=f"STALE_PENDING_{reason}", refund=True)
+            self._release_reserved_cash_safe(
+                code, reason=f"STALE_PENDING_{reason}", refund=True
+            )
         self._clear_pending_order(code)
         self._reset_pending_empty_sync(code)
         if isinstance(info, dict):
@@ -513,9 +633,12 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         if callable(recompute):
             recompute()
         if hasattr(self, "log"):
-            self.log(f"[주문조정] {name} 미체결 주문 미확인으로 pending 해제했습니다. (예약현금 환불)")
+            self.log(
+                f"[주문조정] {name} 미체결 주문 미확인으로 pending 해제했습니다. (예약현금 환불)"
+            )
         if hasattr(self, "sig_update_table") and not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _isolate_stale_pending(self, code: str, reason_text: str) -> None:
         """소멸 확정 불가 -> sync_failed 격리(fail-closed, 매수 예약현금 환불)."""
         pending_state = getattr(self, "_pending_order_state", {})
@@ -524,7 +647,9 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         if isinstance(pending, dict):
             side = str(pending.get("side", "") or "").lower()
         if side == "buy":
-            self._release_reserved_cash_safe(code, reason="STALE_PENDING_SYNC_FAILED", refund=True)
+            self._release_reserved_cash_safe(
+                code, reason="STALE_PENDING_SYNC_FAILED", refund=True
+            )
         self._mark_pending_state(code, "sync_failed")
         self._clear_pending_order(code, final_state="sync_failed")
         self._reset_pending_empty_sync(code)
@@ -542,13 +667,22 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
         failed_codes = getattr(self, "_sync_failed_codes", None)
         if isinstance(failed_codes, set):
             failed_codes.add(code)
-        self._diag_touch_safe(code, sync_status="sync_failed", retry_count=0, last_sync_error=str(reason_text or ""))
-        self._log_sync_fail_once(code, f"[안전차단] {name} 주문 상태 불일치로 자동주문을 차단했습니다. ({reason_text})")
+        self._diag_touch_safe(
+            code,
+            sync_status="sync_failed",
+            retry_count=0,
+            last_sync_error=str(reason_text or ""),
+        )
+        self._log_sync_fail_once(
+            code,
+            f"[안전차단] {name} 주문 상태 불일치로 자동주문을 차단했습니다. ({reason_text})",
+        )
         recompute = getattr(self, "_recompute_holding_or_pending_count", None)
         if callable(recompute):
             recompute()
         if hasattr(self, "sig_update_table") and not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     # =====================================================================
     # Phase-2: 지정가 미체결 자동취소 (STALE_LIMIT_ORDER_CANCEL_SEC, 0이면 비활성)
     # =====================================================================
@@ -580,9 +714,10 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
             if (now_dt - updated).total_seconds() < timeout_sec:
                 continue
             last_cancel = pending.get("cancel_requested_at")
-            if isinstance(last_cancel, datetime.datetime) and (
-                now_dt - last_cancel
-            ).total_seconds() < timeout_sec:
+            if (
+                isinstance(last_cancel, datetime.datetime)
+                and (now_dt - last_cancel).total_seconds() < timeout_sec
+            ):
                 continue
             targets = []
             children = self._pending_children(pending)
@@ -611,11 +746,15 @@ class OrderSyncPositionSyncMixin(TraderMixinBase):
                 starter(worker)
                 requested += 1
         return requested
+
     def _on_stale_cancel_result(self, code: str, result) -> None:
         ok = bool(getattr(result, "success", False))
         detail = "" if ok else str(getattr(result, "message", "") or "")
         if hasattr(self, "log"):
-            self.log(f"[자동취소] {code} 미체결 취소 {'요청됨' if ok else f'실패({detail})'}")
+            self.log(
+                f"[자동취소] {code} 미체결 취소 {'요청됨' if ok else f'실패({detail})'}"
+            )
+
     def _on_stale_cancel_error(self, code: str, error: Exception) -> None:
         if hasattr(self, "log"):
             self.log(f"[자동취소] {code} 취소 요청 오류: {error}")

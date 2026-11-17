@@ -69,7 +69,16 @@ class TestExternalPositionPromotion(unittest.TestCase):
 
         trader._on_position_sync_result(
             {"123456"},
-            [Position(code="123456", name="외부종목", quantity=2, available_qty=2, buy_price=1000, buy_amount=2000)],
+            [
+                Position(
+                    code="123456",
+                    name="외부종목",
+                    quantity=2,
+                    available_qty=2,
+                    buy_price=1000,
+                    buy_amount=2000,
+                )
+            ],
         )
 
         self.assertIn("123456", trader.external_positions)

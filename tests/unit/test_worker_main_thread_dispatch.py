@@ -22,10 +22,14 @@ def test_result_and_finished_run_on_gui_thread_after_worker_is_released(qapp):
 
     worker = Worker(task)
     worker.signals.result.connect(
-        lambda value: calls.append(("result", value, QThread.currentThread() == qapp.thread()))
+        lambda value: calls.append(
+            ("result", value, QThread.currentThread() == qapp.thread())
+        )
     )
     worker.signals.finished.connect(
-        lambda value: calls.append(("finished", value, QThread.currentThread() == qapp.thread()))
+        lambda value: calls.append(
+            ("finished", value, QThread.currentThread() == qapp.thread())
+        )
     )
     signals_ref = weakref.ref(worker.signals)
     pool.start(worker)
@@ -79,7 +83,9 @@ def test_account_refresh_lambda_updates_ui_on_gui_thread(qapp, fails):
     trader._last_account_refresh_ts = 0
     trader.threadpool = QThreadPool()
     trader.rest_client = MagicMock()
-    info = SimpleNamespace(available_amount=1000, total_eval_amount=2000, total_profit=50)
+    info = SimpleNamespace(
+        available_amount=1000, total_eval_amount=2000, total_profit=50
+    )
     trader.rest_client.get_account_info.return_value = info
     trader.logger = MagicMock()
     if fails:

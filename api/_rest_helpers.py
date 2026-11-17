@@ -55,7 +55,9 @@ def _payload_dict(result: Optional[Dict[str, Any]], *keys: str) -> Dict[str, Any
     return result
 
 
-def _payload_records(result: Optional[Dict[str, Any]], *keys: str) -> List[Dict[str, Any]]:
+def _payload_records(
+    result: Optional[Dict[str, Any]], *keys: str
+) -> List[Dict[str, Any]]:
     if not isinstance(result, dict):
         return []
     for key in keys:

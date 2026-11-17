@@ -30,7 +30,9 @@ class TestBacktestRunner(unittest.TestCase):
             )
 
             bars = load_backtest_bars_csv(csv_path)
-            result = run_backtest_from_files(csv_path, config_values={"commission_bps": 0, "slippage_bps": 0})
+            result = run_backtest_from_files(
+                csv_path, config_values={"commission_bps": 0, "slippage_bps": 0}
+            )
             serialized = backtest_result_to_dict(result)
 
         self.assertEqual(len(bars), 7)

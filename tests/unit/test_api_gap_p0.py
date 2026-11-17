@@ -8,6 +8,7 @@ Covered gaps:
 - WS ka10173 조건검색 실시간 등록 / ka10174 실시간 해제
 - WS REAL `0s` 장시작시간 구독 + get_market_status 스냅샷 연동
 """
+
 import asyncio
 import json
 import logging
@@ -19,27 +20,62 @@ from api.rest_client import KiwoomRESTClient
 from api.websocket_client import KiwoomWebSocketClient
 
 PRE_EXISTING_REST_METHODS = [
-    "__init__", "_condition_ws", "_create_session", "_index_market_tp",
-    "_order_no_from_result", "_parse_market_type", "_parse_order_side",
-    "_rank_market_tp", "_rate_limit", "_request", "_stk_cd",
-    "buy_limit", "buy_market", "cancel_order",
-    "get_account_info", "get_account_list", "get_condition_list",
-    "get_daily_chart", "get_deposit_detail", "get_executed_orders",
-    "get_fluctuation_ranking", "get_index_quote", "get_investor_trading",
-    "get_market_indexes", "get_market_status", "get_minute_chart",
-    "get_open_orders", "get_order_book", "get_positions",
-    "get_program_trading", "get_stock_name", "get_stock_quote",
-    "get_tick_chart", "get_vi_status", "get_volume_ranking",
-    "get_weekly_chart", "modify_order", "search_by_condition",
-    "sell_limit", "sell_market", "send_order", "supports_open_orders",
+    "__init__",
+    "_condition_ws",
+    "_create_session",
+    "_index_market_tp",
+    "_order_no_from_result",
+    "_parse_market_type",
+    "_parse_order_side",
+    "_rank_market_tp",
+    "_rate_limit",
+    "_request",
+    "_stk_cd",
+    "buy_limit",
+    "buy_market",
+    "cancel_order",
+    "get_account_info",
+    "get_account_list",
+    "get_condition_list",
+    "get_daily_chart",
+    "get_deposit_detail",
+    "get_executed_orders",
+    "get_fluctuation_ranking",
+    "get_index_quote",
+    "get_investor_trading",
+    "get_market_indexes",
+    "get_market_status",
+    "get_minute_chart",
+    "get_open_orders",
+    "get_order_book",
+    "get_positions",
+    "get_program_trading",
+    "get_stock_name",
+    "get_stock_quote",
+    "get_tick_chart",
+    "get_vi_status",
+    "get_volume_ranking",
+    "get_weekly_chart",
+    "modify_order",
+    "search_by_condition",
+    "sell_limit",
+    "sell_market",
+    "send_order",
+    "supports_open_orders",
 ]
 
 NEW_REST_METHODS = [
-    "get_realized_pnl", "get_realized_pnl_by_stock",
-    "get_realized_pnl_by_stock_period", "_parse_stock_pnl_row",
-    "get_stock_info_detail", "get_sector_code_list", "get_member_list",
-    "get_broker_stock_trend", "request_condition_realtime",
-    "stop_condition_realtime", "_parse_condition_stock_rows",
+    "get_realized_pnl",
+    "get_realized_pnl_by_stock",
+    "get_realized_pnl_by_stock_period",
+    "_parse_stock_pnl_row",
+    "get_stock_info_detail",
+    "get_sector_code_list",
+    "get_member_list",
+    "get_broker_stock_trend",
+    "request_condition_realtime",
+    "stop_condition_realtime",
+    "_parse_condition_stock_rows",
 ]
 
 
@@ -98,19 +134,21 @@ class TestRealizedPnlAdapters(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_get_realized_pnl_uses_ka10074(self, mock_post):
-        mock_post.return_value = _json_ok({
-            "return_code": 0,
-            "dt_rlzt_pl": [
-                {
-                    "dt": "20260924",
-                    "buy_amt": "1,000,000",
-                    "sell_amt": "1,100,000",
-                    "tdy_sell_pl": "100,000",
-                    "tdy_trde_cmsn": "1,000",
-                    "tdy_trde_tax": "2,000",
-                }
-            ],
-        })
+        mock_post.return_value = _json_ok(
+            {
+                "return_code": 0,
+                "dt_rlzt_pl": [
+                    {
+                        "dt": "20260924",
+                        "buy_amt": "1,000,000",
+                        "sell_amt": "1,100,000",
+                        "tdy_sell_pl": "100,000",
+                        "tdy_trde_cmsn": "1,000",
+                        "tdy_trde_tax": "2,000",
+                    }
+                ],
+            }
+        )
 
         rows = self.client.get_realized_pnl("12345678", "20260901", "20260924")
 
@@ -136,22 +174,24 @@ class TestRealizedPnlAdapters(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_get_realized_pnl_by_stock_uses_ka10072(self, mock_post):
-        mock_post.return_value = _json_ok({
-            "return_code": 0,
-            "dt_stk_dly_rlzt_pl": [
-                {
-                    "stk_cd": "005930",
-                    "stk_nm": "삼성전자",
-                    "cntr_qty": "10",
-                    "buy_uv": "70,000",
-                    "cntr_pric": "69,000",
-                    "tdy_sell_pl": "-10,000",
-                    "pl_rt": "-1.43",
-                    "tdy_trde_cmsn": "500",
-                    "tdy_trde_tax": "300",
-                }
-            ],
-        })
+        mock_post.return_value = _json_ok(
+            {
+                "return_code": 0,
+                "dt_stk_dly_rlzt_pl": [
+                    {
+                        "stk_cd": "005930",
+                        "stk_nm": "삼성전자",
+                        "cntr_qty": "10",
+                        "buy_uv": "70,000",
+                        "cntr_pric": "69,000",
+                        "tdy_sell_pl": "-10,000",
+                        "pl_rt": "-1.43",
+                        "tdy_trde_cmsn": "500",
+                        "tdy_trde_tax": "300",
+                    }
+                ],
+            }
+        )
 
         rows = self.client.get_realized_pnl_by_stock("12345678", "005930", "20260924")
 
@@ -172,7 +212,9 @@ class TestRealizedPnlAdapters(unittest.TestCase):
     def test_get_realized_pnl_by_stock_period_uses_ka10073(self, mock_post):
         mock_post.return_value = _json_ok({"return_code": 0, "output": []})
 
-        rows = self.client.get_realized_pnl_by_stock_period("12345678", "005930", "20260901", "20260924")
+        rows = self.client.get_realized_pnl_by_stock_period(
+            "12345678", "005930", "20260901", "20260924"
+        )
 
         self.assertEqual(rows, [])
         headers = mock_post.call_args[1]["headers"]
@@ -189,30 +231,33 @@ class TestBrokerStockTrend(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_get_broker_stock_trend_uses_ka10078(self, mock_post):
-        mock_post.return_value = _json_ok({
-            "return_code": 0,
-            "sec_stk_trde_trend": [
-                {
-                    "dt": "20260924",
-                    "cur_prc": "70,000",
-                    "pred_pre": "-500",
-                    "flu_rt": "-0.71",
-                    "acc_trde_qty": "123456",
-                    "netprps_qty": "1000",
-                    "buy_qty": "5000",
-                    "sell_qty": "4000",
-                },
-                {
-                    "dt": "20260923",
-                    "cur_prc": "70500",
-                    "buy_qty": "3000",
-                    "sell_qty": "1000",
-                },
-            ],
-        })
+        mock_post.return_value = _json_ok(
+            {
+                "return_code": 0,
+                "sec_stk_trde_trend": [
+                    {
+                        "dt": "20260924",
+                        "cur_prc": "70,000",
+                        "pred_pre": "-500",
+                        "flu_rt": "-0.71",
+                        "acc_trde_qty": "123456",
+                        "netprps_qty": "1000",
+                        "buy_qty": "5000",
+                        "sell_qty": "4000",
+                    },
+                    {
+                        "dt": "20260923",
+                        "cur_prc": "70500",
+                        "buy_qty": "3000",
+                        "sell_qty": "1000",
+                    },
+                ],
+            }
+        )
 
         rows = self.client.get_broker_stock_trend(
-            "005930", member_code="039", start_date="20260923", end_date="20260924")
+            "005930", member_code="039", start_date="20260923", end_date="20260924"
+        )
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["date"], "20260924")
@@ -240,22 +285,24 @@ class TestStockInfoAdapters(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_get_stock_info_detail_uses_ka10100(self, mock_post):
-        mock_post.return_value = _json_ok({
-            "return_code": 0,
-            "code": "005930",
-            "name": "삼성전자",
-            "listCount": "5,964,978,686",
-            "auditInfo": "정상",
-            "regDay": "19750611",
-            "lastPrice": "70,000",
-            "state": "정상",
-            "marketCode": "KRX",
-            "marketName": "유가증권",
-            "upName": "전기전자",
-            "companyClassName": "대형주",
-            "orderWarning": "",
-            "nxtEnable": "Y",
-        })
+        mock_post.return_value = _json_ok(
+            {
+                "return_code": 0,
+                "code": "005930",
+                "name": "삼성전자",
+                "listCount": "5,964,978,686",
+                "auditInfo": "정상",
+                "regDay": "19750611",
+                "lastPrice": "70,000",
+                "state": "정상",
+                "marketCode": "KRX",
+                "marketName": "유가증권",
+                "upName": "전기전자",
+                "companyClassName": "대형주",
+                "orderWarning": "",
+                "nxtEnable": "Y",
+            }
+        )
 
         info = self.client.get_stock_info_detail("005930")
 
@@ -276,12 +323,19 @@ class TestStockInfoAdapters(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_get_sector_code_list_uses_ka10101(self, mock_post):
-        mock_post.return_value = _json_ok({
-            "return_code": 0,
-            "list": [
-                {"marketCode": "KRX", "code": "001", "name": "종합", "group": "지수"},
-            ],
-        })
+        mock_post.return_value = _json_ok(
+            {
+                "return_code": 0,
+                "list": [
+                    {
+                        "marketCode": "KRX",
+                        "code": "001",
+                        "name": "종합",
+                        "group": "지수",
+                    },
+                ],
+            }
+        )
 
         rows = self.client.get_sector_code_list("0")
 
@@ -295,12 +349,14 @@ class TestStockInfoAdapters(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_get_member_list_uses_ka10102(self, mock_post):
-        mock_post.return_value = _json_ok({
-            "return_code": 0,
-            "list": [
-                {"code": "039", "name": "키움증권", "gb": "국내"},
-            ],
-        })
+        mock_post.return_value = _json_ok(
+            {
+                "return_code": 0,
+                "list": [
+                    {"code": "039", "name": "키움증권", "gb": "국내"},
+                ],
+            }
+        )
 
         rows = self.client.get_member_list()
 
@@ -322,7 +378,15 @@ class TestConditionRealtimeRest(unittest.TestCase):
         fake_ws.request_once = MagicMock()
         fake_ws.request_once.return_value = {
             "trnm": "CNSRREQ",
-            "data": [{"9001": "005930", "302": "삼성전자", "10": "70000", "12": "1.5", "13": "1000"}],
+            "data": [
+                {
+                    "9001": "005930",
+                    "302": "삼성전자",
+                    "10": "70000",
+                    "12": "1.5",
+                    "13": "1000",
+                }
+            ],
         }
         self.client.ws_client = fake_ws
 
@@ -361,7 +425,9 @@ class TestMarketStatusWebSocket(unittest.TestCase):
         ws.subscribe_market_status(codes=["000"])
 
         self.assertIn("market_status_000", ws._subscriptions)
-        payload = ws._build_reg_payload(["000"], ws.REAL_TYPE["MARKET_STATUS"], register=True)
+        payload = ws._build_reg_payload(
+            ["000"], ws.REAL_TYPE["MARKET_STATUS"], register=True
+        )
         self.assertEqual(payload["trnm"], "REG")
         self.assertEqual(payload["data"], [{"item": ["000"], "type": ["0s"]}])
 
@@ -390,10 +456,16 @@ class TestMarketStatusWebSocket(unittest.TestCase):
         seen = []
         ws._condition_realtime["4"] = seen.append
 
-        asyncio.run(ws._handle_message(json.dumps({
-            "trnm": "CNSRREQ",
-            "data": [{"seq": "4", "9001": "005930"}],
-        })))
+        asyncio.run(
+            ws._handle_message(
+                json.dumps(
+                    {
+                        "trnm": "CNSRREQ",
+                        "data": [{"seq": "4", "9001": "005930"}],
+                    }
+                )
+            )
+        )
 
         self.assertEqual(len(seen), 1)
         self.assertEqual(seen[0]["9001"], "005930")
@@ -431,7 +503,9 @@ class TestMarketStatusRestIntegration(unittest.TestCase):
         client = _make_client()
         fake_ws = MagicMock()
         fake_ws.get_market_status_snapshot.return_value = {
-            "trading_status": "1", "source": "websocket_0s"}
+            "trading_status": "1",
+            "source": "websocket_0s",
+        }
         client.ws_client = fake_ws
         self.assertEqual(client.get_market_status()["trading_status"], "1")
 
@@ -447,12 +521,14 @@ class TestRestAdditiveParity(unittest.TestCase):
     def test_pre_existing_42_methods_intact(self):
         for name in PRE_EXISTING_REST_METHODS:
             self.assertTrue(
-                hasattr(KiwoomRESTClient, name), f"missing pre-existing: {name}")
+                hasattr(KiwoomRESTClient, name), f"missing pre-existing: {name}"
+            )
 
     def test_new_gap_methods_present(self):
         for name in NEW_REST_METHODS:
             self.assertTrue(
-                hasattr(KiwoomRESTClient, name), f"missing new gap adapter: {name}")
+                hasattr(KiwoomRESTClient, name), f"missing new gap adapter: {name}"
+            )
 
 
 if __name__ == "__main__":

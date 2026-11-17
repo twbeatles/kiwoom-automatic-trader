@@ -4,20 +4,34 @@ import unittest
 from app.support.intel_timeline import build_intel_timeline, timeline_row
 
 
-def _event(ts, symbol="005930", event_type="news_spike", score=10.0, summary="뉴스 급등"):
+def _event(
+    ts, symbol="005930", event_type="news_spike", score=10.0, summary="뉴스 급등"
+):
     return {
-        "ts": ts, "scope": "symbol", "symbol": symbol, "source": "news",
-        "event_type": event_type, "score": score, "summary": summary,
-        "blocking": False, "event_id": f"e-{ts}",
+        "ts": ts,
+        "scope": "symbol",
+        "symbol": symbol,
+        "source": "news",
+        "event_type": event_type,
+        "score": score,
+        "summary": summary,
+        "blocking": False,
+        "event_id": f"e-{ts}",
         "payload": {"action_policy": "allow", "exit_policy": "none"},
     }
 
 
 def _audit(ts, symbol="005930", allowed=True, reason="가드 통과"):
     return {
-        "ts": ts, "symbol": symbol, "name": "삼성전자", "allowed": allowed,
-        "reason": reason, "quantity": 1, "action_policy": "allow",
-        "exit_policy": "none", "market_intel": {"status": "fresh", "last_event_id": "e-1"},
+        "ts": ts,
+        "symbol": symbol,
+        "name": "삼성전자",
+        "allowed": allowed,
+        "reason": reason,
+        "quantity": 1,
+        "action_policy": "allow",
+        "exit_policy": "none",
+        "market_intel": {"status": "fresh", "last_event_id": "e-1"},
     }
 
 
@@ -27,9 +41,14 @@ class TestIntelTimeline(unittest.TestCase):
         audits = [_audit("2026-09-25T09:30:00", allowed=False, reason="차단")]
         entries = build_intel_timeline(events, audits)
         self.assertEqual(len(entries), 3)
-        self.assertEqual([e["ts_text"] for e in entries], [
-            "2026-09-25T09:00:00", "2026-09-25T09:30:00", "2026-09-25T10:00:00",
-        ])
+        self.assertEqual(
+            [e["ts_text"] for e in entries],
+            [
+                "2026-09-25T09:00:00",
+                "2026-09-25T09:30:00",
+                "2026-09-25T10:00:00",
+            ],
+        )
         self.assertEqual([e["kind"] for e in entries], ["event", "audit", "event"])
         row = timeline_row(entries[1])
         self.assertEqual(len(row), 5)
@@ -97,7 +116,9 @@ class TestIntelTimeline(unittest.TestCase):
 
         class Harness:
             _refresh_intel_timeline = MarketIntelViewsMixin._refresh_intel_timeline
-            _render_selected_intel_timeline_detail = MarketIntelViewsMixin._render_selected_intel_timeline_detail
+            _render_selected_intel_timeline_detail = (
+                MarketIntelViewsMixin._render_selected_intel_timeline_detail
+            )
 
             def __init__(self):
                 self.market_replay_timeline_table = _Table()
@@ -111,7 +132,10 @@ class TestIntelTimeline(unittest.TestCase):
         )
         self.assertEqual(harness.market_replay_timeline_table.rows, 2)
         self.assertEqual(len(harness._market_replay_timeline_entries), 2)
-        self.assertIn("선택된 타임라인 항목이 없습니다.", harness.market_replay_timeline_detail_panel.text)
+        self.assertIn(
+            "선택된 타임라인 항목이 없습니다.",
+            harness.market_replay_timeline_detail_panel.text,
+        )
 
 
 if __name__ == "__main__":

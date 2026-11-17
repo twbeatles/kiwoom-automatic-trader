@@ -131,7 +131,9 @@ class TestWorkspaceRailWiring(unittest.TestCase):
         lst = _top_list(host.fluent_nav)
         # 실제 마우스 클릭처럼 레일 선택이 먼저 바뀌었다고 가정
         lst.setCurrentRow(3)
-        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.No
+        ):
             lst.itemClicked.emit(lst.item(3))
         self.assertEqual(host.main_tabs.currentIndex(), 0)
         self.assertEqual(host.fluent_nav.current(), 0)
@@ -139,7 +141,9 @@ class TestWorkspaceRailWiring(unittest.TestCase):
     def test_running_allow_moves_both(self):
         host = _host(running=True)
         lst = _top_list(host.fluent_nav)
-        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes
+        ):
             lst.itemClicked.emit(lst.item(1))
         self.assertEqual(host.main_tabs.currentIndex(), 1)
         self.assertEqual(host.fluent_nav.current(), 1)

@@ -1,4 +1,4 @@
-﻿"""Simple local performance smoke test for strategy/UI sync paths."""
+"""Simple local performance smoke test for strategy/UI sync paths."""
 
 import sys
 import time

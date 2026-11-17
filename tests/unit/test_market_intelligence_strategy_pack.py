@@ -80,7 +80,9 @@ class TestMarketIntelligenceStrategyPack(unittest.TestCase):
         }
         sm = StrategyManager(trader, cfg)
 
-        passed, conditions, metrics = sm.evaluate_buy_conditions("005930", now_ts=1000.0)
+        passed, conditions, metrics = sm.evaluate_buy_conditions(
+            "005930", now_ts=1000.0
+        )
 
         self.assertFalse(passed)
         self.assertFalse(conditions["risk:news_risk_guard"])
@@ -93,7 +95,9 @@ class TestMarketIntelligenceStrategyPack(unittest.TestCase):
         cfg.strategy_pack = dict(Config.DEFAULT_STRATEGY_PACK)
         sm = StrategyManager(trader, cfg)
 
-        passed, conditions, _metrics = sm.evaluate_buy_conditions("005930", now_ts=2000.0)
+        passed, conditions, _metrics = sm.evaluate_buy_conditions(
+            "005930", now_ts=2000.0
+        )
 
         self.assertFalse(passed)
         self.assertIn("risk:news_risk_guard", conditions)
@@ -112,7 +116,9 @@ class TestMarketIntelligenceStrategyPack(unittest.TestCase):
         }
         sm = StrategyManager(trader, cfg)
 
-        passed, conditions, metrics = sm.evaluate_buy_conditions("005930", now_ts=2000.0)
+        passed, conditions, metrics = sm.evaluate_buy_conditions(
+            "005930", now_ts=2000.0
+        )
 
         self.assertIsInstance(passed, bool)
         self.assertTrue(conditions["filter:theme_heat_filter"])

@@ -88,7 +88,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_ts_start.setRange(0.5, 20)
         self.spin_ts_start.setValue(Config.DEFAULT_TS_START)
         self.spin_ts_start.setSuffix("%")
-        self.spin_ts_start.setToolTip("수익률이 이 기준을 넘으면 추적 손절이 시작됩니다.")
+        self.spin_ts_start.setToolTip(
+            "수익률이 이 기준을 넘으면 추적 손절이 시작됩니다."
+        )
         layout.addWidget(self.spin_ts_start, 1, 5)
 
         layout.addWidget(QLabel("추적 손절 폭:"), 2, 0)
@@ -107,7 +109,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_loss.setToolTip("매수 후 손실이 이 기준을 넘으면 손절합니다.")
         layout.addWidget(self.spin_loss, 2, 3)
 
-        note_label = QLabel("초보자 권장: 투자 비중은 낮게 시작하고, 기본값에서 하나씩만 조절하세요.")
+        note_label = QLabel(
+            "초보자 권장: 투자 비중은 낮게 시작하고, 기본값에서 하나씩만 조절하세요."
+        )
         note_label.setWordWrap(True)
         mark_secondary(note_label)
         layout.addWidget(note_label, 3, 0, 1, 7)
@@ -115,6 +119,7 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         outer.addWidget(basic_group)
         outer.addStretch()
         return widget
+
     def _create_advanced_tab(self):
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
@@ -257,7 +262,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             DAILY_LOSS_BASIS_CHOICES,
             str(getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")),
         )
-        self.combo_daily_loss_basis.setToolTip("일일 손실 한도를 총자산 기준으로 볼지, 주문가능금액 기준으로 볼지 고릅니다.")
+        self.combo_daily_loss_basis.setToolTip(
+            "일일 손실 한도를 총자산 기준으로 볼지, 주문가능금액 기준으로 볼지 고릅니다."
+        )
         g2.addWidget(self.combo_daily_loss_basis, 0, 5)
 
         # ATR 손절
@@ -294,7 +301,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
 
         # 동적 포지션 사이징
         self.chk_use_dynamic_sizing = QCheckBox("연속 손실 시 비중 축소")
-        self.chk_use_dynamic_sizing.setToolTip("연속 손실 시 투자금 자동 축소 (Anti-Martingale)")
+        self.chk_use_dynamic_sizing.setToolTip(
+            "연속 손실 시 투자금 자동 축소 (Anti-Martingale)"
+        )
         g2.addWidget(self.chk_use_dynamic_sizing, 3, 0, 1, 2)
 
         # ATR 포지션 사이징
@@ -351,7 +360,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g3.addWidget(self.chk_use_gap, 2, 2, 1, 2)
 
         self.chk_use_time_strategy = QCheckBox("시간대별 전략 사용")
-        self.chk_use_time_strategy.setToolTip("09:00-09:30 공격적, 09:30-14:30 기본, 14:30- 보수적")
+        self.chk_use_time_strategy.setToolTip(
+            "09:00-09:30 공격적, 09:30-14:30 기본, 14:30- 보수적"
+        )
         g3.addWidget(self.chk_use_time_strategy, 3, 0, 1, 2)
 
         self.chk_use_breakout_confirm = QCheckBox("돌파 확인 후 진입")
@@ -386,7 +397,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g4.setSpacing(10)
 
         self.chk_use_split = QCheckBox("분할 매수")
-        self.chk_use_split.setToolTip("지정가 우선 주문 방식에서만 동작하며, 분할 가격으로 즉시 다건 제출됩니다.")
+        self.chk_use_split.setToolTip(
+            "지정가 우선 주문 방식에서만 동작하며, 분할 가격으로 즉시 다건 제출됩니다."
+        )
         g4.addWidget(self.chk_use_split, 0, 0)
         g4.addWidget(QLabel("나눌 횟수:"), 0, 1)
         self.spin_split_count = NoScrollSpinBox()
@@ -451,7 +464,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             EXECUTION_MODE_CHOICES,
             getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
         )
-        self.combo_execution_mode.setToolTip("신호 전용은 주문 API를 호출하지 않고 감사 로그만 남깁니다.")
+        self.combo_execution_mode.setToolTip(
+            "신호 전용은 주문 API를 호출하지 않고 감사 로그만 남깁니다."
+        )
         g4.addWidget(self.combo_execution_mode, 3, 1, 1, 2)
 
         grp_order.setLayout(g4)
@@ -473,17 +488,25 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
 
         g5.addWidget(QLabel("포트폴리오 방식:"), 0, 3)
         self.combo_portfolio_mode = NoScrollComboBox()
-        populate_combo(self.combo_portfolio_mode, PORTFOLIO_MODE_CHOICES, Config.DEFAULT_PORTFOLIO_MODE)
+        populate_combo(
+            self.combo_portfolio_mode,
+            PORTFOLIO_MODE_CHOICES,
+            Config.DEFAULT_PORTFOLIO_MODE,
+        )
         g5.addWidget(self.combo_portfolio_mode, 0, 4)
 
         self.chk_short_enabled = QCheckBox("공매도 허용 (모의/백테스트 전용)")
-        self.chk_short_enabled.setToolTip("SHORT 전략은 현재 자동매매에서 지원하지 않으며, 백테스트/연구용 표기입니다.")
+        self.chk_short_enabled.setToolTip(
+            "SHORT 전략은 현재 자동매매에서 지원하지 않으며, 백테스트/연구용 표기입니다."
+        )
         self.chk_short_enabled.setChecked(Config.DEFAULT_SHORT_ENABLED)
         g5.addWidget(self.chk_short_enabled, 1, 0, 1, 2)
 
         g5.addWidget(QLabel("운용 자산 범위:"), 1, 2)
         self.combo_asset_scope = NoScrollComboBox()
-        populate_combo(self.combo_asset_scope, ASSET_SCOPE_CHOICES, Config.DEFAULT_ASSET_SCOPE)
+        populate_combo(
+            self.combo_asset_scope, ASSET_SCOPE_CHOICES, Config.DEFAULT_ASSET_SCOPE
+        )
         g5.addWidget(self.combo_asset_scope, 1, 3, 1, 2)
 
         g5.addWidget(QLabel("주문 방식:"), 2, 0)
@@ -507,35 +530,51 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g5.addWidget(QLabel("조회 기간(일):"), 2, 4)
         self.spin_backtest_lookback = NoScrollSpinBox()
         self.spin_backtest_lookback.setRange(60, 5000)
-        self.spin_backtest_lookback.setValue(int(Config.DEFAULT_BACKTEST_CONFIG.get("lookback_days", 365)))
+        self.spin_backtest_lookback.setValue(
+            int(Config.DEFAULT_BACKTEST_CONFIG.get("lookback_days", 365))
+        )
         g5.addWidget(self.spin_backtest_lookback, 2, 5)
 
         g5.addWidget(QLabel("수수료(bp):"), 3, 0)
         self.spin_backtest_commission = NoScrollDoubleSpinBox()
         self.spin_backtest_commission.setRange(0.0, 50.0)
-        self.spin_backtest_commission.setValue(float(Config.DEFAULT_BACKTEST_CONFIG.get("commission_bps", 5.0)))
+        self.spin_backtest_commission.setValue(
+            float(Config.DEFAULT_BACKTEST_CONFIG.get("commission_bps", 5.0))
+        )
         g5.addWidget(self.spin_backtest_commission, 3, 1)
 
         g5.addWidget(QLabel("슬리피지(bp):"), 3, 2)
         self.spin_backtest_slippage = NoScrollDoubleSpinBox()
         self.spin_backtest_slippage.setRange(0.0, 50.0)
-        self.spin_backtest_slippage.setValue(float(Config.DEFAULT_BACKTEST_CONFIG.get("slippage_bps", 3.0)))
+        self.spin_backtest_slippage.setValue(
+            float(Config.DEFAULT_BACKTEST_CONFIG.get("slippage_bps", 3.0))
+        )
         g5.addWidget(self.spin_backtest_slippage, 3, 3)
 
         self.chk_feature_modular_pack = QCheckBox("모듈형 전략 엔진 사용")
-        self.chk_feature_modular_pack.setChecked(bool(Config.FEATURE_FLAGS.get("use_modular_strategy_pack", True)))
+        self.chk_feature_modular_pack.setChecked(
+            bool(Config.FEATURE_FLAGS.get("use_modular_strategy_pack", True))
+        )
         g5.addWidget(self.chk_feature_modular_pack, 4, 0, 1, 2)
         self.chk_feature_backtest = QCheckBox("백테스트 기능 사용")
-        self.chk_feature_backtest.setToolTip("CSV/JSONL 입력을 이벤트 드리븐 백테스트 엔진으로 실행합니다.")
-        self.chk_feature_backtest.setChecked(bool(Config.FEATURE_FLAGS.get("enable_backtest", True)))
+        self.chk_feature_backtest.setToolTip(
+            "CSV/JSONL 입력을 이벤트 드리븐 백테스트 엔진으로 실행합니다."
+        )
+        self.chk_feature_backtest.setChecked(
+            bool(Config.FEATURE_FLAGS.get("enable_backtest", True))
+        )
         g5.addWidget(self.chk_feature_backtest, 4, 2)
         self.chk_feature_external_data = QCheckBox("외부 데이터 사용")
-        self.chk_feature_external_data.setChecked(bool(Config.FEATURE_FLAGS.get("enable_external_data", True)))
+        self.chk_feature_external_data.setChecked(
+            bool(Config.FEATURE_FLAGS.get("enable_external_data", True))
+        )
         g5.addWidget(self.chk_feature_external_data, 4, 3, 1, 2)
 
         g5.addWidget(QLabel("가격 CSV:"), 5, 0)
         self.input_backtest_bars_path = QLineEdit()
-        self.input_backtest_bars_path.setPlaceholderText("symbol,ts,open,high,low,close,volume")
+        self.input_backtest_bars_path.setPlaceholderText(
+            "symbol,ts,open,high,low,close,volume"
+        )
         g5.addWidget(self.input_backtest_bars_path, 5, 1, 1, 4)
         self.btn_backtest_bars_browse = QPushButton("찾기")
         self.btn_backtest_bars_browse.clicked.connect(self._select_backtest_bars_file)
@@ -565,7 +604,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g5.addWidget(self.backtest_metrics_table, 8, 0, 1, 6)
 
         self.backtest_trades_table = QTableWidget(0, 5)
-        self.backtest_trades_table.setHorizontalHeaderLabels(["시각", "종목", "구분", "가격", "수량"])
+        self.backtest_trades_table.setHorizontalHeaderLabels(
+            ["시각", "종목", "구분", "가격", "수량"]
+        )
         self.backtest_trades_table.setMaximumHeight(130)
         g5.addWidget(self.backtest_trades_table, 9, 0, 1, 6)
 
@@ -585,7 +626,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g7.setSpacing(10)
 
         self.chk_use_shock_guard = QCheckBox("시장 쇼크 보호")
-        self.chk_use_shock_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_SHOCK_GUARD", True)))
+        self.chk_use_shock_guard.setChecked(
+            bool(getattr(Config, "DEFAULT_USE_SHOCK_GUARD", True))
+        )
         g7.addWidget(self.chk_use_shock_guard, 0, 0)
         g7.addWidget(QLabel("1분 변동률:"), 0, 1)
         self.spin_shock_1m = NoScrollDoubleSpinBox()
@@ -605,35 +648,49 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_shock_cooldown = NoScrollSpinBox()
         self.spin_shock_cooldown.setRange(1, 120)
         self.spin_shock_cooldown.setSuffix("분")
-        self.spin_shock_cooldown.setValue(int(getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10)))
+        self.spin_shock_cooldown.setValue(
+            int(getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10))
+        )
         g7.addWidget(self.spin_shock_cooldown, 0, 6)
 
         self.chk_use_vi_guard = QCheckBox("VI/거래정지 보호")
-        self.chk_use_vi_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_VI_GUARD", True)))
+        self.chk_use_vi_guard.setChecked(
+            bool(getattr(Config, "DEFAULT_USE_VI_GUARD", True))
+        )
         g7.addWidget(self.chk_use_vi_guard, 1, 0)
         g7.addWidget(QLabel("보호 유지 시간:"), 1, 1)
         self.spin_vi_cooldown = NoScrollSpinBox()
         self.spin_vi_cooldown.setRange(1, 120)
         self.spin_vi_cooldown.setSuffix("분")
-        self.spin_vi_cooldown.setValue(int(getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7)))
+        self.spin_vi_cooldown.setValue(
+            int(getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7))
+        )
         g7.addWidget(self.spin_vi_cooldown, 1, 2)
 
         self.chk_use_regime_sizing = QCheckBox("시장 상태별 비중 축소")
-        self.chk_use_regime_sizing.setChecked(bool(getattr(Config, "DEFAULT_USE_REGIME_SIZING", True)))
+        self.chk_use_regime_sizing.setChecked(
+            bool(getattr(Config, "DEFAULT_USE_REGIME_SIZING", True))
+        )
         g7.addWidget(self.chk_use_regime_sizing, 1, 3, 1, 2)
 
         self.chk_use_slippage_guard = QCheckBox("슬리피지 보호")
-        self.chk_use_slippage_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_SLIPPAGE_GUARD", True)))
+        self.chk_use_slippage_guard.setChecked(
+            bool(getattr(Config, "DEFAULT_USE_SLIPPAGE_GUARD", True))
+        )
         g7.addWidget(self.chk_use_slippage_guard, 2, 0)
         g7.addWidget(QLabel("최대 허용(bp):"), 2, 1)
         self.spin_max_slippage_bps = NoScrollDoubleSpinBox()
         self.spin_max_slippage_bps.setRange(1.0, 100.0)
         self.spin_max_slippage_bps.setSingleStep(1.0)
-        self.spin_max_slippage_bps.setValue(float(getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+        self.spin_max_slippage_bps.setValue(
+            float(getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0))
+        )
         g7.addWidget(self.spin_max_slippage_bps, 2, 2)
 
         self.chk_use_order_health_guard = QCheckBox("주문 실패 급증 보호")
-        self.chk_use_order_health_guard.setChecked(bool(getattr(Config, "DEFAULT_USE_ORDER_HEALTH_GUARD", True)))
+        self.chk_use_order_health_guard.setChecked(
+            bool(getattr(Config, "DEFAULT_USE_ORDER_HEALTH_GUARD", True))
+        )
         g7.addWidget(self.chk_use_order_health_guard, 2, 3, 1, 2)
 
         self.chk_use_liquidity_stress_guard = QCheckBox("유동성 스트레스 보호")
@@ -642,7 +699,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         )
         g7.addWidget(self.chk_use_liquidity_stress_guard, 3, 0, 1, 2)
 
-        guard_notice = QLabel("주의: 이 영역은 시장 급변 시 신규 진입을 자동으로 제한합니다. 실거래에서는 기본적으로 켜 두는 편이 안전합니다.")
+        guard_notice = QLabel(
+            "주의: 이 영역은 시장 급변 시 신규 진입을 자동으로 제한합니다. 실거래에서는 기본적으로 켜 두는 편이 안전합니다."
+        )
         guard_notice.setWordWrap(True)
         guard_notice.setProperty("tone", "warning")
         g7.addWidget(guard_notice, 4, 0, 1, 7)
@@ -661,7 +720,9 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g6.addWidget(self.chk_auto_start, 0, 0, 1, 2)
 
         self.chk_minimize_tray = QCheckBox("종료 시 트레이로 최소화")
-        self.chk_minimize_tray.setToolTip("창을 닫아도 프로그램이 종료되지 않고 트레이 아이콘으로 숨겨집니다.")
+        self.chk_minimize_tray.setToolTip(
+            "창을 닫아도 프로그램이 종료되지 않고 트레이 아이콘으로 숨겨집니다."
+        )
         self.chk_minimize_tray.setChecked(Config.DEFAULT_MINIMIZE_TO_TRAY)
         g6.addWidget(self.chk_minimize_tray, 0, 2, 1, 3)
 
@@ -671,14 +732,20 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         g6.addWidget(self.chk_use_sound, 1, 0, 1, 2)
 
         self.chk_sync_history_flush_on_exit = QCheckBox("종료 시 거래내역 동기 저장")
-        self.chk_sync_history_flush_on_exit.setToolTip("강제 종료 직전 거래내역을 동기 저장하여 유실을 줄입니다.")
+        self.chk_sync_history_flush_on_exit.setToolTip(
+            "강제 종료 직전 거래내역을 동기 저장하여 유실을 줄입니다."
+        )
         self.chk_sync_history_flush_on_exit.setChecked(
             bool(getattr(Config, "DEFAULT_SYNC_HISTORY_FLUSH_ON_EXIT", True))
         )
         g6.addWidget(self.chk_sync_history_flush_on_exit, 1, 2, 1, 3)
 
-        self.chk_allow_plaintext_secret_fallback = QCheckBox("Keyring 실패 시 평문 secret 저장 허용")
-        self.chk_allow_plaintext_secret_fallback.setToolTip("실거래에서는 꺼두는 것이 안전합니다.")
+        self.chk_allow_plaintext_secret_fallback = QCheckBox(
+            "Keyring 실패 시 평문 secret 저장 허용"
+        )
+        self.chk_allow_plaintext_secret_fallback.setToolTip(
+            "실거래에서는 꺼두는 것이 안전합니다."
+        )
         self.chk_allow_plaintext_secret_fallback.setChecked(
             bool(getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False))
         )
@@ -703,20 +770,26 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
             float(getattr(Config, "UI_FONT_SCALE_MAX", 1.5)),
         )
         self.spin_ui_font_scale.setSingleStep(0.05)
-        self.spin_ui_font_scale.setValue(float(getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0)))
+        self.spin_ui_font_scale.setValue(
+            float(getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+        )
         self.spin_ui_font_scale.setToolTip("UI 글자 크기 배율")
         self.spin_ui_font_scale.setAccessibleName("UI 글자 크기 배율")
         self.spin_ui_font_scale.valueChanged.connect(self._on_font_scale_changed)
         g6.addWidget(self.spin_ui_font_scale, 3, 3)
 
         lbl_density = QLabel("UI 밀도")
-        lbl_density.setToolTip("comfortable: 메뉴/버튼 간격을 넓혀 고배율에서 고르기 쉽습니다.")
+        lbl_density.setToolTip(
+            "comfortable: 메뉴/버튼 간격을 넓혀 고배율에서 고르기 쉽습니다."
+        )
         g6.addWidget(lbl_density, 4, 0)
         self.combo_ui_density = NoScrollComboBox()
         self.combo_ui_density.addItems(["compact", "comfortable"])
         self.combo_ui_density.setToolTip("UI 밀도 선택")
         self.combo_ui_density.setAccessibleName("UI 밀도 선택")
-        self.combo_ui_density.setCurrentText(str(getattr(Config, "DEFAULT_UI_DENSITY", "compact")))
+        self.combo_ui_density.setCurrentText(
+            str(getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
+        )
         self.combo_ui_density.currentTextChanged.connect(self._on_density_changed)
         g6.addWidget(self.combo_ui_density, 4, 1)
 
@@ -735,11 +808,15 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.chk_use_dmi.toggled.connect(lambda s: self.spin_adx.setEnabled(s))
         self.spin_adx.setEnabled(self.chk_use_dmi.isChecked())
 
-        self.chk_use_volume.toggled.connect(lambda s: self.spin_volume_mult.setEnabled(s))
+        self.chk_use_volume.toggled.connect(
+            lambda s: self.spin_volume_mult.setEnabled(s)
+        )
         self.spin_volume_mult.setEnabled(self.chk_use_volume.isChecked())
 
         self.chk_use_risk.toggled.connect(lambda s: self.spin_max_loss.setEnabled(s))
-        self.chk_use_risk.toggled.connect(lambda s: self.spin_max_holdings.setEnabled(s))
+        self.chk_use_risk.toggled.connect(
+            lambda s: self.spin_max_holdings.setEnabled(s)
+        )
         self.spin_max_loss.setEnabled(self.chk_use_risk.isChecked())
         self.spin_max_holdings.setEnabled(self.chk_use_risk.isChecked())
 
@@ -748,55 +825,93 @@ class UIBuildSettingsTabsMixin(TraderMixinBase):
         self.spin_ma_short.setEnabled(self.chk_use_ma.isChecked())
         self.spin_ma_long.setEnabled(self.chk_use_ma.isChecked())
 
-        self.chk_use_atr_sizing.toggled.connect(lambda s: self.spin_risk_percent.setEnabled(s))
+        self.chk_use_atr_sizing.toggled.connect(
+            lambda s: self.spin_risk_percent.setEnabled(s)
+        )
         self.spin_risk_percent.setEnabled(self.chk_use_atr_sizing.isChecked())
 
-        self.chk_use_split.toggled.connect(lambda s: self.spin_split_count.setEnabled(s))
-        self.chk_use_split.toggled.connect(lambda s: self.spin_split_percent.setEnabled(s))
+        self.chk_use_split.toggled.connect(
+            lambda s: self.spin_split_count.setEnabled(s)
+        )
+        self.chk_use_split.toggled.connect(
+            lambda s: self.spin_split_percent.setEnabled(s)
+        )
         self.spin_split_count.setEnabled(self.chk_use_split.isChecked())
         self.spin_split_percent.setEnabled(self.chk_use_split.isChecked())
 
-        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_upper.setEnabled(s))
-        self.chk_use_stoch_rsi.toggled.connect(lambda s: self.spin_stoch_lower.setEnabled(s))
+        self.chk_use_stoch_rsi.toggled.connect(
+            lambda s: self.spin_stoch_upper.setEnabled(s)
+        )
+        self.chk_use_stoch_rsi.toggled.connect(
+            lambda s: self.spin_stoch_lower.setEnabled(s)
+        )
         self.spin_stoch_upper.setEnabled(self.chk_use_stoch_rsi.isChecked())
         self.spin_stoch_lower.setEnabled(self.chk_use_stoch_rsi.isChecked())
 
-        self.chk_use_market_limit.toggled.connect(lambda s: self.spin_market_limit.setEnabled(s))
+        self.chk_use_market_limit.toggled.connect(
+            lambda s: self.spin_market_limit.setEnabled(s)
+        )
         self.spin_market_limit.setEnabled(self.chk_use_market_limit.isChecked())
 
-        self.chk_use_sector_limit.toggled.connect(lambda s: self.spin_sector_limit.setEnabled(s))
+        self.chk_use_sector_limit.toggled.connect(
+            lambda s: self.spin_sector_limit.setEnabled(s)
+        )
         self.spin_sector_limit.setEnabled(self.chk_use_sector_limit.isChecked())
 
-        self.chk_use_atr_stop.toggled.connect(lambda s: self.spin_atr_mult.setEnabled(s))
+        self.chk_use_atr_stop.toggled.connect(
+            lambda s: self.spin_atr_mult.setEnabled(s)
+        )
         self.spin_atr_mult.setEnabled(self.chk_use_atr_stop.isChecked())
 
-        self.chk_use_liquidity.toggled.connect(lambda s: self.spin_min_value.setEnabled(s))
+        self.chk_use_liquidity.toggled.connect(
+            lambda s: self.spin_min_value.setEnabled(s)
+        )
         self.spin_min_value.setEnabled(self.chk_use_liquidity.isChecked())
 
-        self.chk_use_spread.toggled.connect(lambda s: self.spin_spread_max.setEnabled(s))
+        self.chk_use_spread.toggled.connect(
+            lambda s: self.spin_spread_max.setEnabled(s)
+        )
         self.spin_spread_max.setEnabled(self.chk_use_spread.isChecked())
 
-        self.chk_use_breakout_confirm.toggled.connect(lambda s: self.spin_breakout_ticks.setEnabled(s))
+        self.chk_use_breakout_confirm.toggled.connect(
+            lambda s: self.spin_breakout_ticks.setEnabled(s)
+        )
         self.spin_breakout_ticks.setEnabled(self.chk_use_breakout_confirm.isChecked())
 
-        self.chk_use_cooldown.toggled.connect(lambda s: self.spin_cooldown_min.setEnabled(s))
+        self.chk_use_cooldown.toggled.connect(
+            lambda s: self.spin_cooldown_min.setEnabled(s)
+        )
         self.spin_cooldown_min.setEnabled(self.chk_use_cooldown.isChecked())
 
-        self.chk_use_time_stop.toggled.connect(lambda s: self.spin_time_stop_min.setEnabled(s))
+        self.chk_use_time_stop.toggled.connect(
+            lambda s: self.spin_time_stop_min.setEnabled(s)
+        )
         self.spin_time_stop_min.setEnabled(self.chk_use_time_stop.isChecked())
 
-        self.chk_use_entry_score.toggled.connect(lambda s: self.spin_entry_score_threshold.setEnabled(s))
+        self.chk_use_entry_score.toggled.connect(
+            lambda s: self.spin_entry_score_threshold.setEnabled(s)
+        )
         self.spin_entry_score_threshold.setEnabled(self.chk_use_entry_score.isChecked())
 
-        self.chk_use_shock_guard.toggled.connect(lambda s: self.spin_shock_1m.setEnabled(s))
-        self.chk_use_shock_guard.toggled.connect(lambda s: self.spin_shock_5m.setEnabled(s))
-        self.chk_use_shock_guard.toggled.connect(lambda s: self.spin_shock_cooldown.setEnabled(s))
+        self.chk_use_shock_guard.toggled.connect(
+            lambda s: self.spin_shock_1m.setEnabled(s)
+        )
+        self.chk_use_shock_guard.toggled.connect(
+            lambda s: self.spin_shock_5m.setEnabled(s)
+        )
+        self.chk_use_shock_guard.toggled.connect(
+            lambda s: self.spin_shock_cooldown.setEnabled(s)
+        )
         self.spin_shock_1m.setEnabled(self.chk_use_shock_guard.isChecked())
         self.spin_shock_5m.setEnabled(self.chk_use_shock_guard.isChecked())
         self.spin_shock_cooldown.setEnabled(self.chk_use_shock_guard.isChecked())
-        self.chk_use_vi_guard.toggled.connect(lambda s: self.spin_vi_cooldown.setEnabled(s))
+        self.chk_use_vi_guard.toggled.connect(
+            lambda s: self.spin_vi_cooldown.setEnabled(s)
+        )
         self.spin_vi_cooldown.setEnabled(self.chk_use_vi_guard.isChecked())
-        self.chk_use_slippage_guard.toggled.connect(lambda s: self.spin_max_slippage_bps.setEnabled(s))
+        self.chk_use_slippage_guard.toggled.connect(
+            lambda s: self.spin_max_slippage_bps.setEnabled(s)
+        )
         self.spin_max_slippage_bps.setEnabled(self.chk_use_slippage_guard.isChecked())
 
         entry_layout.addStretch()

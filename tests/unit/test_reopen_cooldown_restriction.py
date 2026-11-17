@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin

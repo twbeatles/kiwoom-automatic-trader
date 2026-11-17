@@ -46,18 +46,37 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
             control = getattr(self, name, None)
             if control is None:
                 continue
-            for signal_name in ("toggled", "valueChanged", "currentTextChanged", "textChanged"):
+            for signal_name in (
+                "toggled",
+                "valueChanged",
+                "currentTextChanged",
+                "textChanged",
+            ):
                 signal = getattr(control, signal_name, None)
                 if signal is not None:
                     signal.connect(self._update_market_intelligence_config_from_ui)
                     break
+
     def _update_market_intelligence_config_from_ui(self, *_args):
         cfg = self._market_intelligence_config()
-        cfg["enabled"] = bool(getattr(self, "chk_market_intel_enabled", None) and self.chk_market_intel_enabled.isChecked())
-        cfg["providers"]["news"] = bool(getattr(self, "chk_market_news", None) and self.chk_market_news.isChecked())
-        cfg["providers"]["dart"] = bool(getattr(self, "chk_market_dart", None) and self.chk_market_dart.isChecked())
-        cfg["providers"]["datalab"] = bool(getattr(self, "chk_market_datalab", None) and self.chk_market_datalab.isChecked())
-        cfg["providers"]["macro"] = bool(getattr(self, "chk_market_macro", None) and self.chk_market_macro.isChecked())
+        cfg["enabled"] = bool(
+            getattr(self, "chk_market_intel_enabled", None)
+            and self.chk_market_intel_enabled.isChecked()
+        )
+        cfg["providers"]["news"] = bool(
+            getattr(self, "chk_market_news", None) and self.chk_market_news.isChecked()
+        )
+        cfg["providers"]["dart"] = bool(
+            getattr(self, "chk_market_dart", None) and self.chk_market_dart.isChecked()
+        )
+        cfg["providers"]["datalab"] = bool(
+            getattr(self, "chk_market_datalab", None)
+            and self.chk_market_datalab.isChecked()
+        )
+        cfg["providers"]["macro"] = bool(
+            getattr(self, "chk_market_macro", None)
+            and self.chk_market_macro.isChecked()
+        )
         policy = cfg.get("source_policy", {})
         if not isinstance(policy, dict):
             policy = {}
@@ -74,23 +93,37 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
         if hasattr(self, "spin_market_macro_refresh"):
             cfg["refresh_sec"]["macro"] = int(self.spin_market_macro_refresh.value())
         if hasattr(self, "spin_market_news_block"):
-            cfg["scoring"]["news_block_threshold"] = -abs(int(self.spin_market_news_block.value()))
+            cfg["scoring"]["news_block_threshold"] = -abs(
+                int(self.spin_market_news_block.value())
+            )
         if hasattr(self, "spin_market_news_boost"):
-            cfg["scoring"]["news_boost_threshold"] = abs(int(self.spin_market_news_boost.value()))
+            cfg["scoring"]["news_boost_threshold"] = abs(
+                int(self.spin_market_news_boost.value())
+            )
         if hasattr(self, "chk_market_ai_enabled"):
             cfg["ai"]["enabled"] = bool(self.chk_market_ai_enabled.isChecked())
         if hasattr(self, "combo_market_ai_provider"):
-            cfg["ai"]["provider"] = combo_value(self.combo_market_ai_provider, "gemini").lower()
+            cfg["ai"]["provider"] = combo_value(
+                self.combo_market_ai_provider, "gemini"
+            ).lower()
         if hasattr(self, "input_market_ai_model"):
-            cfg["ai"]["model"] = str(self.input_market_ai_model.text() or cfg["ai"].get("model", "gemini-2.5-flash-lite"))
+            cfg["ai"]["model"] = str(
+                self.input_market_ai_model.text()
+                or cfg["ai"].get("model", "gemini-2.5-flash-lite")
+            )
         if hasattr(self, "spin_market_ai_daily_calls"):
-            cfg["ai"]["max_calls_per_day"] = int(self.spin_market_ai_daily_calls.value())
+            cfg["ai"]["max_calls_per_day"] = int(
+                self.spin_market_ai_daily_calls.value()
+            )
         if hasattr(self, "spin_market_ai_symbol_calls"):
-            cfg["ai"]["max_calls_per_symbol"] = int(self.spin_market_ai_symbol_calls.value())
+            cfg["ai"]["max_calls_per_symbol"] = int(
+                self.spin_market_ai_symbol_calls.value()
+            )
         if hasattr(self, "spin_market_ai_budget"):
             cfg["ai"]["daily_budget_krw"] = int(self.spin_market_ai_budget.value())
         if hasattr(self, "config"):
             self.config.market_intelligence = cfg
+
     def _create_market_intelligence_settings_tab(self):
         from PySide6.QtWidgets import QCheckBox
 
@@ -119,23 +152,41 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
         self.chk_market_intel_enabled = QCheckBox("시장 인텔리전스 사용")
         self.chk_market_intel_enabled.setChecked(bool(cfg.get("enabled", True)))
         basic_form.addRow("", self.chk_market_intel_enabled)
-        source_policy = cfg.get("source_policy", {}) if isinstance(cfg.get("source_policy"), dict) else {}
-        self.chk_market_intel_strict_guard = QCheckBox("인텔리전스 준비 전 신규 진입 차단")
-        self.chk_market_intel_strict_guard.setToolTip("실거래에서 fail-closed 정책이 필요할 때 켭니다.")
-        self.chk_market_intel_strict_guard.setChecked(bool(source_policy.get("strict_entry_guard", False)))
+        source_policy = (
+            cfg.get("source_policy", {})
+            if isinstance(cfg.get("source_policy"), dict)
+            else {}
+        )
+        self.chk_market_intel_strict_guard = QCheckBox(
+            "인텔리전스 준비 전 신규 진입 차단"
+        )
+        self.chk_market_intel_strict_guard.setToolTip(
+            "실거래에서 fail-closed 정책이 필요할 때 켭니다."
+        )
+        self.chk_market_intel_strict_guard.setChecked(
+            bool(source_policy.get("strict_entry_guard", False))
+        )
         basic_form.addRow("", self.chk_market_intel_strict_guard)
         body.addWidget(basic_group)
 
         source_group = QGroupBox("데이터 소스")
         source_form = QFormLayout(source_group)
         self.chk_market_news = QCheckBox("NAVER 뉴스 사용")
-        self.chk_market_news.setChecked(bool(cfg.get("providers", {}).get("news", True)))
+        self.chk_market_news.setChecked(
+            bool(cfg.get("providers", {}).get("news", True))
+        )
         self.chk_market_dart = QCheckBox("OpenDART 공시 사용")
-        self.chk_market_dart.setChecked(bool(cfg.get("providers", {}).get("dart", True)))
+        self.chk_market_dart.setChecked(
+            bool(cfg.get("providers", {}).get("dart", True))
+        )
         self.chk_market_datalab = QCheckBox("NAVER 데이터랩 사용")
-        self.chk_market_datalab.setChecked(bool(cfg.get("providers", {}).get("datalab", True)))
+        self.chk_market_datalab.setChecked(
+            bool(cfg.get("providers", {}).get("datalab", True))
+        )
         self.chk_market_macro = QCheckBox("FRED 매크로 데이터 사용")
-        self.chk_market_macro.setChecked(bool(cfg.get("providers", {}).get("macro", True)))
+        self.chk_market_macro.setChecked(
+            bool(cfg.get("providers", {}).get("macro", True))
+        )
         provider_row = QHBoxLayout()
         provider_row.addWidget(self.chk_market_news)
         provider_row.addWidget(self.chk_market_dart)
@@ -166,11 +217,15 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
         refresh_form = QFormLayout(refresh_group)
         self.spin_market_news_refresh = NoScrollSpinBox()
         self.spin_market_news_refresh.setRange(10, 600)
-        self.spin_market_news_refresh.setValue(int(cfg.get("refresh_sec", {}).get("news", 60)))
+        self.spin_market_news_refresh.setValue(
+            int(cfg.get("refresh_sec", {}).get("news", 60))
+        )
         refresh_form.addRow("뉴스/공시 갱신(초):", self.spin_market_news_refresh)
         self.spin_market_macro_refresh = NoScrollSpinBox()
         self.spin_market_macro_refresh.setRange(30, 1800)
-        self.spin_market_macro_refresh.setValue(int(cfg.get("refresh_sec", {}).get("macro", 300)))
+        self.spin_market_macro_refresh.setValue(
+            int(cfg.get("refresh_sec", {}).get("macro", 300))
+        )
         refresh_form.addRow("매크로 갱신(초):", self.spin_market_macro_refresh)
         body.addWidget(refresh_group)
 
@@ -178,23 +233,35 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
         scoring_form = QFormLayout(scoring_group)
         self.spin_market_news_block = NoScrollSpinBox()
         self.spin_market_news_block.setRange(10, 100)
-        self.spin_market_news_block.setValue(abs(int(cfg.get("scoring", {}).get("news_block_threshold", -60))))
+        self.spin_market_news_block.setValue(
+            abs(int(cfg.get("scoring", {}).get("news_block_threshold", -60)))
+        )
         scoring_form.addRow("신규 진입 차단 점수:", self.spin_market_news_block)
         self.spin_market_news_boost = NoScrollSpinBox()
         self.spin_market_news_boost.setRange(10, 100)
-        self.spin_market_news_boost.setValue(abs(int(cfg.get("scoring", {}).get("news_boost_threshold", 60))))
+        self.spin_market_news_boost.setValue(
+            abs(int(cfg.get("scoring", {}).get("news_boost_threshold", 60)))
+        )
         scoring_form.addRow("우선순위 강화 점수:", self.spin_market_news_boost)
         body.addWidget(scoring_group)
 
         ai_group = QGroupBox("AI 요약")
         ai_form = QFormLayout(ai_group)
         self.chk_market_ai_enabled = QCheckBox("AI 요약 사용")
-        self.chk_market_ai_enabled.setChecked(bool(cfg.get("ai", {}).get("enabled", False)))
+        self.chk_market_ai_enabled.setChecked(
+            bool(cfg.get("ai", {}).get("enabled", False))
+        )
         ai_form.addRow("", self.chk_market_ai_enabled)
         self.combo_market_ai_provider = NoScrollComboBox()
-        populate_combo(self.combo_market_ai_provider, AI_PROVIDER_CHOICES, str(cfg.get("ai", {}).get("provider", "gemini")))
+        populate_combo(
+            self.combo_market_ai_provider,
+            AI_PROVIDER_CHOICES,
+            str(cfg.get("ai", {}).get("provider", "gemini")),
+        )
         ai_form.addRow("AI 제공사:", self.combo_market_ai_provider)
-        self.input_market_ai_model = QLineEdit(str(cfg.get("ai", {}).get("model", "gemini-2.5-flash-lite")))
+        self.input_market_ai_model = QLineEdit(
+            str(cfg.get("ai", {}).get("model", "gemini-2.5-flash-lite"))
+        )
         self.input_market_ai_model.setPlaceholderText("예: gemini-2.5-flash-lite")
         ai_form.addRow("모델 이름:", self.input_market_ai_model)
         self.input_ai_api_key = QLineEdit()
@@ -204,15 +271,21 @@ class MarketIntelSettingsUIMixin(TraderMixinBase):
 
         self.spin_market_ai_daily_calls = NoScrollSpinBox()
         self.spin_market_ai_daily_calls.setRange(1, 500)
-        self.spin_market_ai_daily_calls.setValue(int(cfg.get("ai", {}).get("max_calls_per_day", 30)))
+        self.spin_market_ai_daily_calls.setValue(
+            int(cfg.get("ai", {}).get("max_calls_per_day", 30))
+        )
         ai_form.addRow("하루 최대 호출 수:", self.spin_market_ai_daily_calls)
         self.spin_market_ai_symbol_calls = NoScrollSpinBox()
         self.spin_market_ai_symbol_calls.setRange(1, 50)
-        self.spin_market_ai_symbol_calls.setValue(int(cfg.get("ai", {}).get("max_calls_per_symbol", 3)))
+        self.spin_market_ai_symbol_calls.setValue(
+            int(cfg.get("ai", {}).get("max_calls_per_symbol", 3))
+        )
         ai_form.addRow("종목당 최대 호출 수:", self.spin_market_ai_symbol_calls)
         self.spin_market_ai_budget = NoScrollSpinBox()
         self.spin_market_ai_budget.setRange(100, 100000)
-        self.spin_market_ai_budget.setValue(int(cfg.get("ai", {}).get("daily_budget_krw", 1000)))
+        self.spin_market_ai_budget.setValue(
+            int(cfg.get("ai", {}).get("daily_budget_krw", 1000))
+        )
         ai_form.addRow("하루 예산(원):", self.spin_market_ai_budget)
         body.addWidget(ai_group)
 

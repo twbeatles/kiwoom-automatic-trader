@@ -24,7 +24,10 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
             use_dynamic = self.config.use_dynamic_sizing
         else:
             base_invest = self.trader.deposit * (self.trader.spin_betting.value() / 100)
-            use_dynamic = hasattr(self.trader, "chk_use_dynamic_sizing") and self.trader.chk_use_dynamic_sizing.isChecked()
+            use_dynamic = (
+                hasattr(self.trader, "chk_use_dynamic_sizing")
+                and self.trader.chk_use_dynamic_sizing.isChecked()
+            )
 
         if not use_dynamic:
             base_qty = max(0, int(base_invest / current_price))
@@ -32,12 +35,16 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
 
         if self.consecutive_losses >= 3:
             adjusted_invest = base_invest * 0.5
-            self.log(f"[동적사이징] 연속 {self.consecutive_losses}회 손실 - 투자금 50% 축소")
+            self.log(
+                f"[동적사이징] 연속 {self.consecutive_losses}회 손실 - 투자금 50% 축소"
+            )
         elif self.consecutive_losses >= 2:
             adjusted_invest = base_invest * 0.75
         elif self.consecutive_wins >= 3:
             adjusted_invest = base_invest * 1.25
-            self.log(f"[동적사이징] 연속 {self.consecutive_wins}회 이익 - 투자금 25% 확대")
+            self.log(
+                f"[동적사이징] 연속 {self.consecutive_wins}회 이익 - 투자금 25% 확대"
+            )
         elif self.consecutive_wins >= 2:
             adjusted_invest = base_invest * 1.1
         else:
@@ -64,7 +71,10 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
                 return True
             max_val = self.config.market_limit
         else:
-            if not hasattr(self.trader, "chk_use_market_limit") or not self.trader.chk_use_market_limit.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_market_limit")
+                or not self.trader.chk_use_market_limit.isChecked()
+            ):
                 return True
             max_ratio_spin = getattr(self.trader, "spin_market_limit", None)
             max_val = max_ratio_spin.value() if max_ratio_spin else 70
@@ -77,7 +87,9 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
         if total_invested > 0:
             market_ratio = current_allocation / total_invested
             if market_ratio >= max_ratio:
-                self.log(f"[분산관리] {market.upper()} 비중 {market_ratio*100:.0f}% >= {max_ratio*100:.0f}% 진입 보류")
+                self.log(
+                    f"[분산관리] {market.upper()} 비중 {market_ratio * 100:.0f}% >= {max_ratio * 100:.0f}% 진입 보류"
+                )
                 return False
 
         return True
@@ -93,10 +105,14 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
     def update_market_investment(self, code, amount, is_buy=True, cost_amount=None):
         market = self._get_stock_market(code)
         if is_buy:
-            self.market_investments[market] = self.market_investments.get(market, 0) + amount
+            self.market_investments[market] = (
+                self.market_investments.get(market, 0) + amount
+            )
         else:
             decrease = cost_amount if cost_amount is not None else amount
-            self.market_investments[market] = max(0, self.market_investments.get(market, 0) - decrease)
+            self.market_investments[market] = max(
+                0, self.market_investments.get(market, 0) - decrease
+            )
 
     def check_sector_limit(self, code) -> bool:
         if self.config:
@@ -104,7 +120,10 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
                 return True
             max_val = self.config.sector_limit
         else:
-            if not hasattr(self.trader, "chk_use_sector_limit") or not self.trader.chk_use_sector_limit.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_sector_limit")
+                or not self.trader.chk_use_sector_limit.isChecked()
+            ):
                 return True
             max_amt = getattr(self.trader, "spin_sector_limit", None)
             max_val = max_amt.value() if max_amt else 30
@@ -114,7 +133,9 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
         max_sector_invest = self.trader.deposit * (max_val / 100)
 
         if current_allocation >= max_sector_invest:
-            self.log(f"[섹터관리] {sector} 섹터 한도 도달 ({current_allocation:,.0f}원)")
+            self.log(
+                f"[섹터관리] {sector} 섹터 한도 도달 ({current_allocation:,.0f}원)"
+            )
             return False
 
         return True
@@ -132,10 +153,14 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
     def update_sector_investment(self, code, amount, is_buy=True, cost_amount=None):
         sector = self._get_stock_sector(code)
         if is_buy:
-            self.sector_investments[sector] = self.sector_investments.get(sector, 0) + amount
+            self.sector_investments[sector] = (
+                self.sector_investments.get(sector, 0) + amount
+            )
         else:
             decrease = cost_amount if cost_amount is not None else amount
-            self.sector_investments[sector] = max(0, self.sector_investments.get(sector, 0) - decrease)
+            self.sector_investments[sector] = max(
+                0, self.sector_investments.get(sector, 0) - decrease
+            )
 
     def apply_regime_size_scale(self, code, quantity: int) -> int:
         qty = max(0, int(quantity or 0))
@@ -143,11 +168,29 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
             return 0
         regime, scale, _atr_pct = self.get_regime_profile(code)
         market_intel = self.get_market_intel_snapshot(code)
-        if market_intel.get("enabled") and str(market_intel.get("macro_regime", "neutral")) == "risk_off":
+        if (
+            market_intel.get("enabled")
+            and str(market_intel.get("macro_regime", "neutral")) == "risk_off"
+        ):
             qty = max(1, int(qty * 0.7))
         if market_intel.get("enabled"):
-            qty = max(1, int(qty * max(0.1, float(market_intel.get("size_multiplier", 1.0) or 1.0))))
-            qty = max(1, int(qty * max(0.1, float(market_intel.get("portfolio_budget_scale", 1.0) or 1.0))))
+            qty = max(
+                1,
+                int(
+                    qty
+                    * max(0.1, float(market_intel.get("size_multiplier", 1.0) or 1.0))
+                ),
+            )
+            qty = max(
+                1,
+                int(
+                    qty
+                    * max(
+                        0.1,
+                        float(market_intel.get("portfolio_budget_scale", 1.0) or 1.0),
+                    )
+                ),
+            )
         if regime in {"elevated", "extreme"}:
             return max(1, int(qty * float(scale)))
         return qty
@@ -170,7 +213,9 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
 
         stop_loss_amount = atr * atr_multiplier
         risk_amount = self.trader.deposit * (risk_percent / 100)
-        position_size = int(risk_amount / stop_loss_amount) if stop_loss_amount > 0 else 0
+        position_size = (
+            int(risk_amount / stop_loss_amount) if stop_loss_amount > 0 else 0
+        )
 
         max_invest = (
             self.trader.deposit * (self.config.betting_ratio / 100)
@@ -181,7 +226,9 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
         final_size = min(position_size, max_quantity)
 
         if final_size > 0:
-            self.log(f"[{info.get('name', code)}] ATR 사이징: ATR={atr:.0f}, 적정수량={final_size}주")
+            self.log(
+                f"[{info.get('name', code)}] ATR 사이징: ATR={atr:.0f}, 적정수량={final_size}주"
+            )
 
         return self.apply_regime_size_scale(code, max(0, final_size))
 
@@ -194,7 +241,9 @@ class StrategyManagerPortfolioRiskMixin(StrategyManagerMixinBase):
         if self.config:
             invest_amount = self.trader.deposit * (self.config.betting_ratio / 100)
         else:
-            invest_amount = self.trader.deposit * (self.trader.spin_betting.value() / 100)
+            invest_amount = self.trader.deposit * (
+                self.trader.spin_betting.value() / 100
+            )
         base_qty = max(0, int(invest_amount / current_price))
         return self.apply_regime_size_scale(code, base_qty)
 

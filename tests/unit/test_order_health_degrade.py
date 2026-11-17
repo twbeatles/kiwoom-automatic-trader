@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 from collections import deque
 
@@ -50,20 +50,26 @@ class TestOrderHealthDegrade(unittest.TestCase):
         self.assertEqual(trader._order_health_mode, "degraded")
         self.assertIsNotNone(trader._order_health_until)
 
-        trader._update_order_health_mode(datetime.datetime.now() + datetime.timedelta(seconds=2))
+        trader._update_order_health_mode(
+            datetime.datetime.now() + datetime.timedelta(seconds=2)
+        )
         self.assertEqual(trader._order_health_mode, "normal")
 
     def test_cancel_event_does_not_count_as_order_failure(self):
         trader = _Harness()
 
-        trader._on_order_execution({"code": "005930", "order_status": "취소", "order_no": "O1", "ord_qty": "1"})
+        trader._on_order_execution(
+            {"code": "005930", "order_status": "취소", "order_no": "O1", "ord_qty": "1"}
+        )
 
         self.assertEqual(len(trader._order_fail_events), 0)
 
     def test_reject_event_counts_as_order_failure(self):
         trader = _Harness()
 
-        trader._on_order_execution({"code": "005930", "order_status": "거부", "order_no": "O1", "ord_qty": "1"})
+        trader._on_order_execution(
+            {"code": "005930", "order_status": "거부", "order_no": "O1", "ord_qty": "1"}
+        )
 
         self.assertEqual(len(trader._order_fail_events), 1)
 

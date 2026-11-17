@@ -7,10 +7,17 @@ from .mode_lifecycle import ExecutionModeLifecycleMixin
 from .sell_flow import ExecutionSellFlowMixin
 
 
-class ExecutionEngineMixin(ExecutionModeLifecycleMixin, ExecutionCashReservationMixin, ExecutionGuardsMixin, ExecutionBuyFlowMixin, ExecutionSellFlowMixin):
+class ExecutionEngineMixin(
+    ExecutionModeLifecycleMixin,
+    ExecutionCashReservationMixin,
+    ExecutionGuardsMixin,
+    ExecutionBuyFlowMixin,
+    ExecutionSellFlowMixin,
+):
     """Composed ExecutionEngineMixin split by feature responsibility."""
 
     pass
+
 
 __all__ = [
     "ExecutionEngineMixin",

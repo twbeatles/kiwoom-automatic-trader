@@ -51,6 +51,7 @@ class DiagnosticsMixin(TraderMixinBase):
             diag[key] = value
         diag["last_update"] = fields.get("last_update", datetime.datetime.now())
         self._diagnostics_dirty_codes.add(code)
+
     def _diag_clear_pending(self, code: str):
         if not code:
             return
@@ -62,32 +63,44 @@ class DiagnosticsMixin(TraderMixinBase):
             pending_state="",
             pending_remaining="",
         )
+
     @staticmethod
     def _diag_fmt_dt(value: Any) -> str:
         if isinstance(value, datetime.datetime):
             return value.strftime("%H:%M:%S")
         return ""
+
     @staticmethod
     def _diag_age_seconds(value: Any) -> str:
         if isinstance(value, datetime.datetime):
             age = int((datetime.datetime.now() - value).total_seconds())
             return str(max(0, age))
         return ""
+
     def _refresh_diagnostics(self):
         if not hasattr(self, "diagnostic_table"):
             return
 
         external_positions = _dict_or_empty(getattr(self, "external_positions", {}))
         codes = list(self.universe.keys())
-        codes.extend(code for code in sorted(external_positions.keys()) if code not in self.universe)
+        codes.extend(
+            code
+            for code in sorted(external_positions.keys())
+            if code not in self.universe
+        )
 
-        if not self._diagnostics_dirty_codes and self.diagnostic_table.rowCount() == len(codes):
+        if (
+            not self._diagnostics_dirty_codes
+            and self.diagnostic_table.rowCount() == len(codes)
+        ):
             has_external_clock = any(
                 isinstance(info.get("external_updated_at"), datetime.datetime)
                 for info in self.universe.values()
             )
             has_external_clock = has_external_clock or any(
-                isinstance(_dict_or_empty(info).get("external_updated_at"), datetime.datetime)
+                isinstance(
+                    _dict_or_empty(info).get("external_updated_at"), datetime.datetime
+                )
                 for info in external_positions.values()
             )
             if not has_external_clock and not external_positions:
@@ -100,13 +113,19 @@ class DiagnosticsMixin(TraderMixinBase):
             for row, code in enumerate(codes):
                 row_to_code[row] = code
                 tracked_getter = getattr(self, "_get_tracked_position_info", None)
-                raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+                raw_info = (
+                    tracked_getter(code)
+                    if callable(tracked_getter)
+                    else self.universe.get(code, {})
+                )
                 info = _dict_or_empty(raw_info)
                 market_intel = _dict_or_empty(info.get("market_intel", {}))
                 diag = self._diagnostics_by_code.get(code, {})
                 pending = self._pending_order_state.get(code, {})
                 if not pending:
-                    pending = _dict_or_empty(getattr(self, "_manual_pending_state", {})).get(code, {})
+                    pending = _dict_or_empty(
+                        getattr(self, "_manual_pending_state", {})
+                    ).get(code, {})
                 pending = _dict_or_empty(pending)
                 sync_status = str(info.get("status", ""))
                 if sync_status == "sync_failed":
@@ -116,7 +135,11 @@ class DiagnosticsMixin(TraderMixinBase):
                 external_error = str(info.get("external_error", "") or "")
                 external_age = self._diag_age_seconds(external_updated)
                 stale_limit = int(getattr(Config, "EXTERNAL_FLOW_STALE_SEC", 30))
-                if external_status == "fresh" and external_age and int(external_age) > stale_limit:
+                if (
+                    external_status == "fresh"
+                    and external_age
+                    and int(external_age) > stale_limit
+                ):
                     external_status = "stale"
                 if external_status == "error" and external_error:
                     sync_error = str(diag.get("last_sync_error", "") or "")
@@ -132,17 +155,25 @@ class DiagnosticsMixin(TraderMixinBase):
                     or self._guard_reason_by_code.get(code, "")
                     or ""
                 )
-                raw_action_policy = str(market_intel.get("action_policy", "allow") or "allow")
+                raw_action_policy = str(
+                    market_intel.get("action_policy", "allow") or "allow"
+                )
                 raw_exit_policy = str(market_intel.get("exit_policy", "none") or "none")
-                raw_risk_mode = str(getattr(self, "_global_risk_mode", "normal") or "normal")
-                raw_health_mode = str(getattr(self, "_order_health_mode", "normal") or "normal")
+                raw_risk_mode = str(
+                    getattr(self, "_global_risk_mode", "normal") or "normal"
+                )
+                raw_health_mode = str(
+                    getattr(self, "_order_health_mode", "normal") or "normal"
+                )
 
                 values = [
                     code,
                     str(info.get("name", code)),
                     str(diag.get("pending_side") or pending.get("side") or ""),
                     str(diag.get("pending_reason") or pending.get("reason") or ""),
-                    self._diag_fmt_dt(diag.get("pending_until") or pending.get("until")),
+                    self._diag_fmt_dt(
+                        diag.get("pending_until") or pending.get("until")
+                    ),
                     display_status(sync_status),
                     str(diag.get("retry_count", 0)),
                     sync_error,
@@ -159,8 +190,14 @@ class DiagnosticsMixin(TraderMixinBase):
                     str(market_intel.get("last_event_id", "") or ""),
                     display_regime(raw_risk_mode),
                     display_regime(raw_health_mode),
-                    display_status(diag.get("pending_state") or pending.get("state") or ""),
-                    str(diag.get("pending_remaining") or pending.get("remaining_qty") or ""),
+                    display_status(
+                        diag.get("pending_state") or pending.get("state") or ""
+                    ),
+                    str(
+                        diag.get("pending_remaining")
+                        or pending.get("remaining_qty")
+                        or ""
+                    ),
                     str(info.get("sync_failed_reason", "") or ""),
                 ]
 
@@ -176,45 +213,92 @@ class DiagnosticsMixin(TraderMixinBase):
                     if col == 9:
                         state = str(text).lower()
                         if state == "error":
-                            item.setForeground(QColor(table_status_color(_theme, "error")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "error"))
+                            )
                         elif state == "stale":
-                            item.setForeground(QColor(table_status_color(_theme, "warning")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "warning"))
+                            )
                         elif state == "fresh":
                             item.setForeground(QColor(table_status_color(_theme, "ok")))
                         else:
-                            item.setForeground(QColor(table_status_color(_theme, "muted")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "muted"))
+                            )
                     elif col == 12:
                         state = raw_market_state.lower()
                         if state in {"halt", "vi"}:
-                            item.setForeground(QColor(table_status_color(_theme, "error")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "error"))
+                            )
                         elif state == "reopen_cooldown":
-                            item.setForeground(QColor(table_status_color(_theme, "warning")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "warning"))
+                            )
                         else:
-                            item.setForeground(QColor(table_status_color(_theme, "muted")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "muted"))
+                            )
                     elif col == 13:
-                        item.setForeground(QColor(table_status_color(_theme, "error")) if raw_guard_reason else QColor(table_status_color(_theme, "muted")))
+                        item.setForeground(
+                            QColor(table_status_color(_theme, "error"))
+                            if raw_guard_reason
+                            else QColor(table_status_color(_theme, "muted"))
+                        )
                     elif col == 14:
-                        item.setForeground(QColor(table_status_color(_theme, "muted") if not str(text) else table_status_color(_theme, "warning")))
+                        item.setForeground(
+                            QColor(
+                                table_status_color(_theme, "muted")
+                                if not str(text)
+                                else table_status_color(_theme, "warning")
+                            )
+                        )
                     elif col == 15:
                         state = raw_action_policy.lower()
-                        if state in {"force_exit", "tighten_exit", "reduce_size", "block_entry"}:
-                            item.setForeground(QColor(table_status_color(_theme, "error")))
+                        if state in {
+                            "force_exit",
+                            "tighten_exit",
+                            "reduce_size",
+                            "block_entry",
+                        }:
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "error"))
+                            )
                         elif state in {"allow", ""}:
-                            item.setForeground(QColor(table_status_color(_theme, "muted")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "muted"))
+                            )
                     elif col == 17:
                         state = raw_exit_policy.lower()
                         if state in {"force_exit", "tighten_exit", "reduce_size"}:
-                            item.setForeground(QColor(table_status_color(_theme, "error")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "error"))
+                            )
                         elif state in {"none", ""}:
-                            item.setForeground(QColor(table_status_color(_theme, "muted")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "muted"))
+                            )
                     elif col in {19, 20}:
-                        state = raw_risk_mode.lower() if col == 19 else raw_health_mode.lower()
+                        state = (
+                            raw_risk_mode.lower()
+                            if col == 19
+                            else raw_health_mode.lower()
+                        )
                         if state in {"shock", "degraded"}:
-                            item.setForeground(QColor(table_status_color(_theme, "error")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "error"))
+                            )
                         elif state in {"normal", ""}:
-                            item.setForeground(QColor(table_status_color(_theme, "muted")))
+                            item.setForeground(
+                                QColor(table_status_color(_theme, "muted"))
+                            )
                     elif col == 23:
-                        item.setForeground(QColor(table_status_color(_theme, "error")) if str(text) else QColor(table_status_color(_theme, "muted")))
+                        item.setForeground(
+                            QColor(table_status_color(_theme, "error"))
+                            if str(text)
+                            else QColor(table_status_color(_theme, "muted"))
+                        )
         finally:
             self.diagnostic_table.setUpdatesEnabled(True)
         self._diagnostic_row_to_code = row_to_code
@@ -223,6 +307,7 @@ class DiagnosticsMixin(TraderMixinBase):
         render_detail = getattr(self, "_render_selected_diagnostic_detail", None)
         if callable(render_detail):
             render_detail()
+
     def _selected_diagnostic_code(self) -> str:
         table = getattr(self, "diagnostic_table", None)
         if table is None:
@@ -248,6 +333,7 @@ class DiagnosticsMixin(TraderMixinBase):
         if isinstance(row_to_code, dict):
             return str(row_to_code.get(row, "") or "")
         return ""
+
     def _render_selected_diagnostic_detail(self):
         panel = getattr(self, "diag_detail_panel", None)
         if panel is None:
@@ -255,16 +341,24 @@ class DiagnosticsMixin(TraderMixinBase):
         code = self._selected_diagnostic_code()
         if not code:
             self._last_rendered_diagnostic_code = ""
-            update_plain_text_panel(panel, "선택된 종목이 없습니다.", preserve_scroll=False)
+            update_plain_text_panel(
+                panel, "선택된 종목이 없습니다.", preserve_scroll=False
+            )
             return
 
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
-        raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+        raw_info = (
+            tracked_getter(code)
+            if callable(tracked_getter)
+            else self.universe.get(code, {})
+        )
         info = _dict_or_empty(raw_info)
         market_intel = _dict_or_empty(info.get("market_intel", {}))
         pending = self._pending_order_state.get(code, {})
         if not pending:
-            pending = _dict_or_empty(getattr(self, "_manual_pending_state", {})).get(code, {})
+            pending = _dict_or_empty(getattr(self, "_manual_pending_state", {})).get(
+                code, {}
+            )
         pending = _dict_or_empty(pending)
         detail = [
             f"코드: {code}",
@@ -290,19 +384,25 @@ class DiagnosticsMixin(TraderMixinBase):
             f"수량 배수: {market_intel.get('size_multiplier', 1.0)}",
             f"마지막 이벤트 ID: {market_intel.get('last_event_id', '')}",
         ]
-        extra_lines = self._get_diagnostic_drilldown_lines(code, info, market_intel, pending)
+        extra_lines = self._get_diagnostic_drilldown_lines(
+            code, info, market_intel, pending
+        )
         if extra_lines:
             detail.extend(extra_lines)
 
         last_code = getattr(self, "_last_rendered_diagnostic_code", None)
-        code_changed = (code != last_code)
+        code_changed = code != last_code
         self._last_rendered_diagnostic_code = code
 
         full_text = "\n".join(detail)
         update_plain_text_panel(panel, full_text, preserve_scroll=not code_changed)
 
     def _get_diagnostic_drilldown_lines(
-        self, code: str, info: Dict[str, Any], market_intel: Dict[str, Any], pending: Dict[str, Any]
+        self,
+        code: str,
+        info: Dict[str, Any],
+        market_intel: Dict[str, Any],
+        pending: Dict[str, Any],
     ) -> List[str]:
         """진단 드릴다운 라인 생성: PnL/비중/노출 + 외부 읽기전용/sync_failed 안내."""
         try:
@@ -351,10 +451,13 @@ class DiagnosticsMixin(TraderMixinBase):
             return
         current = str(to_text())
         if extra[0] not in current:
-            update_plain_text_panel(panel, current + "\n" + "\n".join(extra), preserve_scroll=True)
+            update_plain_text_panel(
+                panel, current + "\n" + "\n".join(extra), preserve_scroll=True
+            )
 
     def _on_diagnostic_selection_changed(self):
         self._render_selected_diagnostic_detail()
+
     def _on_diagnostic_resync_selected(self):
         code = self._selected_diagnostic_code()
         if not code:
@@ -363,6 +466,7 @@ class DiagnosticsMixin(TraderMixinBase):
         self._sync_position_from_account(code)
         self.log(f"[진단] 선택 종목 재동기화 요청: {code}")
         self._render_selected_diagnostic_detail()
+
     def _on_diagnostic_release_sync_failed_selected(self):
         code = self._selected_diagnostic_code()
         if not code:

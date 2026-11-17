@@ -3,6 +3,7 @@
 current_price 가 0일 때(인자 price=0 이고 universe current 도 0) 시장가 주문이
 전송되지 않고 잔액 검증 우회도 일어나지 않아야 한다.
 """
+
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin

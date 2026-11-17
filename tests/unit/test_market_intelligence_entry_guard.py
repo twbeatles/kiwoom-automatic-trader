@@ -16,7 +16,9 @@ class _Harness(ExecutionEngineMixin):
         self._order_health_until = None
         self._recent_slippage_bps = []
 
-    def _request_market_intelligence_refresh_batch(self, codes, reason="periodic", force=False):
+    def _request_market_intelligence_refresh_batch(
+        self, codes, reason="periodic", force=False
+    ):
         self.refresh_requests.append((list(codes), reason, force))
         return True
 
@@ -37,7 +39,9 @@ class TestMarketIntelligenceEntryGuard(unittest.TestCase):
     def test_idle_market_intelligence_relaxed_default_allows_and_requests_refresh(self):
         trader = _Harness()
 
-        allowed, reason = trader._can_enter_trade("005930", self._info(status="idle"), datetime.datetime.now())
+        allowed, reason = trader._can_enter_trade(
+            "005930", self._info(status="idle"), datetime.datetime.now()
+        )
 
         self.assertTrue(allowed)
         self.assertEqual(reason, "")
@@ -47,7 +51,9 @@ class TestMarketIntelligenceEntryGuard(unittest.TestCase):
         trader = _Harness()
         trader.config.market_intelligence["source_policy"]["strict_entry_guard"] = True
 
-        allowed, reason = trader._can_enter_trade("005930", self._info(status="idle"), datetime.datetime.now())
+        allowed, reason = trader._can_enter_trade(
+            "005930", self._info(status="idle"), datetime.datetime.now()
+        )
 
         self.assertFalse(allowed)
         self.assertEqual(reason, "market_intel_fresh_guard")
@@ -55,7 +61,12 @@ class TestMarketIntelligenceEntryGuard(unittest.TestCase):
     def test_high_risk_disclosure_blocks_entry(self):
         trader = _Harness()
         now = datetime.datetime.now()
-        info = self._info(status="fresh", intel_status="fresh", intel_updated_at=now, dart_risk_level="high")
+        info = self._info(
+            status="fresh",
+            intel_status="fresh",
+            intel_updated_at=now,
+            dart_risk_level="high",
+        )
 
         allowed, reason = trader._can_enter_trade("005930", info, now)
 
@@ -66,7 +77,9 @@ class TestMarketIntelligenceEntryGuard(unittest.TestCase):
         trader = _Harness()
         trader.config.market_intelligence["enabled"] = False
 
-        allowed, reason = trader._can_enter_trade("005930", self._info(status="idle"), datetime.datetime.now())
+        allowed, reason = trader._can_enter_trade(
+            "005930", self._info(status="idle"), datetime.datetime.now()
+        )
 
         self.assertTrue(allowed)
         self.assertEqual(reason, "")

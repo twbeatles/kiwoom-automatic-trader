@@ -22,9 +22,16 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         if minute_of_day < (14 * 60 + 30):
             return "normal"
         return "conservative"
-    def _maybe_recalculate_time_strategy_targets(self, now_dt: Optional[datetime.datetime] = None):
+
+    def _maybe_recalculate_time_strategy_targets(
+        self, now_dt: Optional[datetime.datetime] = None
+    ):
         cfg = getattr(self, "config", None)
-        if not (self.is_running and cfg is not None and bool(getattr(cfg, "use_time_strategy", False))):
+        if not (
+            self.is_running
+            and cfg is not None
+            and bool(getattr(cfg, "use_time_strategy", False))
+        ):
             self._last_time_strategy_phase = None
             return
         if not self.universe:
@@ -36,9 +43,12 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         for code in self.universe.keys():
             self.universe[code]["target"] = self.strategy.calculate_target_price(code)
             self._dirty_codes.add(code)
-        self.log(f"[시간전략] 구간 전환({phase})으로 목표가 재계산: {len(self.universe)}종목")
+        self.log(
+            f"[시간전략] 구간 전환({phase})으로 목표가 재계산: {len(self.universe)}종목"
+        )
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _sync_positions_snapshot(self, codes: List[str]) -> Tuple[bool, str]:
         """매매 시작 직후 계좌 포지션 스냅샷을 유니버스에 강제 반영한다."""
         if not (self.rest_client and self.current_account):
@@ -60,12 +70,24 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             log_external=True,
         )
         return True, ""
+
     def _log_trading_preflight(self, codes: List[str]) -> None:
         cfg = getattr(self, "config", None)
-        execution_mode = str(getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")))
+        execution_mode = str(
+            getattr(
+                cfg,
+                "execution_mode",
+                getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+            )
+        )
         is_mock = bool(hasattr(self, "chk_mock") and self.chk_mock.isChecked())
         intel_cfg = getattr(cfg, "market_intelligence", {}) if cfg is not None else {}
-        source_policy = intel_cfg.get("source_policy", {}) if isinstance(intel_cfg, dict) and isinstance(intel_cfg.get("source_policy"), dict) else {}
+        source_policy = (
+            intel_cfg.get("source_policy", {})
+            if isinstance(intel_cfg, dict)
+            and isinstance(intel_cfg.get("source_policy"), dict)
+            else {}
+        )
         strict_intel = bool(source_policy.get("strict_entry_guard", False))
         rest_client = getattr(self, "rest_client", None)
         open_order_support = bool(getattr(rest_client, "supports_open_orders", False))
@@ -88,7 +110,10 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             # ka10075 기반 미체결 주문 복구 활성화
             self.log("[preflight] open-order recovery enabled (ka10075).")
         else:
-            self.log("[preflight] open-order recovery is unavailable until a verified Kiwoom REST endpoint is configured.")
+            self.log(
+                "[preflight] open-order recovery is unavailable until a verified Kiwoom REST endpoint is configured."
+            )
+
     def start_trading(self, from_schedule: bool = False) -> bool:
         if self.is_running:
             self.log("자동매매가 이미 실행 중입니다.")
@@ -144,7 +169,13 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             return False
 
         if cfg is not None and bool(getattr(cfg, "use_split", False)):
-            policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))
+            policy = str(
+                getattr(
+                    cfg,
+                    "execution_policy",
+                    getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"),
+                )
+            )
             if policy != "limit":
                 QMessageBox.warning(
                     self,
@@ -179,7 +210,9 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             cap = capabilities.get(primary)
             if not cap or not bool(cap.get("live_supported", False)):
                 supported = sorted(
-                    k for k, v in capabilities.items() if isinstance(v, dict) and bool(v.get("live_supported", False))
+                    k
+                    for k, v in capabilities.items()
+                    if isinstance(v, dict) and bool(v.get("live_supported", False))
                 )
                 supported_text = ", ".join(supported) if supported else "(none)"
                 self.log(f"[전략가드] 실거래 미지원 전략 차단: {primary}")
@@ -200,9 +233,13 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             self._global_risk_until = None
             self._order_health_mode = "normal"
             self._order_health_until = None
-            if hasattr(self, "_recent_ticks_by_code") and isinstance(self._recent_ticks_by_code, dict):
+            if hasattr(self, "_recent_ticks_by_code") and isinstance(
+                self._recent_ticks_by_code, dict
+            ):
                 self._recent_ticks_by_code.clear()
-            if hasattr(self, "_guard_reason_by_code") and isinstance(self._guard_reason_by_code, dict):
+            if hasattr(self, "_guard_reason_by_code") and isinstance(
+                self._guard_reason_by_code, dict
+            ):
                 self._guard_reason_by_code.clear()
             self.btn_start.setEnabled(False)
             self.btn_stop.setEnabled(True)
@@ -223,22 +260,30 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                 else:
                     self._last_time_strategy_phase = None
                 self._start_external_refresh_loop(initialized_codes)
-                start_market_intel = getattr(self, "_start_market_intelligence_loop", None)
+                start_market_intel = getattr(
+                    self, "_start_market_intelligence_loop", None
+                )
                 if callable(start_market_intel):
                     start_market_intel(initialized_codes)
                 if self.ws_client:
                     self.ws_client.connect()
-                    self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
+                    self.ws_client.subscribe_execution(
+                        initialized_codes, self._on_realtime
+                    )
                     self.ws_client.subscribe_order_execution(self._on_order_realtime)
                     self._start_index_feed(initialized_codes)
                     self._start_vi_feed(initialized_codes)
                 self.is_running = True
-                self.schedule_started = bool(getattr(self, "_scheduled_start_requested", False))
+                self.schedule_started = bool(
+                    getattr(self, "_scheduled_start_requested", False)
+                )
                 self._scheduled_start_requested = False
                 self._trading_start_inflight = False
                 self.log(f"매매 시작 - {len(initialized_codes)}개 종목")
                 if self.telegram:
-                    self.telegram.send(f"매매 시작\n종목: {', '.join(initialized_codes)}")
+                    self.telegram.send(
+                        f"매매 시작\n종목: {', '.join(initialized_codes)}"
+                    )
                 return True
 
             self.log(f"유니버스 초기화 중... ({len(valid_codes)}개 종목)")
@@ -252,21 +297,29 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
 
                     self.universe = universe
                     self.table.setRowCount(len(initialized_codes))
-                    self._code_to_row = {code: idx for idx, code in enumerate(initialized_codes)}
+                    self._code_to_row = {
+                        code: idx for idx, code in enumerate(initialized_codes)
+                    }
                     self._holding_or_pending_count = 0
 
                     for code in initialized_codes:
-                        self.universe[code]["target"] = self.strategy.calculate_target_price(code)
+                        self.universe[code]["target"] = (
+                            self.strategy.calculate_target_price(code)
+                        )
 
                     synced, reason = self._sync_positions_snapshot(initialized_codes)
                     if not synced:
                         raise RuntimeError(reason)
-                    if cfg is not None and bool(getattr(cfg, "use_time_strategy", False)):
+                    if cfg is not None and bool(
+                        getattr(cfg, "use_time_strategy", False)
+                    ):
                         self._last_time_strategy_phase = self._time_strategy_phase()
                     else:
                         self._last_time_strategy_phase = None
                     self._start_external_refresh_loop(initialized_codes)
-                    start_market_intel = getattr(self, "_start_market_intelligence_loop", None)
+                    start_market_intel = getattr(
+                        self, "_start_market_intelligence_loop", None
+                    )
                     if callable(start_market_intel):
                         start_market_intel(initialized_codes)
 
@@ -274,22 +327,32 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                     self.sig_update_table.emit()
 
                     if failed_codes:
-                        self.log(f"{len(failed_codes)}개 종목 초기화 실패: {', '.join(failed_codes)}")
+                        self.log(
+                            f"{len(failed_codes)}개 종목 초기화 실패: {', '.join(failed_codes)}"
+                        )
 
                     if self.ws_client:
                         self.ws_client.connect()
-                        self.ws_client.subscribe_execution(initialized_codes, self._on_realtime)
-                        self.ws_client.subscribe_order_execution(self._on_order_realtime)
+                        self.ws_client.subscribe_execution(
+                            initialized_codes, self._on_realtime
+                        )
+                        self.ws_client.subscribe_order_execution(
+                            self._on_order_realtime
+                        )
                         self._start_index_feed(initialized_codes)
                         self._start_vi_feed(initialized_codes)
 
                     self.is_running = True
-                    self.schedule_started = bool(getattr(self, "_scheduled_start_requested", False))
+                    self.schedule_started = bool(
+                        getattr(self, "_scheduled_start_requested", False)
+                    )
                     self._scheduled_start_requested = False
                     self._trading_start_inflight = False
                     self.log(f"매매 시작 - {len(initialized_codes)}개 종목")
                     if self.telegram:
-                        self.telegram.send(f"매매 시작\n종목: {', '.join(initialized_codes)}")
+                        self.telegram.send(
+                            f"매매 시작\n종목: {', '.join(initialized_codes)}"
+                        )
                 except Exception as exc:
                     self._scheduled_start_requested = False
                     self._trading_start_inflight = False
@@ -315,16 +378,23 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             self.log(f"매매 시작 실패: {exc}")
             QMessageBox.critical(self, "오류", f"매매 시작 중 오류:\n{exc}")
             return False
+
     def stop_trading(self):
         was_running = self.is_running
         self._set_trading_stopped_state()
 
         def finalize_cleanup(cleanup_result):
-            unresolved_codes = set(cleanup_result.get("unresolved_codes", [])) if isinstance(cleanup_result, dict) else set()
+            unresolved_codes = (
+                set(cleanup_result.get("unresolved_codes", []))
+                if isinstance(cleanup_result, dict)
+                else set()
+            )
             release_all_reserved = getattr(self, "_release_all_reserved_cash", None)
             if callable(release_all_reserved) and not unresolved_codes:
                 released = release_all_reserved(reason="STOP_TRADING")
-                released_total = int(released) if isinstance(released, (int, float, str)) else 0
+                released_total = (
+                    int(released) if isinstance(released, (int, float, str)) else 0
+                )
                 if released_total > 0 and hasattr(self, "log"):
                     self.log(f"Reserved cash reconciled on stop: +{released_total:,}")
 
@@ -332,7 +402,9 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         if not bool(getattr(self, "_shutdown_in_progress", False)):
             async_cleanup = getattr(self, "_cleanup_active_orders_async", None)
             if callable(async_cleanup):
-                async_started = bool(async_cleanup("stop_trading", on_done=finalize_cleanup))
+                async_started = bool(
+                    async_cleanup("stop_trading", on_done=finalize_cleanup)
+                )
         if not async_started:
             cleanup_result = self._cancel_pending_orders_before_stop()
             finalize_cleanup(cleanup_result)
@@ -349,11 +421,11 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                 f"- 실현 손익: {report['total_realized_profit']:+,} 원\n"
                 f"- 손익비(PF): {report['profit_factor']:.2f}"
             )
-            if report['best_trade']:
+            if report["best_trade"]:
                 summary_msg += f"\n- 최고 수익: {report['best_trade'].get('name', '')} ({report['best_trade'].get('profit', 0):+,}원)"
-            if report['worst_trade']:
+            if report["worst_trade"]:
                 summary_msg += f"\n- 최대 손실: {report['worst_trade'].get('name', '')} ({report['worst_trade'].get('profit', 0):+,}원)"
-            
+
             self.log(summary_msg)
             if self.telegram:
                 self.telegram.send(f"매매 중지\n\n{summary_msg}")
@@ -362,14 +434,21 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         """당일 세션 매매 성과 지표(승률, 손익비, 실현손익 등) 산출."""
         trades = getattr(self, "trade_history", []) or []
         today_str = datetime.date.today().strftime("%Y-%m-%d")
-        today_trades = [t for t in trades if str(t.get("time", "")).startswith(today_str) or not str(t.get("time", ""))]
+        today_trades = [
+            t
+            for t in trades
+            if str(t.get("time", "")).startswith(today_str)
+            or not str(t.get("time", ""))
+        ]
         if not today_trades:
             today_trades = list(trades)
 
         total_trades = len(today_trades)
         sell_trades = [
-            t for t in today_trades 
-            if str(t.get("type", "")).upper().startswith("SELL") or "매도" in str(t.get("type", ""))
+            t
+            for t in today_trades
+            if str(t.get("type", "")).upper().startswith("SELL")
+            or "매도" in str(t.get("type", ""))
         ]
 
         total_realized_profit = sum(int(t.get("profit", 0) or 0) for t in sell_trades)
@@ -379,10 +458,22 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         win_rate = (len(wins) / len(sell_trades) * 100.0) if sell_trades else 0.0
         total_gains = sum(int(t.get("profit", 0) or 0) for t in wins)
         total_losses = abs(sum(int(t.get("profit", 0) or 0) for t in losses))
-        profit_factor = (total_gains / total_losses) if total_losses > 0 else (float(total_gains) if total_gains > 0 else 1.0)
+        profit_factor = (
+            (total_gains / total_losses)
+            if total_losses > 0
+            else (float(total_gains) if total_gains > 0 else 1.0)
+        )
 
-        best_trade = max(sell_trades, key=lambda t: int(t.get("profit", 0) or 0)) if sell_trades else None
-        worst_trade = min(sell_trades, key=lambda t: int(t.get("profit", 0) or 0)) if sell_trades else None
+        best_trade = (
+            max(sell_trades, key=lambda t: int(t.get("profit", 0) or 0))
+            if sell_trades
+            else None
+        )
+        worst_trade = (
+            min(sell_trades, key=lambda t: int(t.get("profit", 0) or 0))
+            if sell_trades
+            else None
+        )
 
         return {
             "total_trades": total_trades,
@@ -395,6 +486,7 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             "best_trade": best_trade,
             "worst_trade": worst_trade,
         }
+
     def _time_liquidate(self):
         """장마감 시간 청산."""
         liquidated_count = 0
@@ -411,7 +503,10 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
             self.log(f"시간 청산 완료: {liquidated_count}개 종목")
             if self.telegram:
                 self.telegram.send(f"장마감 청산: {liquidated_count}개 종목")
-    def _init_universe(self, codes: List[str], background: bool = False) -> List[str] | BackgroundUniversePayload:
+
+    def _init_universe(
+        self, codes: List[str], background: bool = False
+    ) -> List[str] | BackgroundUniversePayload:
         target_universe: Dict[str, Dict[str, Any]] = {}
         failed_codes: List[str] = []
         initialized_codes: List[str] = []
@@ -428,7 +523,9 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                     continue
 
                 if (idx + 1) % 5 == 0 or idx == 0 or (idx + 1) == total_count:
-                    self.log(f"유니버스 초기화 진행 중... [{idx + 1}/{total_count}] ({quote.name})")
+                    self.log(
+                        f"유니버스 초기화 진행 중... [{idx + 1}/{total_count}] ({quote.name})"
+                    )
 
                 price_history = []
                 daily_prices = []
@@ -460,19 +557,39 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                 try:
                     minute = self.rest_client.get_minute_chart(code, 1, 60)
                     if minute:
-                        minute_prices = [candle.close_price for candle in reversed(minute)]
+                        minute_prices = [
+                            candle.close_price for candle in reversed(minute)
+                        ]
                 except Exception as minute_err:
                     self.log(f"{code} 분봉 로드 실패: {minute_err}")
 
                 if not minute_prices:
-                    minute_prices = list(price_history[-60:]) if price_history else [quote.current_price]
+                    minute_prices = (
+                        list(price_history[-60:])
+                        if price_history
+                        else [quote.current_price]
+                    )
 
-                avg_volume_5 = int(sum(volume_history[-5:]) / 5) if len(volume_history) >= 5 else 0
-                avg_volume_20 = int(sum(volume_history[-20:]) / 20) if len(volume_history) >= 20 else (
-                    int(sum(volume_history) / len(volume_history)) if volume_history else 0
+                avg_volume_5 = (
+                    int(sum(volume_history[-5:]) / 5) if len(volume_history) >= 5 else 0
                 )
-                avg_value_20 = int(sum(value_history[-20:]) / 20) if len(value_history) >= 20 else (
-                    int(sum(value_history) / len(value_history)) if value_history else 0
+                avg_volume_20 = (
+                    int(sum(volume_history[-20:]) / 20)
+                    if len(volume_history) >= 20
+                    else (
+                        int(sum(volume_history) / len(volume_history))
+                        if volume_history
+                        else 0
+                    )
+                )
+                avg_value_20 = (
+                    int(sum(value_history[-20:]) / 20)
+                    if len(value_history) >= 20
+                    else (
+                        int(sum(value_history) / len(value_history))
+                        if value_history
+                        else 0
+                    )
                 )
 
                 target_universe[code] = {
@@ -484,7 +601,9 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                     "prev_close": quote.prev_close,
                     "prev_high": prev_high,
                     "prev_low": prev_low,
-                    "daily_prices": daily_prices if daily_prices else list(price_history),
+                    "daily_prices": daily_prices
+                    if daily_prices
+                    else list(price_history),
                     "minute_prices": minute_prices,
                     "market_type": quote.market_type,
                     "sector": quote.sector or "기타",
@@ -524,11 +643,15 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
                     ensure_market_intel(target_universe[code])
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):
-                    diag_touch(code, sync_status="watch", retry_count=0, last_sync_error="")
+                    diag_touch(
+                        code, sync_status="watch", retry_count=0, last_sync_error=""
+                    )
 
                 if not background:
                     self.universe = target_universe
-                    target_universe[code]["target"] = self.strategy.calculate_target_price(code)
+                    target_universe[code]["target"] = (
+                        self.strategy.calculate_target_price(code)
+                    )
 
                 initialized_codes.append(code)
             except Exception as exc:
@@ -546,6 +669,8 @@ class TradingSessionLifecycleMixin(TraderMixinBase):
         self.sig_update_table.emit()
 
         if failed_codes:
-            self.log(f"{len(failed_codes)}개 종목 초기화 실패: {', '.join(failed_codes)}")
+            self.log(
+                f"{len(failed_codes)}개 종목 초기화 실패: {', '.join(failed_codes)}"
+            )
 
         return initialized_codes

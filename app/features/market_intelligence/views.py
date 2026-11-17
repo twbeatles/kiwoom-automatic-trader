@@ -67,9 +67,13 @@ class MarketIntelViewsMixin(TraderMixinBase):
                 info = entities.get(code, {})
                 state = self._ensure_market_intel_state(info)
                 updated_at = state.get("updated_at") or state.get("intel_updated_at")
-                status = str(state.get("status", state.get("intel_status", "idle")) or "idle")
+                status = str(
+                    state.get("status", state.get("intel_status", "idle")) or "idle"
+                )
                 if status == "fresh" and isinstance(updated_at, datetime.datetime):
-                    age = max(0, int((datetime.datetime.now() - updated_at).total_seconds()))
+                    age = max(
+                        0, int((datetime.datetime.now() - updated_at).total_seconds())
+                    )
                     if age > stale_sec:
                         status = "stale"
                 values = [
@@ -80,11 +84,15 @@ class MarketIntelViewsMixin(TraderMixinBase):
                     f"{float(state.get('theme_score', 0.0) or 0.0):.0f}",
                     display_regime(state.get("macro_regime", "neutral") or "neutral"),
                     display_source_health(state.get("source_health", "") or ""),
-                    display_action_policy(state.get("action_policy", "allow") or "allow"),
+                    display_action_policy(
+                        state.get("action_policy", "allow") or "allow"
+                    ),
                     f"{float(state.get('size_multiplier', 1.0) or 1.0):.2f}",
                     display_exit_policy(state.get("exit_policy", "none") or "none"),
                     str(state.get("last_event_id", "") or ""),
-                    updated_at.strftime("%H:%M:%S") if isinstance(updated_at, datetime.datetime) else "",
+                    updated_at.strftime("%H:%M:%S")
+                    if isinstance(updated_at, datetime.datetime)
+                    else "",
                     str(state.get("last_alert", "") or ""),
                 ]
                 for col, value in enumerate(values):
@@ -100,6 +108,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             table.setUpdatesEnabled(True)
         self._market_intel_dirty_codes = set()
         self._render_selected_market_intel_detail()
+
     def _selected_market_intel_code(self) -> str:
         table = getattr(self, "market_intel_table", None)
         if table is None:
@@ -122,7 +131,6 @@ class MarketIntelViewsMixin(TraderMixinBase):
             return ""
         return str(getattr(self, "_market_intel_row_to_code", {}).get(row, "") or "")
 
-
     def _render_selected_market_intel_detail(self):
         panel = getattr(self, "market_intel_detail_panel", None)
         if panel is None:
@@ -130,14 +138,26 @@ class MarketIntelViewsMixin(TraderMixinBase):
         code = self._selected_market_intel_code()
         if not code:
             self._last_rendered_market_intel_code = ""
-            update_plain_text_panel(panel, "선택된 종목이 없습니다.", preserve_scroll=False)
+            update_plain_text_panel(
+                panel, "선택된 종목이 없습니다.", preserve_scroll=False
+            )
             return
         info = self._market_intel_entity(code)
         state = self._ensure_market_intel_state(info)
-        ai_summary = state.get("ai_summary", {}) if isinstance(state.get("ai_summary"), dict) else {}
-        headlines = [f"- {item.get('title', '')}" for item in state.get("news_headlines", [])[:5]]
-        disclosures = [f"- {item.get('title', '')}" for item in state.get("dart_events", [])[:5]]
-        sources = state.get("sources", {}) if isinstance(state.get("sources"), dict) else {}
+        ai_summary = (
+            state.get("ai_summary", {})
+            if isinstance(state.get("ai_summary"), dict)
+            else {}
+        )
+        headlines = [
+            f"- {item.get('title', '')}" for item in state.get("news_headlines", [])[:5]
+        ]
+        disclosures = [
+            f"- {item.get('title', '')}" for item in state.get("dart_events", [])[:5]
+        ]
+        sources = (
+            state.get("sources", {}) if isinstance(state.get("sources"), dict) else {}
+        )
         detail = [
             f"종목: {info.get('name', code)} ({code})",
             f"인텔리전스 상태: {display_status(state.get('status', state.get('intel_status', 'idle')))}",
@@ -170,7 +190,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             *disclosures,
         ]
         last_code = getattr(self, "_last_rendered_market_intel_code", None)
-        code_changed = (code != last_code)
+        code_changed = code != last_code
         self._last_rendered_market_intel_code = code
 
         full_text = "\n".join(detail)
@@ -178,20 +198,32 @@ class MarketIntelViewsMixin(TraderMixinBase):
 
     def _on_market_intel_selection_changed(self):
         self._render_selected_market_intel_detail()
+
     def _on_market_intel_refresh_selected(self):
         code = self._selected_market_intel_code()
         if not code:
             self.log("[시장인텔리전스] 새로고침 대상 종목이 선택되지 않았습니다.")
             return
         self.log(f"[시장인텔리전스] 선택 종목 새로고침: {code}")
-        self._request_market_intelligence_refresh_batch([code], reason="manual_selected", force=True)
+        self._request_market_intelligence_refresh_batch(
+            [code], reason="manual_selected", force=True
+        )
+
     def _on_market_intel_refresh_all(self):
-        codes = list(dict.fromkeys(list(self.universe.keys()) + list(getattr(self, "_active_market_candidates", {}).keys())))
+        codes = list(
+            dict.fromkeys(
+                list(self.universe.keys())
+                + list(getattr(self, "_active_market_candidates", {}).keys())
+            )
+        )
         if not codes:
             self.log("[시장인텔리전스] 새로고침 대상 종목이 없습니다.")
             return
         self.log(f"[시장인텔리전스] 전체 새로고침: {len(codes)}개 종목")
-        self._request_market_intelligence_refresh_batch(codes, reason="manual_all", force=True)
+        self._request_market_intelligence_refresh_batch(
+            codes, reason="manual_all", force=True
+        )
+
     @staticmethod
     def _market_replay_payload(record: Dict[str, Any]) -> Dict[str, Any]:
         payload = record.get("payload", {}) if isinstance(record, dict) else {}
@@ -208,6 +240,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             except Exception:
                 return {}
         return {}
+
     @staticmethod
     def _market_replay_parse_ts(value: Any) -> Optional[datetime.datetime]:
         text = str(value or "").strip()
@@ -219,7 +252,10 @@ class MarketIntelViewsMixin(TraderMixinBase):
             return datetime.datetime.fromisoformat(text)
         except ValueError:
             return None
-    def _read_jsonl_tail_records(self, path_value: Any, limit: int = 200) -> List[Dict[str, Any]]:
+
+    def _read_jsonl_tail_records(
+        self, path_value: Any, limit: int = 200
+    ) -> List[Dict[str, Any]]:
         path = Path(str(path_value or "")).expanduser()
         if not path.exists():
             return []
@@ -241,7 +277,10 @@ class MarketIntelViewsMixin(TraderMixinBase):
             if isinstance(record, dict):
                 records.append(record)
         return records
-    def _collect_market_replay_scope_state(self, event_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+
+    def _collect_market_replay_scope_state(
+        self, event_records: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         market_mode = "unknown"
         portfolio_budget_scale = 1.0
         aggregate_news_risk = 0.0
@@ -257,22 +296,37 @@ class MarketIntelViewsMixin(TraderMixinBase):
                 mode = str(payload.get("macro_regime", "") or "")
                 if mode:
                     market_mode = mode
-                portfolio_budget_scale = float(payload.get("portfolio_budget_scale", portfolio_budget_scale) or portfolio_budget_scale)
-                aggregate_news_risk = float(payload.get("aggregate_news_risk", aggregate_news_risk) or aggregate_news_risk)
+                portfolio_budget_scale = float(
+                    payload.get("portfolio_budget_scale", portfolio_budget_scale)
+                    or portfolio_budget_scale
+                )
+                aggregate_news_risk = float(
+                    payload.get("aggregate_news_risk", aggregate_news_risk)
+                    or aggregate_news_risk
+                )
             elif scope == "sector":
-                sector = str(payload.get("sector", "") or record.get("symbol", "") or "").strip()
+                sector = str(
+                    payload.get("sector", "") or record.get("symbol", "") or ""
+                ).strip()
                 if not sector:
                     continue
                 if event_type == "sector_block":
-                    sector_blocks[sector] = int(payload.get("count", sector_blocks.get(sector, 0)) or sector_blocks.get(sector, 0))
+                    sector_blocks[sector] = int(
+                        payload.get("count", sector_blocks.get(sector, 0))
+                        or sector_blocks.get(sector, 0)
+                    )
                 elif event_type == "sector_block_release":
                     sector_blocks.pop(sector, None)
             elif scope == "theme":
-                theme = str(payload.get("theme", "") or record.get("symbol", "") or "").strip()
+                theme = str(
+                    payload.get("theme", "") or record.get("symbol", "") or ""
+                ).strip()
                 if not theme:
                     continue
                 if event_type == "theme_heat":
-                    hot_themes[theme] = float(payload.get("theme_score", record.get("score", 0.0)) or 0.0)
+                    hot_themes[theme] = float(
+                        payload.get("theme_score", record.get("score", 0.0)) or 0.0
+                    )
                 elif event_type == "theme_cooldown":
                     hot_themes.pop(theme, None)
         return {
@@ -283,18 +337,45 @@ class MarketIntelViewsMixin(TraderMixinBase):
             "hot_themes": hot_themes,
             "latest_event_ts": latest_event_ts,
         }
+
     def _market_replay_filters(self) -> Dict[str, Any]:
-        symbol_filter = str(getattr(getattr(self, "input_market_replay_symbol_filter", None), "text", lambda: "")()).strip().lower()
-        scope_filter = combo_value(getattr(self, "combo_market_replay_scope", None), "all").strip().lower()
-        audit_filter = combo_value(getattr(self, "combo_market_replay_allowed", None), "all").strip().lower()
-        limit = int(getattr(getattr(self, "spin_market_replay_limit", None), "value", lambda: 100)() or 100)
+        symbol_filter = (
+            str(
+                getattr(
+                    getattr(self, "input_market_replay_symbol_filter", None),
+                    "text",
+                    lambda: "",
+                )()
+            )
+            .strip()
+            .lower()
+        )
+        scope_filter = (
+            combo_value(getattr(self, "combo_market_replay_scope", None), "all")
+            .strip()
+            .lower()
+        )
+        audit_filter = (
+            combo_value(getattr(self, "combo_market_replay_allowed", None), "all")
+            .strip()
+            .lower()
+        )
+        limit = int(
+            getattr(
+                getattr(self, "spin_market_replay_limit", None), "value", lambda: 100
+            )()
+            or 100
+        )
         return {
             "symbol_filter": symbol_filter,
             "scope_filter": scope_filter,
             "audit_filter": audit_filter,
             "limit": max(20, limit),
         }
-    def _filter_market_replay_event_records(self, records: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+
+    def _filter_market_replay_event_records(
+        self, records: List[Dict[str, Any]], filters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         symbol_filter = str(filters.get("symbol_filter", "") or "")
         scope_filter = str(filters.get("scope_filter", "all") or "all")
         limit = int(filters.get("limit", 100) or 100)
@@ -322,7 +403,10 @@ class MarketIntelViewsMixin(TraderMixinBase):
             if len(filtered) >= limit:
                 break
         return filtered
-    def _filter_market_replay_audit_records(self, records: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+
+    def _filter_market_replay_audit_records(
+        self, records: List[Dict[str, Any]], filters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         symbol_filter = str(filters.get("symbol_filter", "") or "")
         audit_filter = str(filters.get("audit_filter", "all") or "all")
         limit = int(filters.get("limit", 100) or 100)
@@ -336,7 +420,11 @@ class MarketIntelViewsMixin(TraderMixinBase):
                     str(record.get("reason", "") or ""),
                     str(record.get("action_policy", "") or ""),
                     str(record.get("exit_policy", "") or ""),
-                    str(record.get("market_intel", {}).get("last_event_id", "") if isinstance(record.get("market_intel"), dict) else ""),
+                    str(
+                        record.get("market_intel", {}).get("last_event_id", "")
+                        if isinstance(record.get("market_intel"), dict)
+                        else ""
+                    ),
                 ]
             ).lower()
             if audit_filter == "allowed" and not allowed:
@@ -349,6 +437,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             if len(filtered) >= limit:
                 break
         return filtered
+
     def _build_market_replay_summary(
         self,
         event_records: List[Dict[str, Any]],
@@ -363,22 +452,44 @@ class MarketIntelViewsMixin(TraderMixinBase):
             source = str(record.get("source", "") or "unknown")
             scope_counts[scope] = scope_counts.get(scope, 0) + 1
             source_counts[source] = source_counts.get(source, 0) + 1
-        allowed_count = sum(1 for record in audit_records if bool(record.get("allowed", False)))
+        allowed_count = sum(
+            1 for record in audit_records if bool(record.get("allowed", False))
+        )
         blocked_count = len(audit_records) - allowed_count
         reason_counts: Dict[str, int] = {}
         for record in audit_records:
             reason = str(record.get("reason", "") or "")
             if reason:
                 reason_counts[reason] = reason_counts.get(reason, 0) + 1
-        top_reasons = ", ".join(
-            f"{reason}({count})" for reason, count in sorted(reason_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
-        ) or "-"
-        sector_text = ", ".join(
-            f"{sector}({count})" for sector, count in sorted(scope_state.get("sector_blocks", {}).items(), key=lambda kv: (-kv[1], kv[0]))[:5]
-        ) or "-"
-        theme_text = ", ".join(
-            f"{theme}({score:.0f})" for theme, score in sorted(scope_state.get("hot_themes", {}).items(), key=lambda kv: (-kv[1], kv[0]))[:5]
-        ) or "-"
+        top_reasons = (
+            ", ".join(
+                f"{reason}({count})"
+                for reason, count in sorted(
+                    reason_counts.items(), key=lambda kv: (-kv[1], kv[0])
+                )[:5]
+            )
+            or "-"
+        )
+        sector_text = (
+            ", ".join(
+                f"{sector}({count})"
+                for sector, count in sorted(
+                    scope_state.get("sector_blocks", {}).items(),
+                    key=lambda kv: (-kv[1], kv[0]),
+                )[:5]
+            )
+            or "-"
+        )
+        theme_text = (
+            ", ".join(
+                f"{theme}({score:.0f})"
+                for theme, score in sorted(
+                    scope_state.get("hot_themes", {}).items(),
+                    key=lambda kv: (-kv[1], kv[0]),
+                )[:5]
+            )
+            or "-"
+        )
         audit_label = {"all": "전체", "allowed": "허용만", "blocked": "차단만"}.get(
             str(filters.get("audit_filter", "all") or "all"),
             str(filters.get("audit_filter", "all") or "all"),
@@ -398,6 +509,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
                 f"상위 사유: {top_reasons}",
             ]
         )
+
     def _schedule_market_replay_refresh(self, force: bool = False):
         if force:
             self._market_replay_refresh_scheduled = False
@@ -407,9 +519,11 @@ class MarketIntelViewsMixin(TraderMixinBase):
             return
         self._market_replay_refresh_scheduled = True
         QTimer.singleShot(300, self._run_scheduled_market_replay_refresh)
+
     def _run_scheduled_market_replay_refresh(self):
         self._market_replay_refresh_scheduled = False
         self._refresh_market_replay_dashboard()
+
     def _refresh_market_replay_dashboard(self):
         summary_panel = getattr(self, "market_replay_summary_panel", None)
         event_table = getattr(self, "market_replay_event_table", None)
@@ -418,15 +532,28 @@ class MarketIntelViewsMixin(TraderMixinBase):
             return
         filters = self._market_replay_filters()
         scan_limit = max(300, int(filters.get("limit", 100)) * 5)
-        raw_event_records = self._read_jsonl_tail_records(getattr(Config, "MARKET_INTELLIGENCE_EVENTS_FILE", ""), limit=scan_limit)
-        raw_audit_records = self._read_jsonl_tail_records(getattr(Config, "MARKET_INTELLIGENCE_DECISION_AUDIT_FILE", ""), limit=scan_limit)
-        event_records = self._filter_market_replay_event_records(raw_event_records, filters)
-        audit_records = self._filter_market_replay_audit_records(raw_audit_records, filters)
+        raw_event_records = self._read_jsonl_tail_records(
+            getattr(Config, "MARKET_INTELLIGENCE_EVENTS_FILE", ""), limit=scan_limit
+        )
+        raw_audit_records = self._read_jsonl_tail_records(
+            getattr(Config, "MARKET_INTELLIGENCE_DECISION_AUDIT_FILE", ""),
+            limit=scan_limit,
+        )
+        event_records = self._filter_market_replay_event_records(
+            raw_event_records, filters
+        )
+        audit_records = self._filter_market_replay_audit_records(
+            raw_audit_records, filters
+        )
         self._market_replay_event_records = event_records
         self._market_replay_audit_records = audit_records
         self._market_replay_event_row_to_index = {}
         self._market_replay_audit_row_to_index = {}
-        summary_panel.setPlainText(self._build_market_replay_summary(raw_event_records, raw_audit_records, filters))
+        summary_panel.setPlainText(
+            self._build_market_replay_summary(
+                raw_event_records, raw_audit_records, filters
+            )
+        )
 
         event_table.setUpdatesEnabled(False)
         try:
@@ -436,7 +563,12 @@ class MarketIntelViewsMixin(TraderMixinBase):
                 values = [
                     str(record.get("ts", "") or ""),
                     display_replay_scope(record.get("scope", "symbol") or "symbol"),
-                    str(record.get("symbol", "") or payload.get("sector", "") or payload.get("theme", "") or ""),
+                    str(
+                        record.get("symbol", "")
+                        or payload.get("sector", "")
+                        or payload.get("theme", "")
+                        or ""
+                    ),
                     display_source_name(record.get("source", "") or ""),
                     display_event_type(record.get("event_type", "") or ""),
                     f"{float(record.get('score', 0.0) or 0.0):+.1f}",
@@ -452,7 +584,11 @@ class MarketIntelViewsMixin(TraderMixinBase):
                         event_table.setItem(row, col, item)
                     else:
                         item.setText(str(value))
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col < 9 else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignCenter
+                        if col < 9
+                        else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+                    )
                 self._market_replay_event_row_to_index[row] = row
         finally:
             event_table.setUpdatesEnabled(True)
@@ -461,7 +597,11 @@ class MarketIntelViewsMixin(TraderMixinBase):
         try:
             audit_table.setRowCount(len(audit_records))
             for row, record in enumerate(audit_records):
-                market_intel = record.get("market_intel", {}) if isinstance(record.get("market_intel"), dict) else {}
+                market_intel = (
+                    record.get("market_intel", {})
+                    if isinstance(record.get("market_intel"), dict)
+                    else {}
+                )
                 values = [
                     str(record.get("ts", "") or ""),
                     str(record.get("symbol", "") or ""),
@@ -480,7 +620,11 @@ class MarketIntelViewsMixin(TraderMixinBase):
                         audit_table.setItem(row, col, item)
                     else:
                         item.setText(str(value))
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col != 3 else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignCenter
+                        if col != 3
+                        else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+                    )
                 self._market_replay_audit_row_to_index[row] = row
         finally:
             audit_table.setUpdatesEnabled(True)
@@ -490,6 +634,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
         _timeline_refresher = getattr(self, "_refresh_intel_timeline", None)
         if callable(_timeline_refresher):
             _timeline_refresher(event_records, audit_records)
+
     def _selected_market_replay_event_record(self) -> Dict[str, Any]:
         table = getattr(self, "market_replay_event_table", None)
         if table is None:
@@ -497,11 +642,14 @@ class MarketIntelViewsMixin(TraderMixinBase):
         selected = table.selectedItems()
         if not selected:
             return {}
-        record_index = getattr(self, "_market_replay_event_row_to_index", {}).get(selected[0].row(), -1)
+        record_index = getattr(self, "_market_replay_event_row_to_index", {}).get(
+            selected[0].row(), -1
+        )
         records = getattr(self, "_market_replay_event_records", [])
         if not isinstance(records, list) or not (0 <= int(record_index) < len(records)):
             return {}
         return records[int(record_index)]
+
     def _selected_market_replay_audit_record(self) -> Dict[str, Any]:
         table = getattr(self, "market_replay_audit_table", None)
         if table is None:
@@ -509,18 +657,23 @@ class MarketIntelViewsMixin(TraderMixinBase):
         selected = table.selectedItems()
         if not selected:
             return {}
-        record_index = getattr(self, "_market_replay_audit_row_to_index", {}).get(selected[0].row(), -1)
+        record_index = getattr(self, "_market_replay_audit_row_to_index", {}).get(
+            selected[0].row(), -1
+        )
         records = getattr(self, "_market_replay_audit_records", [])
         if not isinstance(records, list) or not (0 <= int(record_index) < len(records)):
             return {}
         return records[int(record_index)]
+
     def _render_selected_market_replay_event_detail(self):
         panel = getattr(self, "market_replay_event_detail_panel", None)
         if panel is None:
             return
         record = self._selected_market_replay_event_record()
         if not record:
-            update_plain_text_panel(panel, "선택된 이벤트가 없습니다.", preserve_scroll=False)
+            update_plain_text_panel(
+                panel, "선택된 이벤트가 없습니다.", preserve_scroll=False
+            )
             return
         payload = self._market_replay_payload(record)
         detail = [
@@ -537,13 +690,16 @@ class MarketIntelViewsMixin(TraderMixinBase):
             json.dumps(payload, ensure_ascii=False, indent=2) if payload else "{}",
         ]
         update_plain_text_panel(panel, "\n".join(detail), preserve_scroll=False)
+
     def _render_selected_market_replay_audit_detail(self):
         panel = getattr(self, "market_replay_audit_detail_panel", None)
         if panel is None:
             return
         record = self._selected_market_replay_audit_record()
         if not record:
-            update_plain_text_panel(panel, "선택된 감사 로그가 없습니다.", preserve_scroll=False)
+            update_plain_text_panel(
+                panel, "선택된 감사 로그가 없습니다.", preserve_scroll=False
+            )
             return
         detail = [
             f"시각: {record.get('ts', '')}",
@@ -558,6 +714,7 @@ class MarketIntelViewsMixin(TraderMixinBase):
             json.dumps(record, ensure_ascii=False, indent=2),
         ]
         update_plain_text_panel(panel, "\n".join(detail), preserve_scroll=False)
+
     def _refresh_intel_timeline(self, event_records=None, audit_records=None):
         """이벤트+감사 JSONL 기록을 하나의 통합 타임라인으로 병합 표시 (읽기 전용)."""
         table = getattr(self, "market_replay_timeline_table", None)
@@ -589,10 +746,15 @@ class MarketIntelViewsMixin(TraderMixinBase):
                         table.setItem(row, col, item)
                     else:
                         item.setText(str(value))
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col < 3 else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignCenter
+                        if col < 3
+                        else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+                    )
         finally:
             table.setUpdatesEnabled(True)
         self._render_selected_intel_timeline_detail()
+
     def _render_selected_intel_timeline_detail(self):
         panel = getattr(self, "market_replay_timeline_detail_panel", None)
         if panel is None:
@@ -609,18 +771,28 @@ class MarketIntelViewsMixin(TraderMixinBase):
                     if isinstance(source, dict):
                         record = source
         if not record:
-            update_plain_text_panel(panel, "선택된 타임라인 항목이 없습니다.", preserve_scroll=False)
+            update_plain_text_panel(
+                panel, "선택된 타임라인 항목이 없습니다.", preserve_scroll=False
+            )
             return
-        update_plain_text_panel(panel, json.dumps(record, ensure_ascii=False, indent=2), preserve_scroll=False)
+        update_plain_text_panel(
+            panel,
+            json.dumps(record, ensure_ascii=False, indent=2),
+            preserve_scroll=False,
+        )
 
     def _on_intel_timeline_selection_changed(self):
         self._render_selected_intel_timeline_detail()
+
     def _on_market_replay_event_selection_changed(self):
         self._render_selected_market_replay_event_detail()
+
     def _on_market_replay_audit_selection_changed(self):
         self._render_selected_market_replay_audit_detail()
+
     def _on_market_replay_refresh(self):
         self._schedule_market_replay_refresh(force=True)
+
     def _create_market_replay_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -631,26 +803,36 @@ class MarketIntelViewsMixin(TraderMixinBase):
         control_row.addWidget(btn_refresh)
 
         self.input_market_replay_symbol_filter = QLineEdit()
-        self.input_market_replay_symbol_filter.setPlaceholderText("종목코드, 업종, 테마, 사유로 검색")
-        self.input_market_replay_symbol_filter.textChanged.connect(self._on_market_replay_refresh)
+        self.input_market_replay_symbol_filter.setPlaceholderText(
+            "종목코드, 업종, 테마, 사유로 검색"
+        )
+        self.input_market_replay_symbol_filter.textChanged.connect(
+            self._on_market_replay_refresh
+        )
         control_row.addWidget(self.input_market_replay_symbol_filter)
 
         self.combo_market_replay_scope = NoScrollComboBox()
         populate_combo(self.combo_market_replay_scope, REPLAY_SCOPE_CHOICES, "all")
-        self.combo_market_replay_scope.currentTextChanged.connect(self._on_market_replay_refresh)
+        self.combo_market_replay_scope.currentTextChanged.connect(
+            self._on_market_replay_refresh
+        )
         control_row.addWidget(QLabel("범위"))
         control_row.addWidget(self.combo_market_replay_scope)
 
         self.combo_market_replay_allowed = NoScrollComboBox()
         populate_combo(self.combo_market_replay_allowed, REPLAY_AUDIT_CHOICES, "all")
-        self.combo_market_replay_allowed.currentTextChanged.connect(self._on_market_replay_refresh)
+        self.combo_market_replay_allowed.currentTextChanged.connect(
+            self._on_market_replay_refresh
+        )
         control_row.addWidget(QLabel("감사"))
         control_row.addWidget(self.combo_market_replay_allowed)
 
         self.spin_market_replay_limit = NoScrollSpinBox()
         self.spin_market_replay_limit.setRange(20, 500)
         self.spin_market_replay_limit.setValue(100)
-        self.spin_market_replay_limit.valueChanged.connect(self._on_market_replay_refresh)
+        self.spin_market_replay_limit.valueChanged.connect(
+            self._on_market_replay_refresh
+        )
         control_row.addWidget(QLabel("표시 개수"))
         control_row.addWidget(self.spin_market_replay_limit)
         control_row.addStretch()
@@ -670,11 +852,26 @@ class MarketIntelViewsMixin(TraderMixinBase):
         event_group = QGroupBox("이벤트 로그")
         event_layout = QVBoxLayout(event_group)
         self.market_replay_event_table = QTableWidget()
-        event_cols = ["시각", "범위", "대상", "소스", "유형", "점수", "정책", "청산", "차단", "요약"]
+        event_cols = [
+            "시각",
+            "범위",
+            "대상",
+            "소스",
+            "유형",
+            "점수",
+            "정책",
+            "청산",
+            "차단",
+            "요약",
+        ]
         self.market_replay_event_table.setColumnCount(len(event_cols))
         self.market_replay_event_table.setHorizontalHeaderLabels(event_cols)
-        self.market_replay_event_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.market_replay_event_table.itemSelectionChanged.connect(self._on_market_replay_event_selection_changed)
+        self.market_replay_event_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.market_replay_event_table.itemSelectionChanged.connect(
+            self._on_market_replay_event_selection_changed
+        )
         event_header = self.market_replay_event_table.horizontalHeader()
         if event_header is not None:
             from PySide6.QtWidgets import QHeaderView
@@ -691,11 +888,25 @@ class MarketIntelViewsMixin(TraderMixinBase):
         audit_group = QGroupBox("결정 감사")
         audit_layout = QVBoxLayout(audit_group)
         self.market_replay_audit_table = QTableWidget()
-        audit_cols = ["시각", "종목", "허용 여부", "사유", "수량", "정책", "청산", "상태", "마지막 이벤트"]
+        audit_cols = [
+            "시각",
+            "종목",
+            "허용 여부",
+            "사유",
+            "수량",
+            "정책",
+            "청산",
+            "상태",
+            "마지막 이벤트",
+        ]
         self.market_replay_audit_table.setColumnCount(len(audit_cols))
         self.market_replay_audit_table.setHorizontalHeaderLabels(audit_cols)
-        self.market_replay_audit_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.market_replay_audit_table.itemSelectionChanged.connect(self._on_market_replay_audit_selection_changed)
+        self.market_replay_audit_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.market_replay_audit_table.itemSelectionChanged.connect(
+            self._on_market_replay_audit_selection_changed
+        )
         audit_header = self.market_replay_audit_table.horizontalHeader()
         if audit_header is not None:
             from PySide6.QtWidgets import QHeaderView
@@ -705,7 +916,9 @@ class MarketIntelViewsMixin(TraderMixinBase):
         self.market_replay_audit_detail_panel = QPlainTextEdit()
         self.market_replay_audit_detail_panel.setReadOnly(True)
         self.market_replay_audit_detail_panel.setMaximumHeight(220)
-        self.market_replay_audit_detail_panel.setPlainText("선택된 감사 로그가 없습니다.")
+        self.market_replay_audit_detail_panel.setPlainText(
+            "선택된 감사 로그가 없습니다."
+        )
         audit_layout.addWidget(self.market_replay_audit_detail_panel)
         body_layout.addWidget(audit_group, 0, 1)
 
@@ -716,17 +929,24 @@ class MarketIntelViewsMixin(TraderMixinBase):
         timeline_cols = ["시각", "구분", "대상", "내용", "정책/사유"]
         self.market_replay_timeline_table.setColumnCount(len(timeline_cols))
         self.market_replay_timeline_table.setHorizontalHeaderLabels(timeline_cols)
-        self.market_replay_timeline_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.market_replay_timeline_table.itemSelectionChanged.connect(self._on_intel_timeline_selection_changed)
+        self.market_replay_timeline_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.market_replay_timeline_table.itemSelectionChanged.connect(
+            self._on_intel_timeline_selection_changed
+        )
         timeline_layout.addWidget(self.market_replay_timeline_table)
         self.market_replay_timeline_detail_panel = QPlainTextEdit()
         self.market_replay_timeline_detail_panel.setReadOnly(True)
         self.market_replay_timeline_detail_panel.setMaximumHeight(160)
-        self.market_replay_timeline_detail_panel.setPlainText("선택된 타임라인 항목이 없습니다.")
+        self.market_replay_timeline_detail_panel.setPlainText(
+            "선택된 타임라인 항목이 없습니다."
+        )
         timeline_layout.addWidget(self.market_replay_timeline_detail_panel)
         layout.addWidget(timeline_group)
         self._schedule_market_replay_refresh(force=True)
         return widget
+
     def _create_market_intelligence_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -772,8 +992,12 @@ class MarketIntelViewsMixin(TraderMixinBase):
             from PySide6.QtWidgets import QHeaderView
 
             header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.market_intel_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.market_intel_table.itemSelectionChanged.connect(self._on_market_intel_selection_changed)
+        self.market_intel_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.market_intel_table.itemSelectionChanged.connect(
+            self._on_market_intel_selection_changed
+        )
         layout.addWidget(self.market_intel_table)
 
         self.market_intel_detail_panel = QPlainTextEdit()

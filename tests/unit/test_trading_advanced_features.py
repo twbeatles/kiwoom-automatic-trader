@@ -1,4 +1,5 @@
 """자동 매매 고도화 기능 (Chandelier Exit, Spread Guard, Session Performance Summary) 단위 테스트."""
+
 import datetime
 import unittest
 from unittest.mock import MagicMock
@@ -76,7 +77,9 @@ class TestChandelierExitAndIndicators(unittest.TestCase):
         }
 
         triggered, stop_price = self.strategy.check_chandelier_exit("005930")
-        self.assertFalse(triggered, "진입 직후 과거 고가로 인해 즉시 청산되어서는 안 됨")
+        self.assertFalse(
+            triggered, "진입 직후 과거 고가로 인해 즉시 청산되어서는 안 됨"
+        )
         # stop_price should be below buy_price (80000)
         self.assertLess(stop_price, 80000)
 
@@ -119,7 +122,9 @@ class TestExecutionGuardsSpreadCheck(unittest.TestCase):
             "bid_price": 70000,  # spread = (72000 - 70000) / 71000 * 100 = 2.81% > max_spread (1.0%)
             "market_state": "normal",
         }
-        allowed, reason = self.guard_tester._can_enter_trade("005930", info, datetime.datetime.now())
+        allowed, reason = self.guard_tester._can_enter_trade(
+            "005930", info, datetime.datetime.now()
+        )
         self.assertFalse(allowed)
         self.assertEqual(reason, "wide_spread")
 
@@ -131,7 +136,9 @@ class TestExecutionGuardsSpreadCheck(unittest.TestCase):
             "bid_price": 70000,  # spread = 100 / 70050 * 100 = 0.14% <= max_spread (1.0%)
             "market_state": "normal",
         }
-        allowed, reason = self.guard_tester._can_enter_trade("005930", info, datetime.datetime.now())
+        allowed, reason = self.guard_tester._can_enter_trade(
+            "005930", info, datetime.datetime.now()
+        )
         self.assertTrue(allowed)
         self.assertEqual(reason, "")
 
@@ -151,14 +158,41 @@ class TestSessionSummaryReport(unittest.TestCase):
     def setUp(self):
         self.lifecycle = _LifecycleTester()
 
-    def test_generate_session_summary_report_calculates_win_rate_and_profit_factor(self):
+    def test_generate_session_summary_report_calculates_win_rate_and_profit_factor(
+        self,
+    ):
         today_str = datetime.date.today().strftime("%Y-%m-%d")
         self.lifecycle.trade_history = [
-            {"type": "BUY", "name": "삼성전자", "profit": 0, "time": f"{today_str} 09:10:00"},
-            {"type": "SELL", "name": "삼성전자", "profit": 50000, "time": f"{today_str} 09:30:00"},
-            {"type": "BUY", "name": "SK하이닉스", "profit": 0, "time": f"{today_str} 10:00:00"},
-            {"type": "SELL", "name": "SK하이닉스", "profit": -20000, "time": f"{today_str} 10:30:00"},
-            {"type": "SELL", "name": "NAVER", "profit": 30000, "time": f"{today_str} 11:00:00"},
+            {
+                "type": "BUY",
+                "name": "삼성전자",
+                "profit": 0,
+                "time": f"{today_str} 09:10:00",
+            },
+            {
+                "type": "SELL",
+                "name": "삼성전자",
+                "profit": 50000,
+                "time": f"{today_str} 09:30:00",
+            },
+            {
+                "type": "BUY",
+                "name": "SK하이닉스",
+                "profit": 0,
+                "time": f"{today_str} 10:00:00",
+            },
+            {
+                "type": "SELL",
+                "name": "SK하이닉스",
+                "profit": -20000,
+                "time": f"{today_str} 10:30:00",
+            },
+            {
+                "type": "SELL",
+                "name": "NAVER",
+                "profit": 30000,
+                "time": f"{today_str} 11:00:00",
+            },
         ]
 
         report = self.lifecycle._generate_session_summary_report()

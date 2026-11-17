@@ -12,9 +12,7 @@ from app.support.theme import TOKENS, build_stylesheet
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 
-_EMOJI_RE = re.compile(
-    "[\U0001f000-\U0001faff\u2600-\u27bf\u2b00-\u2bff]"
-)
+_EMOJI_RE = re.compile("[\U0001f000-\U0001faff\u2600-\u27bf\u2b00-\u2bff]")
 
 
 def _mock_widget():
@@ -23,8 +21,8 @@ def _mock_widget():
 
     widget = MagicMock()
     props: dict = {}
-    widget.setProperty.side_effect = (
-        lambda name, value: props.__setitem__(name, value) or True
+    widget.setProperty.side_effect = lambda name, value: (
+        props.__setitem__(name, value) or True
     )
     widget.props = props
     return widget
@@ -32,9 +30,7 @@ def _mock_widget():
 
 class TestDesignTokens(unittest.TestCase):
     def test_spacing_scale(self):
-        self.assertEqual(
-            tokens.SPACING_SCALE, (4, 8, 12, 16, 24, 32)
-        )
+        self.assertEqual(tokens.SPACING_SCALE, (4, 8, 12, 16, 24, 32))
         self.assertEqual(tokens.PAGE_MARGIN, 24)
         self.assertEqual(tokens.SECTION_GAP, 24)
         self.assertEqual(tokens.CARD_RADIUS, 8)
@@ -97,10 +93,10 @@ class TestThemeFluentRules(unittest.TestCase):
                 'QLabel[tone="warning"]',
                 'QLabel[badge="connected"]',
                 'QLabel[profit_state="up"]',
-                'QPushButton#orderBtn',
+                "QPushButton#orderBtn",
                 'QFrame[infobar="success"]',
-                'QFrame#fluentNav',
-                'QListWidget#fluentNavList::item:selected',
+                "QFrame#fluentNav",
+                "QListWidget#fluentNavList::item:selected",
                 'QPushButton[secondary_button="true"]',
                 'QLineEdit[invalid="true"]',
             ):
@@ -131,9 +127,7 @@ class TestWorkspaceLabels(unittest.TestCase):
 
         self.assertEqual(len(WORKSPACE_LABELS), 5)
         for label in WORKSPACE_LABELS:
-            self.assertIsNone(
-                _EMOJI_RE.search(label), f"emoji icon in {label!r}"
-            )
+            self.assertIsNone(_EMOJI_RE.search(label), f"emoji icon in {label!r}")
 
 
 class TestUserVisibleLabels(unittest.TestCase):
@@ -147,9 +141,7 @@ class TestUserVisibleLabels(unittest.TestCase):
                 _EMOJI_RE.search(preset["name"]), f"emoji in preset {preset['name']!r}"
             )
         for section, body in Config.HELP_CONTENT.items():
-            self.assertIsNone(
-                _EMOJI_RE.search(body), f"emoji in help {section!r}"
-            )
+            self.assertIsNone(_EMOJI_RE.search(body), f"emoji in help {section!r}")
 
     def test_menu_group_button_labels_have_no_emoji(self):
         menu_text = (REPO / "app" / "mixins" / "system_shell.py").read_text(
@@ -162,9 +154,7 @@ class TestUserVisibleLabels(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for title in ("리플레이 요약", "소스 상태"):
             self.assertIn(title, views_text)
-        schedule_text = (REPO / "dialogs" / "schedule.py").read_text(
-            encoding="utf-8"
-        )
+        schedule_text = (REPO / "dialogs" / "schedule.py").read_text(encoding="utf-8")
         self.assertIn('QPushButton("저장")', schedule_text)
         favorites_text = (
             REPO / "app" / "features" / "dialogs" / "favorites.py"
@@ -176,7 +166,11 @@ class TestUserVisibleLabels(unittest.TestCase):
             ("dialogs/schedule.py", schedule_text),
         ):
             for line in content.splitlines():
-                if "addAction(" in line or "QGroupBox(" in line or "QPushButton(" in line:
+                if (
+                    "addAction(" in line
+                    or "QGroupBox(" in line
+                    or "QPushButton(" in line
+                ):
                     self.assertIsNone(
                         _EMOJI_RE.search(line), f"emoji in {path}: {line.strip()}"
                     )
@@ -195,9 +189,7 @@ class TestTableStatusColors(unittest.TestCase):
 
     def test_status_contrast_passes_on_table_background(self):
         for theme in ("dark", "light"):
-            for role, ratio in theme_engine.check_table_status_contrast(
-                theme
-            ).items():
+            for role, ratio in theme_engine.check_table_status_contrast(theme).items():
                 self.assertGreaterEqual(ratio, 4.5, f"{theme}:{role}")
 
 
@@ -228,12 +220,8 @@ class TestNoInlineQss(unittest.TestCase):
 
 class TestThemeMode(unittest.TestCase):
     def test_modes_and_defaults(self):
-        self.assertEqual(
-            theme_engine.DEFAULT_UI_THEME_MODE, "auto"
-        )
-        self.assertEqual(
-            theme_engine.UI_THEME_MODES, ("auto", "dark", "light")
-        )
+        self.assertEqual(theme_engine.DEFAULT_UI_THEME_MODE, "auto")
+        self.assertEqual(theme_engine.UI_THEME_MODES, ("auto", "dark", "light"))
         self.assertEqual(theme_engine.clamp_theme_mode("DARK"), "dark")
         self.assertEqual(theme_engine.clamp_theme_mode("bogus"), "auto")
 
@@ -257,17 +245,15 @@ class TestThemeMode(unittest.TestCase):
         self.assertRegex(theme_engine.log_timestamp_color(), r"^#[0-9a-f]{6}$")
 
     def test_no_hardcoded_log_hex_in_shell(self):
-        text = (REPO / "app" / "mixins" / "system_shell.py").read_text(
-            encoding="utf-8"
-        )
+        text = (REPO / "app" / "mixins" / "system_shell.py").read_text(encoding="utf-8")
         self.assertIn("_log_level_color(", text)
         for hex_code in ("#f85149", "#d29922", "#3fb950", "#e6edf3", "#8b949e"):
             self.assertNotIn(hex_code, text)
 
     def test_no_hardcoded_status_hex_in_diagnostics(self):
-        text = (
-            REPO / "app" / "features" / "diagnostics" / "mixin.py"
-        ).read_text(encoding="utf-8")
+        text = (REPO / "app" / "features" / "diagnostics" / "mixin.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("table_status_color(", text)
         for hex_code in ("#8b949e", "#d29922"):
             self.assertNotIn(hex_code, text)
@@ -330,16 +316,16 @@ class TestThemeModeParity(unittest.TestCase):
         self.assertEqual(Config.UI_THEME_MODES, ("auto", "dark", "light"))
 
     def test_settings_io_carries_theme_mode(self):
-        text = (
-            REPO / "app" / "features" / "persistence" / "settings_io.py"
-        ).read_text(encoding="utf-8")
+        text = (REPO / "app" / "features" / "persistence" / "settings_io.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('"theme_mode"', text)
         self.assertIn("ui_theme_mode", text)
 
     def test_theme_combo_offers_auto(self):
-        text = (
-            REPO / "app" / "features" / "ui_build" / "settings_tabs.py"
-        ).read_text(encoding="utf-8")
+        text = (REPO / "app" / "features" / "ui_build" / "settings_tabs.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('"auto"', text)
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 try:
     import keyring
+
     KEYRING_AVAILABLE = True
 except ModuleNotFoundError:
     KEYRING_AVAILABLE = False
@@ -33,7 +34,9 @@ from config import Config
 
 class PersistenceSettingsIOMixin(TraderMixinBase):
     def _save_settings(self):
-        update_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+        update_market_intel = getattr(
+            self, "_update_market_intelligence_config_from_ui", None
+        )
         if callable(update_market_intel):
             update_market_intel()
         settings = {
@@ -61,9 +64,20 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             "max_loss": self.spin_max_loss.value(),
             "max_daily_loss": self.spin_max_loss.value(),
             "max_holdings": self.spin_max_holdings.value(),
-            "daily_loss_basis": combo_value(self.combo_daily_loss_basis, getattr(self.config, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+            "daily_loss_basis": combo_value(
+                self.combo_daily_loss_basis,
+                getattr(
+                    self.config,
+                    "daily_loss_basis",
+                    getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+                ),
+            )
             if hasattr(self, "combo_daily_loss_basis")
-            else getattr(self.config, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")),
+            else getattr(
+                self.config,
+                "daily_loss_basis",
+                getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+            ),
             "sync_history_flush_on_exit": self.chk_sync_history_flush_on_exit.isChecked()
             if hasattr(self, "chk_sync_history_flush_on_exit")
             else bool(
@@ -120,7 +134,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             "time_stop_min": self.spin_time_stop_min.value(),
             "use_entry_scoring": self.chk_use_entry_score.isChecked(),
             "entry_score_threshold": self.spin_entry_score_threshold.value(),
-            "schedule": dict(self.schedule) if isinstance(self.schedule, dict) else {
+            "schedule": dict(self.schedule)
+            if isinstance(self.schedule, dict)
+            else {
                 "enabled": False,
                 "start": "09:00",
                 "end": "15:19",
@@ -128,17 +144,25 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             },
             "theme": self.current_theme,
             "theme_mode": str(
-                getattr(self, "ui_theme_mode", getattr(Config, "DEFAULT_UI_THEME_MODE", "auto"))
+                getattr(
+                    self,
+                    "ui_theme_mode",
+                    getattr(Config, "DEFAULT_UI_THEME_MODE", "auto"),
+                )
             ),
             "ui_density": str(
                 self.combo_ui_density.currentText()
                 if hasattr(self, "combo_ui_density")
-                else getattr(self, "ui_density", getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
+                else getattr(
+                    self, "ui_density", getattr(Config, "DEFAULT_UI_DENSITY", "compact")
+                )
             ),
             "ui_font_scale": float(
                 self.spin_ui_font_scale.value()
                 if hasattr(self, "spin_ui_font_scale")
-                else getattr(self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
+                else getattr(
+                    self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0)
+                )
             ),
         }
 
@@ -164,85 +188,151 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
         if hasattr(self, "chk_use_regime_sizing"):
             settings["use_regime_sizing"] = bool(self.chk_use_regime_sizing.isChecked())
         if hasattr(self, "chk_use_liquidity_stress_guard"):
-            settings["use_liquidity_stress_guard"] = bool(self.chk_use_liquidity_stress_guard.isChecked())
+            settings["use_liquidity_stress_guard"] = bool(
+                self.chk_use_liquidity_stress_guard.isChecked()
+            )
         if hasattr(self, "chk_use_slippage_guard"):
-            settings["use_slippage_guard"] = bool(self.chk_use_slippage_guard.isChecked())
+            settings["use_slippage_guard"] = bool(
+                self.chk_use_slippage_guard.isChecked()
+            )
         if hasattr(self, "spin_max_slippage_bps"):
             settings["max_slippage_bps"] = float(self.spin_max_slippage_bps.value())
         if hasattr(self, "chk_use_order_health_guard"):
-            settings["use_order_health_guard"] = bool(self.chk_use_order_health_guard.isChecked())
+            settings["use_order_health_guard"] = bool(
+                self.chk_use_order_health_guard.isChecked()
+            )
 
         # v3+ extended strategy/backtest schema
         settings["strategy_pack"] = dict(
             getattr(cfg, "strategy_pack", getattr(Config, "DEFAULT_STRATEGY_PACK", {}))
         )
         settings["strategy_params"] = dict(
-            getattr(cfg, "strategy_params", getattr(Config, "DEFAULT_STRATEGY_PARAMS", {}))
+            getattr(
+                cfg, "strategy_params", getattr(Config, "DEFAULT_STRATEGY_PARAMS", {})
+            )
         )
         settings["portfolio_mode"] = str(
-            getattr(cfg, "portfolio_mode", getattr(Config, "DEFAULT_PORTFOLIO_MODE", "single_strategy"))
+            getattr(
+                cfg,
+                "portfolio_mode",
+                getattr(Config, "DEFAULT_PORTFOLIO_MODE", "single_strategy"),
+            )
         )
         settings["short_enabled"] = bool(
-            getattr(cfg, "short_enabled", getattr(Config, "DEFAULT_SHORT_ENABLED", False))
+            getattr(
+                cfg, "short_enabled", getattr(Config, "DEFAULT_SHORT_ENABLED", False)
+            )
         )
         settings["asset_scope"] = str(
-            getattr(cfg, "asset_scope", getattr(Config, "DEFAULT_ASSET_SCOPE", "kr_stock_live"))
+            getattr(
+                cfg,
+                "asset_scope",
+                getattr(Config, "DEFAULT_ASSET_SCOPE", "kr_stock_live"),
+            )
         )
         settings["backtest_config"] = dict(
-            getattr(cfg, "backtest_config", getattr(Config, "DEFAULT_BACKTEST_CONFIG", {}))
+            getattr(
+                cfg, "backtest_config", getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})
+            )
         )
         settings["feature_flags"] = dict(
             getattr(cfg, "feature_flags", getattr(Config, "FEATURE_FLAGS", {}))
         )
         settings["execution_policy"] = str(
-            getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"))
+            getattr(
+                cfg,
+                "execution_policy",
+                getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"),
+            )
         )
         settings["execution_mode"] = str(
-            getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))
+            getattr(
+                cfg,
+                "execution_mode",
+                getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+            )
         )
         settings["market_intelligence"] = copy.deepcopy(
-            getattr(cfg, "market_intelligence", getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}))
+            getattr(
+                cfg,
+                "market_intelligence",
+                getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {}),
+            )
         )
         if hasattr(self, "combo_strategy_pack"):
-            settings["strategy_pack"]["primary_strategy"] = combo_value(self.combo_strategy_pack, "volatility_breakout")
+            settings["strategy_pack"]["primary_strategy"] = combo_value(
+                self.combo_strategy_pack, "volatility_breakout"
+            )
         if hasattr(self, "combo_portfolio_mode"):
-            settings["portfolio_mode"] = combo_value(self.combo_portfolio_mode, "single_strategy")
+            settings["portfolio_mode"] = combo_value(
+                self.combo_portfolio_mode, "single_strategy"
+            )
         if hasattr(self, "chk_short_enabled"):
             settings["short_enabled"] = bool(self.chk_short_enabled.isChecked())
         if hasattr(self, "combo_asset_scope"):
-            settings["asset_scope"] = combo_value(self.combo_asset_scope, "kr_stock_live")
+            settings["asset_scope"] = combo_value(
+                self.combo_asset_scope, "kr_stock_live"
+            )
         if hasattr(self, "combo_execution_policy"):
-            settings["execution_policy"] = combo_value(self.combo_execution_policy, "market")
+            settings["execution_policy"] = combo_value(
+                self.combo_execution_policy, "market"
+            )
         if hasattr(self, "combo_execution_mode"):
             settings["execution_mode"] = combo_value(
                 self.combo_execution_mode,
                 getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
             )
         if hasattr(self, "combo_backtest_timeframe"):
-            settings["backtest_config"]["timeframe"] = combo_value(self.combo_backtest_timeframe, "1d")
+            settings["backtest_config"]["timeframe"] = combo_value(
+                self.combo_backtest_timeframe, "1d"
+            )
         if hasattr(self, "spin_backtest_lookback"):
-            settings["backtest_config"]["lookback_days"] = int(self.spin_backtest_lookback.value())
+            settings["backtest_config"]["lookback_days"] = int(
+                self.spin_backtest_lookback.value()
+            )
         if hasattr(self, "spin_backtest_commission"):
-            settings["backtest_config"]["commission_bps"] = float(self.spin_backtest_commission.value())
+            settings["backtest_config"]["commission_bps"] = float(
+                self.spin_backtest_commission.value()
+            )
         if hasattr(self, "spin_backtest_slippage"):
-            settings["backtest_config"]["slippage_bps"] = float(self.spin_backtest_slippage.value())
+            settings["backtest_config"]["slippage_bps"] = float(
+                self.spin_backtest_slippage.value()
+            )
         if hasattr(self, "chk_feature_modular_pack"):
-            settings["feature_flags"]["use_modular_strategy_pack"] = bool(self.chk_feature_modular_pack.isChecked())
+            settings["feature_flags"]["use_modular_strategy_pack"] = bool(
+                self.chk_feature_modular_pack.isChecked()
+            )
         if hasattr(self, "chk_feature_backtest"):
-            settings["feature_flags"]["enable_backtest"] = bool(self.chk_feature_backtest.isChecked())
+            settings["feature_flags"]["enable_backtest"] = bool(
+                self.chk_feature_backtest.isChecked()
+            )
         if hasattr(self, "chk_feature_external_data"):
-            settings["feature_flags"]["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
+            settings["feature_flags"]["enable_external_data"] = bool(
+                self.chk_feature_external_data.isChecked()
+            )
 
         secret_values = {
-            "app_key": self.input_app_key.text().strip() if hasattr(self, "input_app_key") else "",
-            "secret_key": self.input_secret.text().strip() if hasattr(self, "input_secret") else "",
-            "naver_client_id": self.input_naver_client_id.text().strip() if hasattr(self, "input_naver_client_id") else "",
+            "app_key": self.input_app_key.text().strip()
+            if hasattr(self, "input_app_key")
+            else "",
+            "secret_key": self.input_secret.text().strip()
+            if hasattr(self, "input_secret")
+            else "",
+            "naver_client_id": self.input_naver_client_id.text().strip()
+            if hasattr(self, "input_naver_client_id")
+            else "",
             "naver_client_secret": self.input_naver_client_secret.text().strip()
             if hasattr(self, "input_naver_client_secret")
             else "",
-            "dart_api_key": self.input_dart_api_key.text().strip() if hasattr(self, "input_dart_api_key") else "",
-            "fred_api_key": self.input_fred_api_key.text().strip() if hasattr(self, "input_fred_api_key") else "",
-            "ai_api_key": self.input_ai_api_key.text().strip() if hasattr(self, "input_ai_api_key") else "",
+            "dart_api_key": self.input_dart_api_key.text().strip()
+            if hasattr(self, "input_dart_api_key")
+            else "",
+            "fred_api_key": self.input_fred_api_key.text().strip()
+            if hasattr(self, "input_fred_api_key")
+            else "",
+            "ai_api_key": self.input_ai_api_key.text().strip()
+            if hasattr(self, "input_ai_api_key")
+            else "",
         }
 
         allow_plaintext = bool(settings.get("allow_plaintext_secret_fallback", False))
@@ -273,7 +363,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     try:
                         keyring.set_password("KiwoomTrader", secret_name, value)
                     except Exception as e:
-                        self.logger.warning(f"Keyring {secret_name} 저장 실패 (OS 환경 이슈일 수 있음): {e}")
+                        self.logger.warning(
+                            f"Keyring {secret_name} 저장 실패 (OS 환경 이슈일 수 있음): {e}"
+                        )
                         if allow_secret_fallback:
                             settings[setting_name] = value
                         else:
@@ -282,7 +374,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     try:
                         keyring.delete_password("KiwoomTrader", secret_name)
                     except Exception as e:
-                        self.logger.warning(f"Keyring {secret_name} 삭제 실패 (무시 가능): {e}")
+                        self.logger.warning(
+                            f"Keyring {secret_name} 삭제 실패 (무시 가능): {e}"
+                        )
 
             # atomic write: 저장 도중 크래시/강제 종료 시 기존 파일이 절단되지 않도록
             # tmp 파일 작성 후 os.replace 로 교체한다(거래내역 저장과 동일 정책).
@@ -295,6 +389,7 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 self.log("✅ 설정 저장 완료 (⚠️ Keyring 미사용 - 평문 저장)")
         except Exception as exc:
             self.log(f"❌ 저장 실패: {exc}")
+
     def _load_settings(self):
         try:
             if not os.path.exists(Config.SETTINGS_FILE):
@@ -324,9 +419,13 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             self.input_app_key.setText(secret_values.get("app_key", ""))
             self.input_secret.setText(secret_values.get("secret_key", ""))
             if hasattr(self, "input_naver_client_id"):
-                self.input_naver_client_id.setText(secret_values.get("naver_client_id", ""))
+                self.input_naver_client_id.setText(
+                    secret_values.get("naver_client_id", "")
+                )
             if hasattr(self, "input_naver_client_secret"):
-                self.input_naver_client_secret.setText(secret_values.get("naver_client_secret", ""))
+                self.input_naver_client_secret.setText(
+                    secret_values.get("naver_client_secret", "")
+                )
             if hasattr(self, "input_dart_api_key"):
                 self.input_dart_api_key.setText(secret_values.get("dart_api_key", ""))
             if hasattr(self, "input_fred_api_key"):
@@ -337,9 +436,16 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             self.chk_mock.setChecked(settings.get("is_mock", False))
             self.chk_auto_start.setChecked(settings.get("auto_start", False))
             self.input_codes.setText(settings.get("codes", Config.DEFAULT_CODES))
-            self.spin_betting.setValue(settings.get("betting_ratio", settings.get("betting", Config.DEFAULT_BETTING_RATIO)))
+            self.spin_betting.setValue(
+                settings.get(
+                    "betting_ratio",
+                    settings.get("betting", Config.DEFAULT_BETTING_RATIO),
+                )
+            )
             self.spin_k.setValue(settings.get("k_value", Config.DEFAULT_K_VALUE))
-            self.spin_ts_start.setValue(settings.get("ts_start", Config.DEFAULT_TS_START))
+            self.spin_ts_start.setValue(
+                settings.get("ts_start", Config.DEFAULT_TS_START)
+            )
             self.spin_ts_stop.setValue(settings.get("ts_stop", Config.DEFAULT_TS_STOP))
             self.spin_loss.setValue(settings.get("loss_cut", Config.DEFAULT_LOSS_CUT))
             self.chk_use_rsi.setChecked(settings.get("use_rsi", True))
@@ -354,7 +460,10 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             self.spin_volume_mult.setValue(settings.get("volume_mult", 1.5))
             self.chk_use_risk.setChecked(settings.get("use_risk", True))
             self.spin_max_loss.setValue(
-                settings.get("max_daily_loss", settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS))
+                settings.get(
+                    "max_daily_loss",
+                    settings.get("max_loss", Config.DEFAULT_MAX_DAILY_LOSS),
+                )
             )
             self.spin_max_holdings.setValue(settings.get("max_holdings", 5))
             self.input_tg_token.setText(settings.get("tg_token", ""))
@@ -368,9 +477,13 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             if hasattr(self, "spin_ma_long"):
                 self.spin_ma_long.setValue(settings.get("ma_long", 20))
             if hasattr(self, "chk_use_time_strategy"):
-                self.chk_use_time_strategy.setChecked(settings.get("use_time_strategy", False))
+                self.chk_use_time_strategy.setChecked(
+                    settings.get("use_time_strategy", False)
+                )
             if hasattr(self, "chk_use_atr_sizing"):
-                self.chk_use_atr_sizing.setChecked(settings.get("use_atr_sizing", False))
+                self.chk_use_atr_sizing.setChecked(
+                    settings.get("use_atr_sizing", False)
+                )
             if hasattr(self, "spin_risk_percent"):
                 self.spin_risk_percent.setValue(settings.get("risk_percent", 1.0))
             if hasattr(self, "chk_use_split"):
@@ -388,23 +501,40 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             if hasattr(self, "chk_use_mtf"):
                 self.chk_use_mtf.setChecked(settings.get("use_mtf", False))
             if hasattr(self, "chk_use_partial_profit"):
-                self.chk_use_partial_profit.setChecked(settings.get("use_partial_profit", False))
+                self.chk_use_partial_profit.setChecked(
+                    settings.get("use_partial_profit", False)
+                )
             if hasattr(self, "chk_use_gap"):
                 self.chk_use_gap.setChecked(settings.get("use_gap", False))
             if hasattr(self, "chk_use_dynamic_sizing"):
-                self.chk_use_dynamic_sizing.setChecked(settings.get("use_dynamic_sizing", False))
+                self.chk_use_dynamic_sizing.setChecked(
+                    settings.get("use_dynamic_sizing", False)
+                )
             if hasattr(self, "chk_use_market_limit"):
-                self.chk_use_market_limit.setChecked(settings.get("use_market_limit", False))
+                self.chk_use_market_limit.setChecked(
+                    settings.get("use_market_limit", False)
+                )
             if hasattr(self, "spin_market_limit"):
-                self.spin_market_limit.setValue(settings.get("market_limit", Config.DEFAULT_MARKET_LIMIT))
+                self.spin_market_limit.setValue(
+                    settings.get("market_limit", Config.DEFAULT_MARKET_LIMIT)
+                )
             if hasattr(self, "chk_use_sector_limit"):
-                self.chk_use_sector_limit.setChecked(settings.get("use_sector_limit", False))
+                self.chk_use_sector_limit.setChecked(
+                    settings.get("use_sector_limit", False)
+                )
             if hasattr(self, "spin_sector_limit"):
-                self.spin_sector_limit.setValue(settings.get("sector_limit", Config.DEFAULT_SECTOR_LIMIT))
+                self.spin_sector_limit.setValue(
+                    settings.get("sector_limit", Config.DEFAULT_SECTOR_LIMIT)
+                )
             if hasattr(self, "combo_daily_loss_basis"):
                 set_combo_value(
                     self.combo_daily_loss_basis,
-                    str(settings.get("daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"))),
+                    str(
+                        settings.get(
+                            "daily_loss_basis",
+                            getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+                        )
+                    ),
                 )
             if hasattr(self, "chk_sync_history_flush_on_exit"):
                 self.chk_sync_history_flush_on_exit.setChecked(
@@ -420,7 +550,9 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     bool(
                         settings.get(
                             "allow_plaintext_secret_fallback",
-                            getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False),
+                            getattr(
+                                Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False
+                            ),
                         )
                     )
                 )
@@ -433,74 +565,156 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             if hasattr(self, "chk_use_liquidity"):
                 self.chk_use_liquidity.setChecked(settings.get("use_liquidity", False))
             if hasattr(self, "spin_min_value"):
-                self.spin_min_value.setValue(settings.get("min_value", Config.DEFAULT_MIN_AVG_VALUE / 100_000_000))
+                self.spin_min_value.setValue(
+                    settings.get(
+                        "min_value", Config.DEFAULT_MIN_AVG_VALUE / 100_000_000
+                    )
+                )
             if hasattr(self, "chk_use_spread"):
                 self.chk_use_spread.setChecked(settings.get("use_spread", False))
             if hasattr(self, "spin_spread_max"):
-                self.spin_spread_max.setValue(settings.get("spread_max", Config.DEFAULT_MAX_SPREAD_PCT))
+                self.spin_spread_max.setValue(
+                    settings.get("spread_max", Config.DEFAULT_MAX_SPREAD_PCT)
+                )
             if hasattr(self, "chk_use_breakout_confirm"):
-                self.chk_use_breakout_confirm.setChecked(settings.get("use_breakout_confirm", False))
+                self.chk_use_breakout_confirm.setChecked(
+                    settings.get("use_breakout_confirm", False)
+                )
             if hasattr(self, "spin_breakout_ticks"):
-                self.spin_breakout_ticks.setValue(settings.get("breakout_ticks", Config.DEFAULT_BREAKOUT_TICKS))
+                self.spin_breakout_ticks.setValue(
+                    settings.get("breakout_ticks", Config.DEFAULT_BREAKOUT_TICKS)
+                )
             if hasattr(self, "chk_use_cooldown"):
                 self.chk_use_cooldown.setChecked(settings.get("use_cooldown", False))
             if hasattr(self, "spin_cooldown_min"):
-                self.spin_cooldown_min.setValue(settings.get("cooldown_min", Config.DEFAULT_COOLDOWN_MINUTES))
+                self.spin_cooldown_min.setValue(
+                    settings.get("cooldown_min", Config.DEFAULT_COOLDOWN_MINUTES)
+                )
             if hasattr(self, "chk_use_time_stop"):
                 self.chk_use_time_stop.setChecked(settings.get("use_time_stop", False))
             if hasattr(self, "spin_time_stop_min"):
-                self.spin_time_stop_min.setValue(settings.get("time_stop_min", Config.DEFAULT_MAX_HOLD_MINUTES))
+                self.spin_time_stop_min.setValue(
+                    settings.get("time_stop_min", Config.DEFAULT_MAX_HOLD_MINUTES)
+                )
             if hasattr(self, "chk_use_entry_score"):
-                self.chk_use_entry_score.setChecked(settings.get("use_entry_scoring", Config.USE_ENTRY_SCORING))
+                self.chk_use_entry_score.setChecked(
+                    settings.get("use_entry_scoring", Config.USE_ENTRY_SCORING)
+                )
             if hasattr(self, "spin_entry_score_threshold"):
-                self.spin_entry_score_threshold.setValue(settings.get("entry_score_threshold", Config.ENTRY_SCORE_THRESHOLD))
+                self.spin_entry_score_threshold.setValue(
+                    settings.get("entry_score_threshold", Config.ENTRY_SCORE_THRESHOLD)
+                )
             if hasattr(self, "chk_use_shock_guard"):
-                self.chk_use_shock_guard.setChecked(bool(settings.get("use_shock_guard", True)))
+                self.chk_use_shock_guard.setChecked(
+                    bool(settings.get("use_shock_guard", True))
+                )
             if hasattr(self, "spin_shock_1m"):
-                self.spin_shock_1m.setValue(float(settings.get("shock_1m_pct", getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5))))
+                self.spin_shock_1m.setValue(
+                    float(
+                        settings.get(
+                            "shock_1m_pct", getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5)
+                        )
+                    )
+                )
             if hasattr(self, "spin_shock_5m"):
-                self.spin_shock_5m.setValue(float(settings.get("shock_5m_pct", getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8))))
+                self.spin_shock_5m.setValue(
+                    float(
+                        settings.get(
+                            "shock_5m_pct", getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8)
+                        )
+                    )
+                )
             if hasattr(self, "spin_shock_cooldown"):
                 self.spin_shock_cooldown.setValue(
-                    int(settings.get("shock_cooldown_min", getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10)))
+                    int(
+                        settings.get(
+                            "shock_cooldown_min",
+                            getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10),
+                        )
+                    )
                 )
             if hasattr(self, "chk_use_vi_guard"):
-                self.chk_use_vi_guard.setChecked(bool(settings.get("use_vi_guard", True)))
+                self.chk_use_vi_guard.setChecked(
+                    bool(settings.get("use_vi_guard", True))
+                )
             if hasattr(self, "spin_vi_cooldown"):
                 self.spin_vi_cooldown.setValue(
-                    int(settings.get("vi_cooldown_min", getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7)))
+                    int(
+                        settings.get(
+                            "vi_cooldown_min",
+                            getattr(Config, "DEFAULT_VI_COOLDOWN_MIN", 7),
+                        )
+                    )
                 )
             if hasattr(self, "chk_use_regime_sizing"):
-                self.chk_use_regime_sizing.setChecked(bool(settings.get("use_regime_sizing", True)))
+                self.chk_use_regime_sizing.setChecked(
+                    bool(settings.get("use_regime_sizing", True))
+                )
             if hasattr(self, "chk_use_liquidity_stress_guard"):
-                self.chk_use_liquidity_stress_guard.setChecked(bool(settings.get("use_liquidity_stress_guard", True)))
+                self.chk_use_liquidity_stress_guard.setChecked(
+                    bool(settings.get("use_liquidity_stress_guard", True))
+                )
             if hasattr(self, "chk_use_slippage_guard"):
-                self.chk_use_slippage_guard.setChecked(bool(settings.get("use_slippage_guard", True)))
+                self.chk_use_slippage_guard.setChecked(
+                    bool(settings.get("use_slippage_guard", True))
+                )
             if hasattr(self, "spin_max_slippage_bps"):
                 self.spin_max_slippage_bps.setValue(
-                    float(settings.get("max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+                    float(
+                        settings.get(
+                            "max_slippage_bps",
+                            getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0),
+                        )
+                    )
                 )
             if hasattr(self, "chk_use_order_health_guard"):
-                self.chk_use_order_health_guard.setChecked(bool(settings.get("use_order_health_guard", True)))
+                self.chk_use_order_health_guard.setChecked(
+                    bool(settings.get("use_order_health_guard", True))
+                )
 
             if isinstance(settings.get("schedule"), dict):
                 raw_schedule = settings.get("schedule", {})
                 self.schedule = {
-                    "enabled": bool(raw_schedule.get("enabled", self.schedule.get("enabled", False))),
-                    "start": str(raw_schedule.get("start", self.schedule.get("start", "09:00"))),
-                    "end": str(raw_schedule.get("end", self.schedule.get("end", "15:19"))),
-                    "liquidate": bool(raw_schedule.get("liquidate", self.schedule.get("liquidate", True))),
+                    "enabled": bool(
+                        raw_schedule.get("enabled", self.schedule.get("enabled", False))
+                    ),
+                    "start": str(
+                        raw_schedule.get("start", self.schedule.get("start", "09:00"))
+                    ),
+                    "end": str(
+                        raw_schedule.get("end", self.schedule.get("end", "15:19"))
+                    ),
+                    "liquidate": bool(
+                        raw_schedule.get(
+                            "liquidate", self.schedule.get("liquidate", True)
+                        )
+                    ),
                 }
 
-            saved_scale = float(settings.get(
-                "ui_font_scale", getattr(self, "ui_font_scale", getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
-            ))
+            saved_scale = float(
+                settings.get(
+                    "ui_font_scale",
+                    getattr(
+                        self,
+                        "ui_font_scale",
+                        getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0),
+                    ),
+                )
+            )
             if hasattr(self, "spin_ui_font_scale"):
                 self.spin_ui_font_scale.setValue(saved_scale)
             from app.support.ui_scale import clamp_density as _clamp_density
-            saved_density = _clamp_density(settings.get(
-                "ui_density", getattr(self, "ui_density", getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
-            ))
+
+            saved_density = _clamp_density(
+                settings.get(
+                    "ui_density",
+                    getattr(
+                        self,
+                        "ui_density",
+                        getattr(Config, "DEFAULT_UI_DENSITY", "compact"),
+                    ),
+                )
+            )
             if hasattr(self, "combo_ui_density"):
                 try:
                     self.combo_ui_density.blockSignals(True)
@@ -509,65 +723,122 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                     self.combo_ui_density.blockSignals(False)
             from app.support.theme import clamp_theme_mode as _clamp_theme_mode
             from app.support.theme import resolve_theme_name as _resolve_theme_name
-            saved_mode = _clamp_theme_mode(settings.get("theme_mode", settings.get("theme", "dark")))
+
+            saved_mode = _clamp_theme_mode(
+                settings.get("theme_mode", settings.get("theme", "dark"))
+            )
             self.ui_theme_mode = saved_mode
             saved_theme = _resolve_theme_name(saved_mode)
             from app.support.theme import apply_theme as _apply_loaded_theme
-            if saved_theme != self.current_theme or saved_density != str(getattr(self, "ui_density", "")) or abs(saved_scale - float(
-                getattr(self, "ui_font_scale", saved_scale)
-            )) > 1e-9:
+
+            if (
+                saved_theme != self.current_theme
+                or saved_density != str(getattr(self, "ui_density", ""))
+                or abs(saved_scale - float(getattr(self, "ui_font_scale", saved_scale)))
+                > 1e-9
+            ):
                 _apply_loaded_theme(self, saved_theme, saved_scale, saved_density)
             if hasattr(self, "combo_theme"):
-                self.combo_theme.setCurrentText(str(getattr(self, "ui_theme_mode", self.current_theme)))
+                self.combo_theme.setCurrentText(
+                    str(getattr(self, "ui_theme_mode", self.current_theme))
+                )
 
             # v3+ strategy/backtest UI restore
-            if hasattr(self, "combo_strategy_pack") and isinstance(settings.get("strategy_pack"), dict):
-                primary = settings.get("strategy_pack", {}).get("primary_strategy", "volatility_breakout")
+            if hasattr(self, "combo_strategy_pack") and isinstance(
+                settings.get("strategy_pack"), dict
+            ):
+                primary = settings.get("strategy_pack", {}).get(
+                    "primary_strategy", "volatility_breakout"
+                )
                 set_combo_value(self.combo_strategy_pack, str(primary))
             if hasattr(self, "combo_portfolio_mode"):
-                set_combo_value(self.combo_portfolio_mode, str(settings.get("portfolio_mode", "single_strategy")))
+                set_combo_value(
+                    self.combo_portfolio_mode,
+                    str(settings.get("portfolio_mode", "single_strategy")),
+                )
             if hasattr(self, "chk_short_enabled"):
-                self.chk_short_enabled.setChecked(bool(settings.get("short_enabled", False)))
+                self.chk_short_enabled.setChecked(
+                    bool(settings.get("short_enabled", False))
+                )
             if hasattr(self, "combo_asset_scope"):
-                set_combo_value(self.combo_asset_scope, str(settings.get("asset_scope", "kr_stock_live")))
+                set_combo_value(
+                    self.combo_asset_scope,
+                    str(settings.get("asset_scope", "kr_stock_live")),
+                )
             if hasattr(self, "combo_execution_policy"):
-                set_combo_value(self.combo_execution_policy, str(settings.get("execution_policy", "market")))
+                set_combo_value(
+                    self.combo_execution_policy,
+                    str(settings.get("execution_policy", "market")),
+                )
             if hasattr(self, "combo_execution_mode"):
                 set_combo_value(
                     self.combo_execution_mode,
-                    str(settings.get("execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))),
+                    str(
+                        settings.get(
+                            "execution_mode",
+                            getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+                        )
+                    ),
                 )
-            bt_cfg = settings.get("backtest_config", {}) if isinstance(settings.get("backtest_config"), dict) else {}
+            bt_cfg = (
+                settings.get("backtest_config", {})
+                if isinstance(settings.get("backtest_config"), dict)
+                else {}
+            )
             if hasattr(self, "combo_backtest_timeframe"):
-                set_combo_value(self.combo_backtest_timeframe, str(bt_cfg.get("timeframe", "1d")))
+                set_combo_value(
+                    self.combo_backtest_timeframe, str(bt_cfg.get("timeframe", "1d"))
+                )
             if hasattr(self, "spin_backtest_lookback"):
-                self.spin_backtest_lookback.setValue(int(bt_cfg.get("lookback_days", 365)))
+                self.spin_backtest_lookback.setValue(
+                    int(bt_cfg.get("lookback_days", 365))
+                )
             if hasattr(self, "spin_backtest_commission"):
-                self.spin_backtest_commission.setValue(float(bt_cfg.get("commission_bps", 5.0)))
+                self.spin_backtest_commission.setValue(
+                    float(bt_cfg.get("commission_bps", 5.0))
+                )
             if hasattr(self, "spin_backtest_slippage"):
-                self.spin_backtest_slippage.setValue(float(bt_cfg.get("slippage_bps", 3.0)))
-            flags = settings.get("feature_flags", {}) if isinstance(settings.get("feature_flags"), dict) else {}
+                self.spin_backtest_slippage.setValue(
+                    float(bt_cfg.get("slippage_bps", 3.0))
+                )
+            flags = (
+                settings.get("feature_flags", {})
+                if isinstance(settings.get("feature_flags"), dict)
+                else {}
+            )
             if hasattr(self, "chk_feature_modular_pack"):
-                self.chk_feature_modular_pack.setChecked(bool(flags.get("use_modular_strategy_pack", True)))
+                self.chk_feature_modular_pack.setChecked(
+                    bool(flags.get("use_modular_strategy_pack", True))
+                )
             if hasattr(self, "chk_feature_backtest"):
-                self.chk_feature_backtest.setChecked(bool(flags.get("enable_backtest", True)))
+                self.chk_feature_backtest.setChecked(
+                    bool(flags.get("enable_backtest", True))
+                )
             if hasattr(self, "chk_feature_external_data"):
-                self.chk_feature_external_data.setChecked(bool(flags.get("enable_external_data", True)))
+                self.chk_feature_external_data.setChecked(
+                    bool(flags.get("enable_external_data", True))
+                )
             market_intelligence = self._deep_merge_dict(
-                copy.deepcopy(getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})),
+                copy.deepcopy(
+                    getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})
+                ),
                 copy.deepcopy(settings.get("market_intelligence", {}))
                 if isinstance(settings.get("market_intelligence"), dict)
                 else {},
             )
             if hasattr(self, "chk_market_intel_enabled"):
-                self.chk_market_intel_enabled.setChecked(bool(market_intelligence.get("enabled", True)))
+                self.chk_market_intel_enabled.setChecked(
+                    bool(market_intelligence.get("enabled", True))
+                )
             source_policy = (
                 market_intelligence.get("source_policy", {})
                 if isinstance(market_intelligence.get("source_policy"), dict)
                 else {}
             )
             if hasattr(self, "chk_market_intel_strict_guard"):
-                self.chk_market_intel_strict_guard.setChecked(bool(source_policy.get("strict_entry_guard", False)))
+                self.chk_market_intel_strict_guard.setChecked(
+                    bool(source_policy.get("strict_entry_guard", False))
+                )
             providers = (
                 market_intelligence.get("providers", {})
                 if isinstance(market_intelligence.get("providers"), dict)
@@ -588,11 +859,20 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
             )
             if hasattr(self, "spin_market_news_refresh"):
                 self.spin_market_news_refresh.setValue(
-                    int(refresh_sec.get("news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60)))
+                    int(
+                        refresh_sec.get(
+                            "news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60)
+                        )
+                    )
                 )
             if hasattr(self, "spin_market_macro_refresh"):
                 self.spin_market_macro_refresh.setValue(
-                    int(refresh_sec.get("macro", getattr(Config, "MARKET_INTEL_MACRO_REFRESH_SEC", 300)))
+                    int(
+                        refresh_sec.get(
+                            "macro",
+                            getattr(Config, "MARKET_INTEL_MACRO_REFRESH_SEC", 300),
+                        )
+                    )
                 )
             scoring = (
                 market_intelligence.get("scoring", {})
@@ -600,56 +880,110 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                 else {}
             )
             if hasattr(self, "spin_market_news_block"):
-                self.spin_market_news_block.setValue(abs(int(scoring.get("news_block_threshold", -60))))
+                self.spin_market_news_block.setValue(
+                    abs(int(scoring.get("news_block_threshold", -60)))
+                )
             if hasattr(self, "spin_market_news_boost"):
-                self.spin_market_news_boost.setValue(abs(int(scoring.get("news_boost_threshold", 60))))
-            ai_cfg = market_intelligence.get("ai", {}) if isinstance(market_intelligence.get("ai"), dict) else {}
+                self.spin_market_news_boost.setValue(
+                    abs(int(scoring.get("news_boost_threshold", 60)))
+                )
+            ai_cfg = (
+                market_intelligence.get("ai", {})
+                if isinstance(market_intelligence.get("ai"), dict)
+                else {}
+            )
             if hasattr(self, "chk_market_ai_enabled"):
-                self.chk_market_ai_enabled.setChecked(bool(ai_cfg.get("enabled", False)))
+                self.chk_market_ai_enabled.setChecked(
+                    bool(ai_cfg.get("enabled", False))
+                )
             if hasattr(self, "combo_market_ai_provider"):
-                set_combo_value(self.combo_market_ai_provider, str(ai_cfg.get("provider", "gemini")))
+                set_combo_value(
+                    self.combo_market_ai_provider, str(ai_cfg.get("provider", "gemini"))
+                )
             if hasattr(self, "input_market_ai_model"):
-                self.input_market_ai_model.setText(str(ai_cfg.get("model", "gemini-2.5-flash-lite")))
+                self.input_market_ai_model.setText(
+                    str(ai_cfg.get("model", "gemini-2.5-flash-lite"))
+                )
             if hasattr(self, "spin_market_ai_daily_calls"):
-                self.spin_market_ai_daily_calls.setValue(int(ai_cfg.get("max_calls_per_day", 30)))
+                self.spin_market_ai_daily_calls.setValue(
+                    int(ai_cfg.get("max_calls_per_day", 30))
+                )
             if hasattr(self, "spin_market_ai_symbol_calls"):
-                self.spin_market_ai_symbol_calls.setValue(int(ai_cfg.get("max_calls_per_symbol", 3)))
+                self.spin_market_ai_symbol_calls.setValue(
+                    int(ai_cfg.get("max_calls_per_symbol", 3))
+                )
             if hasattr(self, "spin_market_ai_budget"):
-                self.spin_market_ai_budget.setValue(int(ai_cfg.get("daily_budget_krw", 1000)))
+                self.spin_market_ai_budget.setValue(
+                    int(ai_cfg.get("daily_budget_krw", 1000))
+                )
 
             cfg = getattr(self, "config", None)
             if cfg is not None:
                 cfg.strategy_pack = self._deep_merge_dict(
                     copy.deepcopy(getattr(Config, "DEFAULT_STRATEGY_PACK", {})),
-                    settings.get("strategy_pack", {}) if isinstance(settings.get("strategy_pack"), dict) else {},
+                    settings.get("strategy_pack", {})
+                    if isinstance(settings.get("strategy_pack"), dict)
+                    else {},
                 )
-                cfg.strategy_params = dict(settings.get("strategy_params", getattr(cfg, "strategy_params", {})))
-                cfg.portfolio_mode = str(settings.get("portfolio_mode", getattr(cfg, "portfolio_mode", "single_strategy")))
-                cfg.short_enabled = bool(settings.get("short_enabled", getattr(cfg, "short_enabled", False)))
-                cfg.asset_scope = str(settings.get("asset_scope", getattr(cfg, "asset_scope", "kr_stock_live")))
+                cfg.strategy_params = dict(
+                    settings.get("strategy_params", getattr(cfg, "strategy_params", {}))
+                )
+                cfg.portfolio_mode = str(
+                    settings.get(
+                        "portfolio_mode",
+                        getattr(cfg, "portfolio_mode", "single_strategy"),
+                    )
+                )
+                cfg.short_enabled = bool(
+                    settings.get("short_enabled", getattr(cfg, "short_enabled", False))
+                )
+                cfg.asset_scope = str(
+                    settings.get(
+                        "asset_scope", getattr(cfg, "asset_scope", "kr_stock_live")
+                    )
+                )
                 cfg.backtest_config = self._deep_merge_dict(
                     copy.deepcopy(getattr(Config, "DEFAULT_BACKTEST_CONFIG", {})),
-                    settings.get("backtest_config", {}) if isinstance(settings.get("backtest_config"), dict) else {},
+                    settings.get("backtest_config", {})
+                    if isinstance(settings.get("backtest_config"), dict)
+                    else {},
                 )
                 cfg.feature_flags = self._deep_merge_dict(
                     copy.deepcopy(getattr(Config, "FEATURE_FLAGS", {})),
-                    settings.get("feature_flags", {}) if isinstance(settings.get("feature_flags"), dict) else {},
+                    settings.get("feature_flags", {})
+                    if isinstance(settings.get("feature_flags"), dict)
+                    else {},
                 )
-                cfg.execution_policy = str(settings.get("execution_policy", getattr(cfg, "execution_policy", "market")))
+                cfg.execution_policy = str(
+                    settings.get(
+                        "execution_policy", getattr(cfg, "execution_policy", "market")
+                    )
+                )
                 cfg.execution_mode = str(
                     settings.get(
                         "execution_mode",
-                        getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")),
+                        getattr(
+                            cfg,
+                            "execution_mode",
+                            getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+                        ),
                     )
                 )
                 cfg.market_intelligence = market_intelligence
                 cfg.max_daily_loss = float(
-                    settings.get("max_daily_loss", settings.get("max_loss", getattr(cfg, "max_daily_loss", 3.0)))
+                    settings.get(
+                        "max_daily_loss",
+                        settings.get("max_loss", getattr(cfg, "max_daily_loss", 3.0)),
+                    )
                 )
                 cfg.daily_loss_basis = str(
                     settings.get(
                         "daily_loss_basis",
-                        getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")),
+                        getattr(
+                            cfg,
+                            "daily_loss_basis",
+                            getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+                        ),
                     )
                 )
                 cfg.sync_history_flush_on_exit = bool(
@@ -668,25 +1002,32 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
                         getattr(
                             cfg,
                             "allow_plaintext_secret_fallback",
-                            getattr(Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False),
+                            getattr(
+                                Config, "DEFAULT_ALLOW_PLAINTEXT_SECRET_FALLBACK", False
+                            ),
                         ),
                     )
                 )
                 for key, default in self._v4_guard_defaults().items():
                     setattr(cfg, key, settings.get(key, getattr(cfg, key, default)))
-            sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+            sync_market_intel = getattr(
+                self, "_update_market_intelligence_config_from_ui", None
+            )
             if callable(sync_market_intel):
                 sync_market_intel()
 
             self.log("📂 설정 불러옴")
         except (json.JSONDecodeError, FileNotFoundError, OSError) as exc:
             self.logger.warning(f"설정 로드 실패: {exc}")
+
     def _clear_stored_secrets(self):
         for _setting_name, secret_name in self._secret_field_names():
             try:
                 keyring.delete_password("KiwoomTrader", secret_name)
             except Exception as exc:
-                self.logger.warning(f"Keyring {secret_name} 삭제 실패 (무시 가능): {exc}")
+                self.logger.warning(
+                    f"Keyring {secret_name} 삭제 실패 (무시 가능): {exc}"
+                )
 
         try:
             settings_path = Path(Config.SETTINGS_FILE)
@@ -704,7 +1045,11 @@ class PersistenceSettingsIOMixin(TraderMixinBase):
         invalidator = getattr(auth, "invalidate_token", None)
         if callable(invalidator):
             invalidator()
-        for filename in ("kiwoom_token_cache.json", "kiwoom_token_cache_live.json", "kiwoom_token_cache_mock.json"):
+        for filename in (
+            "kiwoom_token_cache.json",
+            "kiwoom_token_cache_live.json",
+            "kiwoom_token_cache_mock.json",
+        ):
             try:
                 path = Path(getattr(Config, "BASE_DIR", ".")) / filename
                 if path.exists():

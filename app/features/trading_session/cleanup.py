@@ -22,6 +22,7 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             if int(info.get("held", 0) or 0) > 0:
                 targets.append((code, info))
         return targets
+
     def _force_account_position_sync(self, reason: str = "") -> bool:
         rest_client = getattr(self, "rest_client", None)
         current_account = str(getattr(self, "current_account", "") or "")
@@ -30,7 +31,10 @@ class TradingSessionCleanupMixin(TraderMixinBase):
         try:
             positions = rest_client.get_positions(current_account)
         except Exception as exc:
-            self._log_once(f"force_sync_error:{reason}", f"[account-sync] refresh failed ({reason}): {exc}")
+            self._log_once(
+                f"force_sync_error:{reason}",
+                f"[account-sync] refresh failed ({reason}): {exc}",
+            )
             return False
         if positions is None:
             return False
@@ -42,7 +46,10 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             log_external=False,
         )
         return True
-    def _collect_active_order_cleanup_targets(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+
+    def _collect_active_order_cleanup_targets(
+        self,
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         live_targets: List[Dict[str, Any]] = []
         placeholders: List[Dict[str, Any]] = []
 
@@ -102,7 +109,11 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                         "quantity": remaining_qty,
                     }
                 )
-            elif remaining_qty > 0 or reserved_cash > 0 or self._pending_is_active_safe(pending):
+            elif (
+                remaining_qty > 0
+                or reserved_cash > 0
+                or self._pending_is_active_safe(pending)
+            ):
                 placeholders.append(
                     {
                         "source": "manual",
@@ -114,15 +125,21 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                 )
 
         return live_targets, placeholders
+
     def _cleanup_target_is_active(self, target: Dict[str, Any]) -> bool:
         source = str(target.get("source", "") or "")
         code = str(target.get("code", "") or "")
         order_no = str(target.get("order_no", "") or "").strip()
         if source == "manual":
             pending = self._manual_pending_entries().get(code)
-            if not isinstance(pending, dict) or not self._pending_is_active_safe(pending):
+            if not isinstance(pending, dict) or not self._pending_is_active_safe(
+                pending
+            ):
                 return False
-            if order_no and str(pending.get("order_no", "") or "").strip() not in {"", order_no}:
+            if order_no and str(pending.get("order_no", "") or "").strip() not in {
+                "",
+                order_no,
+            }:
                 return False
             return max(0, int(pending.get("remaining_qty", 0) or 0)) > 0
 
@@ -139,14 +156,22 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             if order_no and child_order_no not in {"", order_no}:
                 return False
             state = str(child.get("state", "submitted") or "submitted").lower()
-            active_states = set(getattr(self, "ACTIVE_PENDING_STATES", {"submitted", "partial"}))
-            return state in active_states and max(0, int(child.get("remaining_qty", 0) or 0)) > 0
+            active_states = set(
+                getattr(self, "ACTIVE_PENDING_STATES", {"submitted", "partial"})
+            )
+            return (
+                state in active_states
+                and max(0, int(child.get("remaining_qty", 0) or 0)) > 0
+            )
 
         pending_order_no = str(pending.get("order_no", "") or "").strip()
         if order_no and pending_order_no not in {"", order_no}:
             return False
         return max(0, int(pending.get("remaining_qty", 0) or 0)) > 0
-    def _force_finalize_cleanup_target(self, target: Dict[str, Any], final_state: str, reason: str = ""):
+
+    def _force_finalize_cleanup_target(
+        self, target: Dict[str, Any], final_state: str, reason: str = ""
+    ):
         source = str(target.get("source", "") or "")
         code = str(target.get("code", "") or "")
         side = str(target.get("side", "") or "").lower()
@@ -176,7 +201,11 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                 if order_no and child_order_no not in {"", order_no}:
                     child = None
                 if child is not None:
-                    refund_amount = max(0, int(child.get("reserved_cash", 0) or 0)) if side == "buy" else 0
+                    refund_amount = (
+                        max(0, int(child.get("reserved_cash", 0) or 0))
+                        if side == "buy"
+                        else 0
+                    )
                     if refund_amount > 0:
                         self._release_reserved_cash_amount_safe(
                             code,
@@ -188,10 +217,16 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                     child["remaining_qty"] = 0
                     child["reserved_cash"] = 0
                     child["updated_at"] = now
-                    aggregate_state, remaining_qty = self._refresh_pending_order_aggregate(code)
-                    active_states = set(getattr(self, "ACTIVE_PENDING_STATES", {"submitted", "partial"}))
+                    aggregate_state, remaining_qty = (
+                        self._refresh_pending_order_aggregate(code)
+                    )
+                    active_states = set(
+                        getattr(self, "ACTIVE_PENDING_STATES", {"submitted", "partial"})
+                    )
                     if remaining_qty <= 0 or aggregate_state not in active_states:
-                        clear_state = "filled" if aggregate_state == "filled" else final_state
+                        clear_state = (
+                            "filled" if aggregate_state == "filled" else final_state
+                        )
                         self._clear_pending_order(code, final_state=clear_state)
         else:
             if side == "buy":
@@ -220,13 +255,21 @@ class TradingSessionCleanupMixin(TraderMixinBase):
 
             diag_touch = getattr(self, "_diag_touch", None)
             if callable(diag_touch):
-                diag_touch(code, sync_status=str(info.get("status", "")), retry_count=0, last_sync_error="")
+                diag_touch(
+                    code,
+                    sync_status=str(info.get("status", "")),
+                    retry_count=0,
+                    last_sync_error="",
+                )
             if kind == "universe":
                 dirty_codes = getattr(self, "_dirty_codes", None)
                 if isinstance(dirty_codes, set):
                     dirty_codes.add(code)
-            elif hasattr(self, "_diagnostics_dirty_codes") and isinstance(self._diagnostics_dirty_codes, set):
+            elif hasattr(self, "_diagnostics_dirty_codes") and isinstance(
+                self._diagnostics_dirty_codes, set
+            ):
                 self._diagnostics_dirty_codes.add(code)
+
     def _mark_cleanup_target_failed(self, target: Dict[str, Any], reason: str = ""):
         source = str(target.get("source", "") or "")
         code = str(target.get("code", "") or "")
@@ -269,8 +312,13 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                 pending["updated_at"] = now
 
         if hasattr(self, "log"):
-            self.log(f"[order-cleanup] cancel unresolved ({reason}) {code}: state=sync_failed")
-    def _cleanup_active_orders(self, reason: str, timeout_sec: float = 8.0) -> Dict[str, Any]:
+            self.log(
+                f"[order-cleanup] cancel unresolved ({reason}) {code}: state=sync_failed"
+            )
+
+    def _cleanup_active_orders(
+        self, reason: str, timeout_sec: float = 8.0
+    ) -> Dict[str, Any]:
         live_targets, placeholders = self._collect_active_order_cleanup_targets()
         if not live_targets and not placeholders:
             self._force_account_position_sync(reason=f"{reason}_noop")
@@ -295,7 +343,9 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                 message = ""
                 if client is not None and account and order_no and quantity > 0:
                     try:
-                        result = client.cancel_order(account, order_no, target["code"], quantity)
+                        result = client.cancel_order(
+                            account, order_no, target["code"], quantity
+                        )
                         success = bool(getattr(result, "success", False))
                         message = str(getattr(result, "message", "") or "")
                     except Exception as exc:
@@ -313,7 +363,11 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             deadline = time.monotonic() + max(0.1, float(timeout_sec or 0.0))
             while unresolved and time.monotonic() < deadline:
                 self._force_account_position_sync(reason=f"{reason}_poll")
-                unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
+                unresolved = [
+                    target
+                    for target in live_targets
+                    if self._cleanup_target_is_active(target)
+                ]
                 if not unresolved:
                     break
                 app = QCoreApplication.instance()
@@ -322,26 +376,42 @@ class TradingSessionCleanupMixin(TraderMixinBase):
                 time.sleep(0.2)
 
             self._force_account_position_sync(reason=f"{reason}_final")
-            unresolved = [target for target in live_targets if self._cleanup_target_is_active(target)]
+            unresolved = [
+                target
+                for target in live_targets
+                if self._cleanup_target_is_active(target)
+            ]
         finally:
             self._cleanup_polling = False
 
         for target in placeholders:
-            self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+            self._force_finalize_cleanup_target(
+                target, final_state="cancelled", reason=reason
+            )
 
         for target in live_targets:
             if not self._cleanup_target_is_active(target):
                 continue
             if bool(target.get("cancel_success")):
-                self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+                self._force_finalize_cleanup_target(
+                    target, final_state="cancelled", reason=reason
+                )
             else:
                 self._mark_cleanup_target_failed(target, reason=reason)
 
-        unresolved_codes = sorted({str(target.get("code", "") or "") for target in unresolved if target.get("code")})
+        unresolved_codes = sorted(
+            {
+                str(target.get("code", "") or "")
+                for target in unresolved
+                if target.get("code")
+            }
+        )
         if unresolved_codes and hasattr(self, "log"):
             preview = ", ".join(unresolved_codes[:5])
             suffix = " ..." if len(unresolved_codes) > 5 else ""
-            self.log(f"[order-cleanup] unresolved before local finalization ({reason}): {preview}{suffix}")
+            self.log(
+                f"[order-cleanup] unresolved before local finalization ({reason}): {preview}{suffix}"
+            )
 
         self._force_account_position_sync(reason=f"{reason}_post_finalize")
         recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
@@ -357,7 +427,10 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             "placeholders": placeholders,
             "unresolved_codes": unresolved_codes,
         }
-    def _cleanup_cancel_requests_worker(self, live_targets: List[Dict[str, Any]], reason: str) -> List[Dict[str, Any]]:
+
+    def _cleanup_cancel_requests_worker(
+        self, live_targets: List[Dict[str, Any]], reason: str
+    ) -> List[Dict[str, Any]]:
         client = getattr(self, "rest_client", None)
         account = str(getattr(self, "current_account", "") or "")
         rows: List[Dict[str, Any]] = []
@@ -369,7 +442,9 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             message = ""
             if client is not None and account and order_no and quantity > 0:
                 try:
-                    result = client.cancel_order(account, order_no, target["code"], quantity)
+                    result = client.cancel_order(
+                        account, order_no, target["code"], quantity
+                    )
                     success = bool(getattr(result, "success", False))
                     message = str(getattr(result, "message", "") or "")
                 except Exception as exc:
@@ -381,6 +456,7 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             target["cleanup_reason"] = reason
             rows.append(target)
         return rows
+
     def _finalize_order_cleanup_requests(
         self,
         reason: str,
@@ -388,11 +464,15 @@ class TradingSessionCleanupMixin(TraderMixinBase):
         placeholders: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         for target in placeholders:
-            self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+            self._force_finalize_cleanup_target(
+                target, final_state="cancelled", reason=reason
+            )
 
         for target in live_targets:
             if bool(target.get("cancel_success")):
-                self._force_finalize_cleanup_target(target, final_state="cancelled", reason=reason)
+                self._force_finalize_cleanup_target(
+                    target, final_state="cancelled", reason=reason
+                )
             else:
                 if hasattr(self, "log"):
                     self.log(
@@ -422,6 +502,7 @@ class TradingSessionCleanupMixin(TraderMixinBase):
             "placeholders": placeholders,
             "unresolved_codes": unresolved_codes,
         }
+
     def _cleanup_active_orders_async(self, reason: str, on_done=None) -> bool:
         threadpool = getattr(self, "threadpool", None)
         starter = getattr(threadpool, "start", None)
@@ -432,20 +513,30 @@ class TradingSessionCleanupMixin(TraderMixinBase):
         if not live_targets and not placeholders:
             self._force_account_position_sync(reason=f"{reason}_noop")
             if callable(on_done):
-                on_done({"live_targets": [], "placeholders": [], "unresolved_codes": []})
+                on_done(
+                    {"live_targets": [], "placeholders": [], "unresolved_codes": []}
+                )
             return False
 
         if hasattr(self, "log"):
-            self.log(f"[order-cleanup] {reason} async: live={len(live_targets)} placeholder={len(placeholders)}")
+            self.log(
+                f"[order-cleanup] {reason} async: live={len(live_targets)} placeholder={len(placeholders)}"
+            )
         self._order_cleanup_inflight = True
         if hasattr(self, "btn_start"):
             self.btn_start.setEnabled(False)
 
-        worker = Worker(self._cleanup_cancel_requests_worker, [dict(row) for row in live_targets], reason)
+        worker = Worker(
+            self._cleanup_cancel_requests_worker,
+            [dict(row) for row in live_targets],
+            reason,
+        )
 
         def finish(rows):
             self._order_cleanup_inflight = False
-            result = self._finalize_order_cleanup_requests(reason, list(rows or []), placeholders)
+            result = self._finalize_order_cleanup_requests(
+                reason, list(rows or []), placeholders
+            )
             if not getattr(self, "is_running", False) and hasattr(self, "btn_start"):
                 self.btn_start.setEnabled(True)
             if callable(on_done):
@@ -465,5 +556,6 @@ class TradingSessionCleanupMixin(TraderMixinBase):
         worker.signals.error.connect(fail)
         starter(worker)
         return True
+
     def _cancel_pending_orders_before_stop(self) -> Dict[str, Any]:
         return self._cleanup_active_orders("stop_trading", timeout_sec=0.1)

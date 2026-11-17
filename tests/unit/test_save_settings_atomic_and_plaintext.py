@@ -4,6 +4,7 @@
 - A4: is_mock=True 이더라도 allow_plaintext_secret_fallback=False 이면 secret 이
   평문으로 settings 에 쓰이지 않는다.
 """
+
 import json
 import shutil
 import sys
@@ -70,7 +71,12 @@ class _Harness(PersistenceSettingsMixin):
     def __init__(self):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
-        self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
+        self.schedule = {
+            "enabled": False,
+            "start": "09:00",
+            "end": "15:19",
+            "liquidate": True,
+        }
         self.config = type(
             "Cfg",
             (),
@@ -113,17 +119,28 @@ class TestSaveSettingsAtomic(unittest.TestCase):
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             # 기존 파일 존재
-            original_payload = {"settings_version": 7, "codes": "005930", "original": True}
+            original_payload = {
+                "settings_version": 7,
+                "codes": "005930",
+                "original": True,
+            }
             settings_path.write_text(
                 json.dumps(original_payload, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
 
             # _atomic_write_json 이 실패하도록 patch
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.KEYRING_AVAILABLE", True
-            ), patch.object(
-                PersistenceSettingsMixin, "_atomic_write_json", side_effect=OSError("disk full")
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch("app.features.persistence.settings_io.KEYRING_AVAILABLE", True),
+                patch.object(
+                    PersistenceSettingsMixin,
+                    "_atomic_write_json",
+                    side_effect=OSError("disk full"),
+                ),
             ):
                 trader._save_settings()
 
@@ -143,11 +160,16 @@ class TestSaveSettingsAtomic(unittest.TestCase):
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
 
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.KEYRING_AVAILABLE", True
-            ), patch.object(
-                PersistenceSettingsMixin, "_atomic_write_json"
-            ) as mock_atomic:
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch("app.features.persistence.settings_io.KEYRING_AVAILABLE", True),
+                patch.object(
+                    PersistenceSettingsMixin, "_atomic_write_json"
+                ) as mock_atomic,
+            ):
                 trader._save_settings()
 
             self.assertEqual(mock_atomic.call_count, 1)
@@ -167,16 +189,23 @@ class TestSaveSettingsNoPlaintextFallbackForMock(unittest.TestCase):
         trader.input_app_key = _DummyAny(text="MY_APP_KEY")
         trader.input_secret = _DummyAny(text="MY_SECRET_KEY")
         trader.chk_mock = _DummyCheck(checked=True)  # 모의투자
-        trader.chk_allow_plaintext_secret_fallback = _DummyCheck(checked=False)  # 평문 거부
+        trader.chk_allow_plaintext_secret_fallback = _DummyCheck(
+            checked=False
+        )  # 평문 거부
 
         tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
 
             # keyring 사용 불가 상황(평문 fallback 유혹 시나리오)
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.KEYRING_AVAILABLE", False
-            ), patch("app.features.persistence.settings_io.keyring.set_password"):
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch("app.features.persistence.settings_io.KEYRING_AVAILABLE", False),
+                patch("app.features.persistence.settings_io.keyring.set_password"),
+            ):
                 trader._save_settings()
 
             # secret 이 settings 파일에 평문으로 쓰이지 않는다.
@@ -186,7 +215,9 @@ class TestSaveSettingsNoPlaintextFallbackForMock(unittest.TestCase):
             # 평문 fallback 이 거부되었으므로 설정 파일에 secret 이 없다(핵심 단언).
             # (keyring.set_password 시도 자체는 keyring mock 이 흡수하므로 호출 여부는 부차적)
             # 경고 로그가 모드 라벨과 함께 남는다.
-            self.assertTrue(any("disabled for mock mode" in w for w in trader.logger.warnings))
+            self.assertTrue(
+                any("disabled for mock mode" in w for w in trader.logger.warnings)
+            )
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -196,15 +227,22 @@ class TestSaveSettingsNoPlaintextFallbackForMock(unittest.TestCase):
         trader.input_app_key = _DummyAny(text="MY_APP_KEY")
         trader.input_secret = _DummyAny(text="MY_SECRET_KEY")
         trader.chk_mock = _DummyCheck(checked=True)
-        trader.chk_allow_plaintext_secret_fallback = _DummyCheck(checked=True)  # 명시적 허용
+        trader.chk_allow_plaintext_secret_fallback = _DummyCheck(
+            checked=True
+        )  # 명시적 허용
 
         tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
 
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.KEYRING_AVAILABLE", False
-            ), patch("app.features.persistence.settings_io.keyring.set_password"):
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch("app.features.persistence.settings_io.KEYRING_AVAILABLE", False),
+                patch("app.features.persistence.settings_io.keyring.set_password"),
+            ):
                 trader._save_settings()
 
             payload = json.loads(settings_path.read_text(encoding="utf-8"))

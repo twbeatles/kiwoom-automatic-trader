@@ -14,4 +14,4 @@ from .auth import KiwoomAuth
 from .rest_client import KiwoomRESTClient
 from .websocket_client import KiwoomWebSocketClient
 
-__all__ = ['KiwoomAuth', 'KiwoomRESTClient', 'KiwoomWebSocketClient']
+__all__ = ["KiwoomAuth", "KiwoomRESTClient", "KiwoomWebSocketClient"]

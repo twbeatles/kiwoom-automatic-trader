@@ -37,7 +37,12 @@ class MarketIntelAuditMixin(TraderMixinBase):
         record = {
             "schema_version": 2,
             "ts": datetime.datetime.now().isoformat(),
-            "event_id": str(event_id or self._build_market_intel_event_id(scope, symbol, source, event_type, summary)),
+            "event_id": str(
+                event_id
+                or self._build_market_intel_event_id(
+                    scope, symbol, source, event_type, summary
+                )
+            ),
             "scope": str(scope or "symbol"),
             "symbol": str(symbol or ""),
             "source": str(source or ""),
@@ -49,11 +54,18 @@ class MarketIntelAuditMixin(TraderMixinBase):
             "payload": payload if isinstance(payload, dict) else {},
             "raw_ref": legacy_raw_ref,
         }
-        path = Path(getattr(Config, "MARKET_INTELLIGENCE_EVENTS_FILE", "data/market_intelligence_events.jsonl"))
+        path = Path(
+            getattr(
+                Config,
+                "MARKET_INTELLIGENCE_EVENTS_FILE",
+                "data/market_intelligence_events.jsonl",
+            )
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         self._schedule_market_replay_refresh()
+
     def _record_decision_audit_event(
         self,
         *,
@@ -65,7 +77,13 @@ class MarketIntelAuditMixin(TraderMixinBase):
         metrics: Optional[Dict[str, Any]] = None,
         quantity: int = 0,
     ):
-        path = Path(getattr(Config, "MARKET_INTELLIGENCE_DECISION_AUDIT_FILE", "data/decision_audit.jsonl"))
+        path = Path(
+            getattr(
+                Config,
+                "MARKET_INTELLIGENCE_DECISION_AUDIT_FILE",
+                "data/decision_audit.jsonl",
+            )
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         state = self._ensure_market_intel_state(info)
         record = {
@@ -78,13 +96,19 @@ class MarketIntelAuditMixin(TraderMixinBase):
             "action_policy": str(state.get("action_policy", "allow") or "allow"),
             "exit_policy": str(state.get("exit_policy", "none") or "none"),
             "size_multiplier": float(state.get("size_multiplier", 1.0) or 1.0),
-            "portfolio_budget_scale": float(state.get("portfolio_budget_scale", 1.0) or 1.0),
+            "portfolio_budget_scale": float(
+                state.get("portfolio_budget_scale", 1.0) or 1.0
+            ),
             "market_intel": {
-                "status": str(state.get("status", state.get("intel_status", "idle")) or "idle"),
+                "status": str(
+                    state.get("status", state.get("intel_status", "idle")) or "idle"
+                ),
                 "news_score": float(state.get("news_score", 0.0) or 0.0),
                 "theme_score": float(state.get("theme_score", 0.0) or 0.0),
                 "macro_regime": str(state.get("macro_regime", "neutral") or "neutral"),
-                "dart_risk_level": str(state.get("dart_risk_level", "normal") or "normal"),
+                "dart_risk_level": str(
+                    state.get("dart_risk_level", "normal") or "normal"
+                ),
                 "last_event_id": str(state.get("last_event_id", "") or ""),
             },
             "conditions": dict(conditions or {}),
@@ -93,6 +117,7 @@ class MarketIntelAuditMixin(TraderMixinBase):
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         self._schedule_market_replay_refresh()
+
     def _maybe_emit_market_intel_alert(
         self,
         code: str,

@@ -49,7 +49,9 @@ class _Harness(TradingSessionMixin):
         self._last_exec_event = {}
         self._sync_failed_codes = set()
         self.config = TradingConfig()
-        self.config.strategy_pack["primary_strategy"] = "pairs_trading_cointegration"  # sim-only
+        self.config.strategy_pack["primary_strategy"] = (
+            "pairs_trading_cointegration"  # sim-only
+        )
         self.init_calls = 0
         self.logs = []
 
@@ -60,12 +62,18 @@ class _Harness(TradingSessionMixin):
         return True
 
     @overload
-    def _init_universe(self, codes, background: Literal[False] = False) -> list[str]: ...
+    def _init_universe(
+        self, codes, background: Literal[False] = False
+    ) -> list[str]: ...
 
     @overload
-    def _init_universe(self, codes, background: Literal[True]) -> BackgroundUniversePayload: ...
+    def _init_universe(
+        self, codes, background: Literal[True]
+    ) -> BackgroundUniversePayload: ...
 
-    def _init_universe(self, codes, background: bool = False) -> list[str] | BackgroundUniversePayload:
+    def _init_universe(
+        self, codes, background: bool = False
+    ) -> list[str] | BackgroundUniversePayload:
         self.init_calls += 1
         initialized_codes = ["005930"]
         if background:

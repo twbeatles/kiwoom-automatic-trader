@@ -54,7 +54,11 @@ class ManualOrdersMixin(TraderMixinBase):
             return None
 
         latest_available = None
-        if getattr(self, "is_connected", False) and getattr(self, "rest_client", None) and getattr(self, "current_account", ""):
+        if (
+            getattr(self, "is_connected", False)
+            and getattr(self, "rest_client", None)
+            and getattr(self, "current_account", "")
+        ):
             getter = getattr(self.rest_client, "get_positions", None)
             if callable(getter):
                 try:
@@ -69,7 +73,14 @@ class ManualOrdersMixin(TraderMixinBase):
                             continue
                         latest_available = max(
                             0,
-                            int(getattr(position, "available_qty", getattr(position, "quantity", 0)) or 0),
+                            int(
+                                getattr(
+                                    position,
+                                    "available_qty",
+                                    getattr(position, "quantity", 0),
+                                )
+                                or 0
+                            ),
                         )
                         break
         if latest_available is not None:
@@ -110,12 +121,16 @@ class ManualOrdersMixin(TraderMixinBase):
             QMessageBox.warning(self, "경고", "주문수량은 1주 이상이어야 합니다.")
             return False
         if price_type == "지정가" and price <= 0:
-            QMessageBox.warning(self, "경고", "지정가 주문은 1원 이상의 가격이 필요합니다.")
+            QMessageBox.warning(
+                self, "경고", "지정가 주문은 1원 이상의 가격이 필요합니다."
+            )
             return False
 
         universe = getattr(self, "universe", {})
         external_positions = getattr(self, "external_positions", {})
-        has_external_position = isinstance(external_positions, dict) and code in external_positions
+        has_external_position = (
+            isinstance(external_positions, dict) and code in external_positions
+        )
         if code not in universe and not has_external_position:
             QMessageBox.warning(
                 self,
@@ -143,7 +158,10 @@ class ManualOrdersMixin(TraderMixinBase):
                 )
                 return False
             required_cash = qty * estimated_price
-            available_cash = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+            available_cash = int(
+                getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
+                or 0
+            )
             if required_cash > available_cash:
                 QMessageBox.warning(
                     self,
@@ -178,11 +196,14 @@ class ManualOrdersMixin(TraderMixinBase):
         if not getattr(self, "current_account", ""):
             QMessageBox.warning(self, "경고", "주문 가능한 계좌를 먼저 선택하세요.")
             return
-        
+
         # NOTE(compat-seam): 기존 테스트가 "app.mixins.dialogs_profiles.ManualOrderDialog"를
         # patch하므로, 호출 시점에 shim 모듈 속성으로 조회한다. (import 시점 바인딩 금지)
         from app.mixins import dialogs_profiles as _dialogs_seam
-        dialog = _dialogs_seam.ManualOrderDialog(self, self.rest_client, self.current_account)
+
+        dialog = _dialogs_seam.ManualOrderDialog(
+            self, self.rest_client, self.current_account
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.order_result:
             order = dialog.order_result
             # 검증은 이 지점(단일 choke point)에서만 통과한다.
@@ -226,22 +247,22 @@ class ManualOrdersMixin(TraderMixinBase):
             return
 
         # 실제 주문 실행 (Worker 사용)
-        code = order['code']
-        qty = order['qty']
-        price = order.get('price', 0)
-        order_type = order['type']
-        price_type = order.get('price_type', '시장가')
-        
+        code = order["code"]
+        qty = order["qty"]
+        price = order.get("price", 0)
+        order_type = order["type"]
+        price_type = order.get("price_type", "시장가")
+
         # API 호출 함수 선택
-        if order_type == '매수':
-            if price_type == '시장가':
+        if order_type == "매수":
+            if price_type == "시장가":
                 func = self.rest_client.buy_market
                 args = (self.current_account, code, qty)
             else:
                 func = self.rest_client.buy_limit
                 args = (self.current_account, code, qty, price)
         else:  # 매도
-            if price_type == '시장가':
+            if price_type == "시장가":
                 func = self.rest_client.sell_market
                 args = (self.current_account, code, qty)
             else:
@@ -250,7 +271,9 @@ class ManualOrdersMixin(TraderMixinBase):
 
         worker = Worker(func, *args)
         worker.signals.result.connect(
-            lambda res, submitted_order=order: self._on_manual_order_result(res, submitted_order, order_type, code)
+            lambda res, submitted_order=order: self._on_manual_order_result(
+                res, submitted_order, order_type, code
+            )
         )
         worker.signals.error.connect(lambda e: self.log(f"❌ 수동 주문 오류: {e}"))
         self.threadpool.start(worker)
@@ -258,11 +281,25 @@ class ManualOrdersMixin(TraderMixinBase):
     def _on_manual_order_result(self, result, order, order_type, code):
         """수동 주문 결과 처리"""
         if result.success:
-            self.log(f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})")
+            self.log(
+                f"✅ 수동 주문 성공: {order_type} {code} (주문번호 {result.order_no})"
+            )
             side = "buy" if order_type == "매수" else "sell"
-            submitted_qty = int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0
-            expected_price = int(order.get("expected_price", order.get("price", 0) if isinstance(order, dict) else 0) or 0)
-            reserve_amount = submitted_qty * expected_price if side == "buy" and expected_price > 0 else 0
+            submitted_qty = (
+                int(order.get("qty", 0) or 0) if isinstance(order, dict) else 0
+            )
+            expected_price = int(
+                order.get(
+                    "expected_price",
+                    order.get("price", 0) if isinstance(order, dict) else 0,
+                )
+                or 0
+            )
+            reserve_amount = (
+                submitted_qty * expected_price
+                if side == "buy" and expected_price > 0
+                else 0
+            )
             reserve_cash = getattr(self, "_reserve_cash_for_buy", None)
             if callable(reserve_cash) and reserve_amount > 0:
                 reserve_cash(code, reserve_amount)
@@ -279,7 +316,9 @@ class ManualOrdersMixin(TraderMixinBase):
                     submitted_qty=submitted_qty,
                     order_no=str(getattr(result, "order_no", "") or ""),
                 )
-                recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+                recompute_count = getattr(
+                    self, "_recompute_holding_or_pending_count", None
+                )
                 if callable(recompute_count):
                     recompute_count()
                 self._sync_position_from_account(code)
@@ -295,7 +334,9 @@ class ManualOrdersMixin(TraderMixinBase):
                         order_no=str(getattr(result, "order_no", "") or ""),
                         reserved_cash=reserve_amount,
                     )
-                    recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+                    recompute_count = getattr(
+                        self, "_recompute_holding_or_pending_count", None
+                    )
                     if callable(recompute_count):
                         recompute_count()
                     self._sync_position_from_account(code)
@@ -308,7 +349,9 @@ class ManualOrdersMixin(TraderMixinBase):
                         submitted_qty=submitted_qty,
                         order_no=str(getattr(result, "order_no", "") or ""),
                     )
-                    recompute_count = getattr(self, "_recompute_holding_or_pending_count", None)
+                    recompute_count = getattr(
+                        self, "_recompute_holding_or_pending_count", None
+                    )
                     if callable(recompute_count):
                         recompute_count()
                     self._sync_position_from_account(code)
@@ -317,7 +360,9 @@ class ManualOrdersMixin(TraderMixinBase):
             if code in getattr(self, "universe", {}):
                 self._clear_pending_order(code)
             else:
-                clear_manual_pending = getattr(self, "_clear_manual_pending_order", None)
+                clear_manual_pending = getattr(
+                    self, "_clear_manual_pending_order", None
+                )
                 if callable(clear_manual_pending):
                     clear_manual_pending(code)
                 else:

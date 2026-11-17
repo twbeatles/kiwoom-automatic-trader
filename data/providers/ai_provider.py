@@ -53,7 +53,9 @@ class AIProvider:
             "response_format": {"type": "json_object"},
             "temperature": 0.2,
         }
-        response = requests.post(self.OPENAI_URL, headers=headers, json=payload, timeout=20)
+        response = requests.post(
+            self.OPENAI_URL, headers=headers, json=payload, timeout=20
+        )
         response.raise_for_status()
         payload = response.json()
         choices = payload.get("choices", [])
@@ -89,13 +91,17 @@ class AIProvider:
                 "responseMimeType": "application/json",
             },
         }
-        response = requests.post(f"{url}?key={self.api_key}", headers=headers, json=payload, timeout=20)
+        response = requests.post(
+            f"{url}?key={self.api_key}", headers=headers, json=payload, timeout=20
+        )
         response.raise_for_status()
         payload = response.json()
         candidates = payload.get("candidates", [])
         if not isinstance(candidates, list) or not candidates:
             raise RuntimeError("gemini_empty_candidates")
-        content = candidates[0].get("content", {}) if isinstance(candidates[0], dict) else {}
+        content = (
+            candidates[0].get("content", {}) if isinstance(candidates[0], dict) else {}
+        )
         parts = content.get("parts", []) if isinstance(content, dict) else []
         text = ""
         if isinstance(parts, list):

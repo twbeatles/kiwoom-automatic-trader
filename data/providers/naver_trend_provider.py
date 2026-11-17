@@ -47,11 +47,16 @@ class NaverTrendProvider:
             "Content-Type": "application/json",
         }
         try:
-            response = requests.post(self.BASE_URL, headers=headers, json=payload, timeout=10)
+            response = requests.post(
+                self.BASE_URL, headers=headers, json=payload, timeout=10
+            )
             response.raise_for_status()
             result = response.json()
             normalized = result if isinstance(result, dict) else {}
-            has_results = bool(isinstance(normalized.get("results"), list) and normalized.get("results"))
+            has_results = bool(
+                isinstance(normalized.get("results"), list)
+                and normalized.get("results")
+            )
             self._mark("ok_with_data" if has_results else "ok_empty")
             return normalized
         except Exception as exc:

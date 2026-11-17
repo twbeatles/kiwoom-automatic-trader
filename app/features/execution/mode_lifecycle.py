@@ -12,16 +12,31 @@ from config import Config
 class ExecutionModeLifecycleMixin(TraderMixinBase):
     def _execution_mode(self) -> str:
         cfg = getattr(self, "config", None)
-        mode = str(getattr(cfg, "execution_mode", getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")) or "")
+        mode = str(
+            getattr(
+                cfg,
+                "execution_mode",
+                getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+            )
+            or ""
+        )
         if mode not in getattr(Config, "EXECUTION_MODES", {"signal_only", "live"}):
             return str(getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"))
         return mode
+
     def _is_signal_only_mode(self) -> bool:
         return self._execution_mode() == "signal_only"
+
     def _record_order_lifecycle_event(self, event: dict) -> None:
         payload = dict(event)
         payload.setdefault("ts", datetime.datetime.now().isoformat())
-        path = Path(getattr(Config, "ORDER_LIFECYCLE_EVENTS_FILE", "data/order_lifecycle_events.jsonl"))
+        path = Path(
+            getattr(
+                Config,
+                "ORDER_LIFECYCLE_EVENTS_FILE",
+                "data/order_lifecycle_events.jsonl",
+            )
+        )
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "a", encoding="utf-8") as file:
@@ -30,6 +45,7 @@ class ExecutionModeLifecycleMixin(TraderMixinBase):
             logger = getattr(self, "logger", None)
             if logger is not None:
                 logger.warning(f"order lifecycle event write failed: {exc}")
+
     def _record_signal_only_order(
         self,
         *,
@@ -56,6 +72,7 @@ class ExecutionModeLifecycleMixin(TraderMixinBase):
                 f"[signal-only] {side.upper()} skipped {code} "
                 f"qty={event['quantity']} price={event['price']} reason={reason or '-'}"
             )
+
     def _record_decision_audit_once(
         self,
         code: str,
@@ -70,7 +87,11 @@ class ExecutionModeLifecycleMixin(TraderMixinBase):
         recorder = getattr(self, "_record_decision_audit_event", None)
         if not callable(recorder):
             return
-        state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+        state = (
+            info.get("market_intel", {})
+            if isinstance(info.get("market_intel"), dict)
+            else {}
+        )
         key = (
             f"{code}:{int(bool(allowed))}:{reason}:{state.get('last_event_id', '')}:"
             f"{int(time.time() // 30)}:{int(quantity or 0)}"

@@ -145,7 +145,12 @@ class KiwoomProTrader(
         self.ui_theme_mode = str(getattr(Config, "DEFAULT_UI_THEME_MODE", "auto"))
         self.ui_font_scale = float(getattr(Config, "DEFAULT_UI_FONT_SCALE", 1.0))
         self.ui_density = str(getattr(Config, "DEFAULT_UI_DENSITY", "compact"))
-        self.schedule = {'enabled': False, 'start': '09:00', 'end': '15:19', 'liquidate': True}
+        self.schedule = {
+            "enabled": False,
+            "start": "09:00",
+            "end": "15:19",
+            "liquidate": True,
+        }
         self.schedule_started = False
 
         # API
@@ -205,133 +210,248 @@ class KiwoomProTrader(
     def _connect_config_signals(self):
         """UI 변경사항을 TradingConfig에 실시간 반영"""
         # 기본 설정
-        self.spin_betting.valueChanged.connect(lambda v: setattr(self.config, 'betting_ratio', v))
-        self.spin_k.valueChanged.connect(lambda v: setattr(self.config, 'k_value', v))
-        self.spin_ts_start.valueChanged.connect(lambda v: setattr(self.config, 'ts_start', v))
-        self.spin_ts_stop.valueChanged.connect(lambda v: setattr(self.config, 'ts_stop', v))
-        self.spin_loss.valueChanged.connect(lambda v: setattr(self.config, 'loss_cut', v))
+        self.spin_betting.valueChanged.connect(
+            lambda v: setattr(self.config, "betting_ratio", v)
+        )
+        self.spin_k.valueChanged.connect(lambda v: setattr(self.config, "k_value", v))
+        self.spin_ts_start.valueChanged.connect(
+            lambda v: setattr(self.config, "ts_start", v)
+        )
+        self.spin_ts_stop.valueChanged.connect(
+            lambda v: setattr(self.config, "ts_stop", v)
+        )
+        self.spin_loss.valueChanged.connect(
+            lambda v: setattr(self.config, "loss_cut", v)
+        )
 
         # RSI
-        self.chk_use_rsi.toggled.connect(lambda v: setattr(self.config, 'use_rsi', v))
-        self.spin_rsi_upper.valueChanged.connect(lambda v: setattr(self.config, 'rsi_upper', v))
-        self.spin_rsi_period.valueChanged.connect(lambda v: setattr(self.config, 'rsi_period', v))
+        self.chk_use_rsi.toggled.connect(lambda v: setattr(self.config, "use_rsi", v))
+        self.spin_rsi_upper.valueChanged.connect(
+            lambda v: setattr(self.config, "rsi_upper", v)
+        )
+        self.spin_rsi_period.valueChanged.connect(
+            lambda v: setattr(self.config, "rsi_period", v)
+        )
 
         # MACD
-        self.chk_use_macd.toggled.connect(lambda v: setattr(self.config, 'use_macd', v))
+        self.chk_use_macd.toggled.connect(lambda v: setattr(self.config, "use_macd", v))
 
         # 볼린저
-        self.chk_use_bb.toggled.connect(lambda v: setattr(self.config, 'use_bb', v))
-        self.spin_bb_k.valueChanged.connect(lambda v: setattr(self.config, 'bb_k', v))
+        self.chk_use_bb.toggled.connect(lambda v: setattr(self.config, "use_bb", v))
+        self.spin_bb_k.valueChanged.connect(lambda v: setattr(self.config, "bb_k", v))
 
         # 거래량
-        self.chk_use_volume.toggled.connect(lambda v: setattr(self.config, 'use_volume', v))
-        self.spin_volume_mult.valueChanged.connect(lambda v: setattr(self.config, 'volume_mult', v))
+        self.chk_use_volume.toggled.connect(
+            lambda v: setattr(self.config, "use_volume", v)
+        )
+        self.spin_volume_mult.valueChanged.connect(
+            lambda v: setattr(self.config, "volume_mult", v)
+        )
 
         # 리스크
-        self.chk_use_risk.toggled.connect(lambda v: setattr(self.config, 'use_risk_mgmt', v))
-        self.spin_max_loss.valueChanged.connect(lambda v: setattr(self.config, 'max_daily_loss', float(v)))
-        self.spin_max_holdings.valueChanged.connect(lambda v: setattr(self.config, 'max_holdings', v))
+        self.chk_use_risk.toggled.connect(
+            lambda v: setattr(self.config, "use_risk_mgmt", v)
+        )
+        self.spin_max_loss.valueChanged.connect(
+            lambda v: setattr(self.config, "max_daily_loss", float(v))
+        )
+        self.spin_max_holdings.valueChanged.connect(
+            lambda v: setattr(self.config, "max_holdings", v)
+        )
         if hasattr(self, "combo_daily_loss_basis"):
             self.combo_daily_loss_basis.currentTextChanged.connect(
-                lambda _v: setattr(self.config, "daily_loss_basis", combo_value(self.combo_daily_loss_basis, "total_equity"))
+                lambda _v: setattr(
+                    self.config,
+                    "daily_loss_basis",
+                    combo_value(self.combo_daily_loss_basis, "total_equity"),
+                )
             )
 
         # 신규 전략들
-        self.chk_use_stoch_rsi.toggled.connect(lambda v: setattr(self.config, 'use_stoch_rsi', v))
-        self.spin_stoch_upper.valueChanged.connect(lambda v: setattr(self.config, 'stoch_upper', v))
-        self.spin_stoch_lower.valueChanged.connect(lambda v: setattr(self.config, 'stoch_lower', v))
+        self.chk_use_stoch_rsi.toggled.connect(
+            lambda v: setattr(self.config, "use_stoch_rsi", v)
+        )
+        self.spin_stoch_upper.valueChanged.connect(
+            lambda v: setattr(self.config, "stoch_upper", v)
+        )
+        self.spin_stoch_lower.valueChanged.connect(
+            lambda v: setattr(self.config, "stoch_lower", v)
+        )
 
-        self.chk_use_mtf.toggled.connect(lambda v: setattr(self.config, 'use_mtf', v))
-        self.chk_use_gap.toggled.connect(lambda v: setattr(self.config, 'use_gap', v))
-        self.chk_use_partial_profit.toggled.connect(lambda v: setattr(self.config, 'use_partial_profit', v))
-        self.chk_use_dynamic_sizing.toggled.connect(lambda v: setattr(self.config, 'use_dynamic_sizing', v))
+        self.chk_use_mtf.toggled.connect(lambda v: setattr(self.config, "use_mtf", v))
+        self.chk_use_gap.toggled.connect(lambda v: setattr(self.config, "use_gap", v))
+        self.chk_use_partial_profit.toggled.connect(
+            lambda v: setattr(self.config, "use_partial_profit", v)
+        )
+        self.chk_use_dynamic_sizing.toggled.connect(
+            lambda v: setattr(self.config, "use_dynamic_sizing", v)
+        )
 
-        self.chk_use_atr_stop.toggled.connect(lambda v: setattr(self.config, 'use_atr_stop', v))
-        self.spin_atr_mult.valueChanged.connect(lambda v: setattr(self.config, 'atr_mult', v))
+        self.chk_use_atr_stop.toggled.connect(
+            lambda v: setattr(self.config, "use_atr_stop", v)
+        )
+        self.spin_atr_mult.valueChanged.connect(
+            lambda v: setattr(self.config, "atr_mult", v)
+        )
 
-        self.chk_use_liquidity.toggled.connect(lambda v: setattr(self.config, 'use_liquidity', v))
-        self.spin_min_value.valueChanged.connect(lambda v: setattr(self.config, 'min_avg_value', int(v)))
+        self.chk_use_liquidity.toggled.connect(
+            lambda v: setattr(self.config, "use_liquidity", v)
+        )
+        self.spin_min_value.valueChanged.connect(
+            lambda v: setattr(self.config, "min_avg_value", int(v))
+        )
 
-        self.chk_use_spread.toggled.connect(lambda v: setattr(self.config, 'use_spread', v))
-        self.spin_spread_max.valueChanged.connect(lambda v: setattr(self.config, 'max_spread', v))
+        self.chk_use_spread.toggled.connect(
+            lambda v: setattr(self.config, "use_spread", v)
+        )
+        self.spin_spread_max.valueChanged.connect(
+            lambda v: setattr(self.config, "max_spread", v)
+        )
 
-        self.chk_use_market_limit.toggled.connect(lambda v: setattr(self.config, 'use_market_limit', v))
-        self.spin_market_limit.valueChanged.connect(lambda v: setattr(self.config, 'market_limit', v))
+        self.chk_use_market_limit.toggled.connect(
+            lambda v: setattr(self.config, "use_market_limit", v)
+        )
+        self.spin_market_limit.valueChanged.connect(
+            lambda v: setattr(self.config, "market_limit", v)
+        )
 
-        self.chk_use_sector_limit.toggled.connect(lambda v: setattr(self.config, 'use_sector_limit', v))
-        self.spin_sector_limit.valueChanged.connect(lambda v: setattr(self.config, 'sector_limit', v))
+        self.chk_use_sector_limit.toggled.connect(
+            lambda v: setattr(self.config, "use_sector_limit", v)
+        )
+        self.spin_sector_limit.valueChanged.connect(
+            lambda v: setattr(self.config, "sector_limit", v)
+        )
 
         # DMI
-        self.chk_use_dmi.toggled.connect(lambda v: setattr(self.config, 'use_dmi', v))
-        self.spin_adx.valueChanged.connect(lambda v: setattr(self.config, 'adx_threshold', v))
+        self.chk_use_dmi.toggled.connect(lambda v: setattr(self.config, "use_dmi", v))
+        self.spin_adx.valueChanged.connect(
+            lambda v: setattr(self.config, "adx_threshold", v)
+        )
 
         # MA Crossover
-        self.chk_use_ma.toggled.connect(lambda v: setattr(self.config, 'use_ma', v))
-        self.spin_ma_short.valueChanged.connect(lambda v: setattr(self.config, 'ma_short', v))
-        self.spin_ma_long.valueChanged.connect(lambda v: setattr(self.config, 'ma_long', v))
+        self.chk_use_ma.toggled.connect(lambda v: setattr(self.config, "use_ma", v))
+        self.spin_ma_short.valueChanged.connect(
+            lambda v: setattr(self.config, "ma_short", v)
+        )
+        self.spin_ma_long.valueChanged.connect(
+            lambda v: setattr(self.config, "ma_long", v)
+        )
 
         # Split Orders
-        self.chk_use_split.toggled.connect(lambda v: setattr(self.config, 'use_split', v))
-        self.spin_split_count.valueChanged.connect(lambda v: setattr(self.config, 'split_count', v))
-        self.spin_split_percent.valueChanged.connect(lambda v: setattr(self.config, 'split_percent', v))
+        self.chk_use_split.toggled.connect(
+            lambda v: setattr(self.config, "use_split", v)
+        )
+        self.spin_split_count.valueChanged.connect(
+            lambda v: setattr(self.config, "split_count", v)
+        )
+        self.spin_split_percent.valueChanged.connect(
+            lambda v: setattr(self.config, "split_percent", v)
+        )
 
         # Time Strategy
-        self.chk_use_time_strategy.toggled.connect(lambda v: setattr(self.config, 'use_time_strategy', v))
+        self.chk_use_time_strategy.toggled.connect(
+            lambda v: setattr(self.config, "use_time_strategy", v)
+        )
 
         # ATR Sizing
         if hasattr(self, "chk_use_atr_sizing"):
-            self.chk_use_atr_sizing.toggled.connect(lambda v: setattr(self.config, 'use_atr_sizing', v))
+            self.chk_use_atr_sizing.toggled.connect(
+                lambda v: setattr(self.config, "use_atr_sizing", v)
+            )
         if hasattr(self, "spin_risk_percent"):
-            self.spin_risk_percent.valueChanged.connect(lambda v: setattr(self.config, 'risk_percent', v))
+            self.spin_risk_percent.valueChanged.connect(
+                lambda v: setattr(self.config, "risk_percent", v)
+            )
 
         # Breakout/Cooldown/Time-stop
         if hasattr(self, "chk_use_breakout_confirm"):
-            self.chk_use_breakout_confirm.toggled.connect(lambda v: setattr(self.config, 'use_breakout_confirm', v))
+            self.chk_use_breakout_confirm.toggled.connect(
+                lambda v: setattr(self.config, "use_breakout_confirm", v)
+            )
         if hasattr(self, "spin_breakout_ticks"):
-            self.spin_breakout_ticks.valueChanged.connect(lambda v: setattr(self.config, 'breakout_ticks', v))
+            self.spin_breakout_ticks.valueChanged.connect(
+                lambda v: setattr(self.config, "breakout_ticks", v)
+            )
         if hasattr(self, "chk_use_cooldown"):
-            self.chk_use_cooldown.toggled.connect(lambda v: setattr(self.config, 'use_cooldown', v))
+            self.chk_use_cooldown.toggled.connect(
+                lambda v: setattr(self.config, "use_cooldown", v)
+            )
         if hasattr(self, "spin_cooldown_min"):
-            self.spin_cooldown_min.valueChanged.connect(lambda v: setattr(self.config, 'cooldown_min', v))
+            self.spin_cooldown_min.valueChanged.connect(
+                lambda v: setattr(self.config, "cooldown_min", v)
+            )
         if hasattr(self, "chk_use_time_stop"):
-            self.chk_use_time_stop.toggled.connect(lambda v: setattr(self.config, 'use_time_stop', v))
+            self.chk_use_time_stop.toggled.connect(
+                lambda v: setattr(self.config, "use_time_stop", v)
+            )
         if hasattr(self, "spin_time_stop_min"):
-            self.spin_time_stop_min.valueChanged.connect(lambda v: setattr(self.config, 'time_stop_min', v))
+            self.spin_time_stop_min.valueChanged.connect(
+                lambda v: setattr(self.config, "time_stop_min", v)
+            )
 
         # Entry Scoring
-        self.chk_use_entry_score.toggled.connect(lambda v: setattr(self.config, 'use_entry_scoring', v))
-        self.spin_entry_score_threshold.valueChanged.connect(lambda v: setattr(self.config, 'entry_score_threshold', v))
+        self.chk_use_entry_score.toggled.connect(
+            lambda v: setattr(self.config, "use_entry_scoring", v)
+        )
+        self.spin_entry_score_threshold.valueChanged.connect(
+            lambda v: setattr(self.config, "entry_score_threshold", v)
+        )
 
         # Extended strategy/backtest controls (v5.0)
         if hasattr(self, "combo_strategy_pack"):
             self.combo_strategy_pack.currentTextChanged.connect(
-                lambda _v: self.config.strategy_pack.update({"primary_strategy": combo_value(self.combo_strategy_pack, "volatility_breakout")})
+                lambda _v: self.config.strategy_pack.update(
+                    {
+                        "primary_strategy": combo_value(
+                            self.combo_strategy_pack, "volatility_breakout"
+                        )
+                    }
+                )
             )
         if hasattr(self, "combo_portfolio_mode"):
             self.combo_portfolio_mode.currentTextChanged.connect(
-                lambda _v: setattr(self.config, 'portfolio_mode', combo_value(self.combo_portfolio_mode, "single_strategy"))
+                lambda _v: setattr(
+                    self.config,
+                    "portfolio_mode",
+                    combo_value(self.combo_portfolio_mode, "single_strategy"),
+                )
             )
         if hasattr(self, "chk_short_enabled"):
-            self.chk_short_enabled.toggled.connect(lambda v: setattr(self.config, 'short_enabled', bool(v)))
+            self.chk_short_enabled.toggled.connect(
+                lambda v: setattr(self.config, "short_enabled", bool(v))
+            )
         if hasattr(self, "combo_asset_scope"):
             self.combo_asset_scope.currentTextChanged.connect(
-                lambda _v: setattr(self.config, 'asset_scope', combo_value(self.combo_asset_scope, "kr_stock_live"))
+                lambda _v: setattr(
+                    self.config,
+                    "asset_scope",
+                    combo_value(self.combo_asset_scope, "kr_stock_live"),
+                )
             )
         if hasattr(self, "combo_execution_policy"):
             self.combo_execution_policy.currentTextChanged.connect(
-                lambda _v: setattr(self.config, 'execution_policy', combo_value(self.combo_execution_policy, "market"))
+                lambda _v: setattr(
+                    self.config,
+                    "execution_policy",
+                    combo_value(self.combo_execution_policy, "market"),
+                )
             )
         if hasattr(self, "combo_execution_mode"):
             self.combo_execution_mode.currentTextChanged.connect(
                 lambda _v: setattr(
                     self.config,
                     "execution_mode",
-                    combo_value(self.combo_execution_mode, getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only")),
+                    combo_value(
+                        self.combo_execution_mode,
+                        getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
+                    ),
                 )
             )
         if hasattr(self, "combo_backtest_timeframe"):
             self.combo_backtest_timeframe.currentTextChanged.connect(
-                lambda _v: self.config.backtest_config.update({"timeframe": combo_value(self.combo_backtest_timeframe, "1d")})
+                lambda _v: self.config.backtest_config.update(
+                    {"timeframe": combo_value(self.combo_backtest_timeframe, "1d")}
+                )
             )
         if hasattr(self, "spin_backtest_lookback"):
             self.spin_backtest_lookback.valueChanged.connect(
@@ -339,7 +459,9 @@ class KiwoomProTrader(
             )
         if hasattr(self, "spin_backtest_commission"):
             self.spin_backtest_commission.valueChanged.connect(
-                lambda v: self.config.backtest_config.update({"commission_bps": float(v)})
+                lambda v: self.config.backtest_config.update(
+                    {"commission_bps": float(v)}
+                )
             )
         if hasattr(self, "spin_backtest_slippage"):
             self.spin_backtest_slippage.valueChanged.connect(
@@ -347,7 +469,9 @@ class KiwoomProTrader(
             )
         if hasattr(self, "chk_feature_modular_pack"):
             self.chk_feature_modular_pack.toggled.connect(
-                lambda v: self.config.feature_flags.update({"use_modular_strategy_pack": bool(v)})
+                lambda v: self.config.feature_flags.update(
+                    {"use_modular_strategy_pack": bool(v)}
+                )
             )
         if hasattr(self, "chk_feature_backtest"):
             self.chk_feature_backtest.toggled.connect(
@@ -355,7 +479,9 @@ class KiwoomProTrader(
             )
         if hasattr(self, "chk_feature_external_data"):
             self.chk_feature_external_data.toggled.connect(
-                lambda v: self.config.feature_flags.update({"enable_external_data": bool(v)})
+                lambda v: self.config.feature_flags.update(
+                    {"enable_external_data": bool(v)}
+                )
             )
         if hasattr(self, "chk_sync_history_flush_on_exit"):
             self.chk_sync_history_flush_on_exit.toggled.connect(
@@ -363,30 +489,50 @@ class KiwoomProTrader(
             )
         if hasattr(self, "chk_allow_plaintext_secret_fallback"):
             self.chk_allow_plaintext_secret_fallback.toggled.connect(
-                lambda v: setattr(self.config, "allow_plaintext_secret_fallback", bool(v))
+                lambda v: setattr(
+                    self.config, "allow_plaintext_secret_fallback", bool(v)
+                )
             )
         if hasattr(self, "chk_use_shock_guard"):
-            self.chk_use_shock_guard.toggled.connect(lambda v: setattr(self.config, "use_shock_guard", bool(v)))
+            self.chk_use_shock_guard.toggled.connect(
+                lambda v: setattr(self.config, "use_shock_guard", bool(v))
+            )
         if hasattr(self, "spin_shock_1m"):
-            self.spin_shock_1m.valueChanged.connect(lambda v: setattr(self.config, "shock_1m_pct", float(v)))
+            self.spin_shock_1m.valueChanged.connect(
+                lambda v: setattr(self.config, "shock_1m_pct", float(v))
+            )
         if hasattr(self, "spin_shock_5m"):
-            self.spin_shock_5m.valueChanged.connect(lambda v: setattr(self.config, "shock_5m_pct", float(v)))
+            self.spin_shock_5m.valueChanged.connect(
+                lambda v: setattr(self.config, "shock_5m_pct", float(v))
+            )
         if hasattr(self, "spin_shock_cooldown"):
-            self.spin_shock_cooldown.valueChanged.connect(lambda v: setattr(self.config, "shock_cooldown_min", int(v)))
+            self.spin_shock_cooldown.valueChanged.connect(
+                lambda v: setattr(self.config, "shock_cooldown_min", int(v))
+            )
         if hasattr(self, "chk_use_vi_guard"):
-            self.chk_use_vi_guard.toggled.connect(lambda v: setattr(self.config, "use_vi_guard", bool(v)))
+            self.chk_use_vi_guard.toggled.connect(
+                lambda v: setattr(self.config, "use_vi_guard", bool(v))
+            )
         if hasattr(self, "spin_vi_cooldown"):
-            self.spin_vi_cooldown.valueChanged.connect(lambda v: setattr(self.config, "vi_cooldown_min", int(v)))
+            self.spin_vi_cooldown.valueChanged.connect(
+                lambda v: setattr(self.config, "vi_cooldown_min", int(v))
+            )
         if hasattr(self, "chk_use_regime_sizing"):
-            self.chk_use_regime_sizing.toggled.connect(lambda v: setattr(self.config, "use_regime_sizing", bool(v)))
+            self.chk_use_regime_sizing.toggled.connect(
+                lambda v: setattr(self.config, "use_regime_sizing", bool(v))
+            )
         if hasattr(self, "chk_use_liquidity_stress_guard"):
             self.chk_use_liquidity_stress_guard.toggled.connect(
                 lambda v: setattr(self.config, "use_liquidity_stress_guard", bool(v))
             )
         if hasattr(self, "chk_use_slippage_guard"):
-            self.chk_use_slippage_guard.toggled.connect(lambda v: setattr(self.config, "use_slippage_guard", bool(v)))
+            self.chk_use_slippage_guard.toggled.connect(
+                lambda v: setattr(self.config, "use_slippage_guard", bool(v))
+            )
         if hasattr(self, "spin_max_slippage_bps"):
-            self.spin_max_slippage_bps.valueChanged.connect(lambda v: setattr(self.config, "max_slippage_bps", float(v)))
+            self.spin_max_slippage_bps.valueChanged.connect(
+                lambda v: setattr(self.config, "max_slippage_bps", float(v))
+            )
         if hasattr(self, "chk_use_order_health_guard"):
             self.chk_use_order_health_guard.toggled.connect(
                 lambda v: setattr(self.config, "use_order_health_guard", bool(v))
@@ -413,7 +559,9 @@ class KiwoomProTrader(
         self.config.max_holdings = self.spin_max_holdings.value()
         self.config.use_risk_mgmt = self.chk_use_risk.isChecked()
         if hasattr(self, "combo_daily_loss_basis"):
-            self.config.daily_loss_basis = combo_value(self.combo_daily_loss_basis, "total_equity")
+            self.config.daily_loss_basis = combo_value(
+                self.combo_daily_loss_basis, "total_equity"
+            )
         self.config.use_stoch_rsi = self.chk_use_stoch_rsi.isChecked()
         self.config.stoch_upper = self.spin_stoch_upper.value()
         self.config.stoch_lower = self.spin_stoch_lower.value()
@@ -459,38 +607,64 @@ class KiwoomProTrader(
         if hasattr(self, "spin_time_stop_min"):
             self.config.time_stop_min = self.spin_time_stop_min.value()
         if hasattr(self, "combo_strategy_pack"):
-            self.config.strategy_pack["primary_strategy"] = combo_value(self.combo_strategy_pack, "volatility_breakout")
+            self.config.strategy_pack["primary_strategy"] = combo_value(
+                self.combo_strategy_pack, "volatility_breakout"
+            )
         if hasattr(self, "combo_portfolio_mode"):
-            self.config.portfolio_mode = combo_value(self.combo_portfolio_mode, "single_strategy")
+            self.config.portfolio_mode = combo_value(
+                self.combo_portfolio_mode, "single_strategy"
+            )
         if hasattr(self, "chk_short_enabled"):
             self.config.short_enabled = bool(self.chk_short_enabled.isChecked())
         if hasattr(self, "combo_asset_scope"):
-            self.config.asset_scope = combo_value(self.combo_asset_scope, "kr_stock_live")
+            self.config.asset_scope = combo_value(
+                self.combo_asset_scope, "kr_stock_live"
+            )
         if hasattr(self, "combo_execution_policy"):
-            self.config.execution_policy = combo_value(self.combo_execution_policy, "market")
+            self.config.execution_policy = combo_value(
+                self.combo_execution_policy, "market"
+            )
         if hasattr(self, "combo_execution_mode"):
             self.config.execution_mode = combo_value(
                 self.combo_execution_mode,
                 getattr(Config, "DEFAULT_EXECUTION_MODE", "signal_only"),
             )
         if hasattr(self, "combo_backtest_timeframe"):
-            self.config.backtest_config["timeframe"] = combo_value(self.combo_backtest_timeframe, "1d")
+            self.config.backtest_config["timeframe"] = combo_value(
+                self.combo_backtest_timeframe, "1d"
+            )
         if hasattr(self, "spin_backtest_lookback"):
-            self.config.backtest_config["lookback_days"] = int(self.spin_backtest_lookback.value())
+            self.config.backtest_config["lookback_days"] = int(
+                self.spin_backtest_lookback.value()
+            )
         if hasattr(self, "spin_backtest_commission"):
-            self.config.backtest_config["commission_bps"] = float(self.spin_backtest_commission.value())
+            self.config.backtest_config["commission_bps"] = float(
+                self.spin_backtest_commission.value()
+            )
         if hasattr(self, "spin_backtest_slippage"):
-            self.config.backtest_config["slippage_bps"] = float(self.spin_backtest_slippage.value())
+            self.config.backtest_config["slippage_bps"] = float(
+                self.spin_backtest_slippage.value()
+            )
         if hasattr(self, "chk_feature_modular_pack"):
-            self.config.feature_flags["use_modular_strategy_pack"] = bool(self.chk_feature_modular_pack.isChecked())
+            self.config.feature_flags["use_modular_strategy_pack"] = bool(
+                self.chk_feature_modular_pack.isChecked()
+            )
         if hasattr(self, "chk_feature_backtest"):
-            self.config.feature_flags["enable_backtest"] = bool(self.chk_feature_backtest.isChecked())
+            self.config.feature_flags["enable_backtest"] = bool(
+                self.chk_feature_backtest.isChecked()
+            )
         if hasattr(self, "chk_feature_external_data"):
-            self.config.feature_flags["enable_external_data"] = bool(self.chk_feature_external_data.isChecked())
+            self.config.feature_flags["enable_external_data"] = bool(
+                self.chk_feature_external_data.isChecked()
+            )
         if hasattr(self, "chk_sync_history_flush_on_exit"):
-            self.config.sync_history_flush_on_exit = bool(self.chk_sync_history_flush_on_exit.isChecked())
+            self.config.sync_history_flush_on_exit = bool(
+                self.chk_sync_history_flush_on_exit.isChecked()
+            )
         if hasattr(self, "chk_allow_plaintext_secret_fallback"):
-            self.config.allow_plaintext_secret_fallback = bool(self.chk_allow_plaintext_secret_fallback.isChecked())
+            self.config.allow_plaintext_secret_fallback = bool(
+                self.chk_allow_plaintext_secret_fallback.isChecked()
+            )
         if hasattr(self, "chk_use_shock_guard"):
             self.config.use_shock_guard = bool(self.chk_use_shock_guard.isChecked())
         if hasattr(self, "spin_shock_1m"):
@@ -506,13 +680,21 @@ class KiwoomProTrader(
         if hasattr(self, "chk_use_regime_sizing"):
             self.config.use_regime_sizing = bool(self.chk_use_regime_sizing.isChecked())
         if hasattr(self, "chk_use_liquidity_stress_guard"):
-            self.config.use_liquidity_stress_guard = bool(self.chk_use_liquidity_stress_guard.isChecked())
+            self.config.use_liquidity_stress_guard = bool(
+                self.chk_use_liquidity_stress_guard.isChecked()
+            )
         if hasattr(self, "chk_use_slippage_guard"):
-            self.config.use_slippage_guard = bool(self.chk_use_slippage_guard.isChecked())
+            self.config.use_slippage_guard = bool(
+                self.chk_use_slippage_guard.isChecked()
+            )
         if hasattr(self, "spin_max_slippage_bps"):
             self.config.max_slippage_bps = float(self.spin_max_slippage_bps.value())
         if hasattr(self, "chk_use_order_health_guard"):
-            self.config.use_order_health_guard = bool(self.chk_use_order_health_guard.isChecked())
-        sync_market_intel = getattr(self, "_update_market_intelligence_config_from_ui", None)
+            self.config.use_order_health_guard = bool(
+                self.chk_use_order_health_guard.isChecked()
+            )
+        sync_market_intel = getattr(
+            self, "_update_market_intelligence_config_from_ui", None
+        )
         if callable(sync_market_intel):
             sync_market_intel()

@@ -10,9 +10,13 @@ class PresetProfilesMixin(TraderMixinBase):
     """Preset/profile/schedule dialogs (SRP: open-apply-log only)."""
 
     def _open_presets(self):
-        current = {"k": self.spin_k.value(), "ts_start": self.spin_ts_start.value(),
-                   "ts_stop": self.spin_ts_stop.value(), "loss": self.spin_loss.value(),
-                   "betting": self.spin_betting.value()}
+        current = {
+            "k": self.spin_k.value(),
+            "ts_start": self.spin_ts_start.value(),
+            "ts_stop": self.spin_ts_stop.value(),
+            "loss": self.spin_loss.value(),
+            "betting": self.spin_betting.value(),
+        }
         dialog = PresetDialog(self, current)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_preset:
             p = dialog.selected_preset
@@ -36,7 +40,9 @@ class PresetProfilesMixin(TraderMixinBase):
         dialog = ScheduleDialog(self, self.schedule)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.schedule = dialog.schedule
-            if self.schedule.get('enabled'):
-                self.log(f"⏰ 예약 매매 설정: {self.schedule['start']} ~ {self.schedule['end']}")
+            if self.schedule.get("enabled"):
+                self.log(
+                    f"⏰ 예약 매매 설정: {self.schedule['start']} ~ {self.schedule['end']}"
+                )
             else:
                 self.log("⏰ 예약 매매 비활성화")

@@ -65,7 +65,12 @@ class _Harness(PersistenceSettingsMixin):
     def __init__(self):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
-        self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
+        self.schedule = {
+            "enabled": False,
+            "start": "09:00",
+            "end": "15:19",
+            "liquidate": True,
+        }
 
         self.input_app_key = _DummyText()
         self.input_secret = _DummyText()
@@ -114,11 +119,20 @@ class TestSettingsDefaultConsistency(unittest.TestCase):
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(
-                json.dumps({"settings_version": 4, "codes": "005930"}, ensure_ascii=False),
+                json.dumps(
+                    {"settings_version": 4, "codes": "005930"}, ensure_ascii=False
+                ),
                 encoding="utf-8",
             )
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.keyring.get_password", return_value=""
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch(
+                    "app.features.persistence.settings_io.keyring.get_password",
+                    return_value="",
+                ),
             ):
                 trader._load_settings()
         finally:
@@ -127,7 +141,9 @@ class TestSettingsDefaultConsistency(unittest.TestCase):
         self.assertEqual(trader.spin_market_limit.value(), Config.DEFAULT_MARKET_LIMIT)
         self.assertEqual(trader.spin_sector_limit.value(), Config.DEFAULT_SECTOR_LIMIT)
         guard_defaults = trader._v4_guard_defaults()
-        self.assertEqual(guard_defaults["max_slippage_bps"], Config.DEFAULT_MAX_SLIPPAGE_BPS)
+        self.assertEqual(
+            guard_defaults["max_slippage_bps"], Config.DEFAULT_MAX_SLIPPAGE_BPS
+        )
         self.assertTrue(guard_defaults["use_shock_guard"])
 
 

@@ -4,6 +4,7 @@ _cleanup_polling=True 인 동안 _on_order_execution 이 cancel/reject 이벤트
 받아도 _pending_order_state 를 변경(cancelled/rejected 마킹)하지 않아야 한다.
 체결 fill 동기화 로그 자체는 남을 수 있으나 pending mutation 은 보류된다.
 """
+
 import unittest
 
 from app.mixins.order_sync import OrderSyncMixin
@@ -139,7 +140,9 @@ class TestCleanupPollingReentryGuard(unittest.TestCase):
         # reserved cash 도 보존된다.
         self.assertEqual(trader._reserved_cash_by_code.get("005930"), 2000)
         # 보류 로그가 남는다.
-        self.assertTrue(any("pending mutation deferred" in m for m in trader.logger.messages))
+        self.assertTrue(
+            any("pending mutation deferred" in m for m in trader.logger.messages)
+        )
 
     def test_pending_mutation_allowed_when_not_polling(self):
         trader = _Harness()

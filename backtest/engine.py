@@ -44,17 +44,33 @@ class EventDrivenBacktestEngine(BacktestIntelEventsMixin):
         global_risk_until: Optional[datetime] = None
         order_health_until: Optional[datetime] = None
         symbol_intelligence_state: Dict[str, Dict[str, Any]] = {}
-        scoped_intelligence_state: Dict[str, Dict[str, Any]] = {"market": {}, "sector": {}, "theme": {}}
+        scoped_intelligence_state: Dict[str, Dict[str, Any]] = {
+            "market": {},
+            "sector": {},
+            "theme": {},
+        }
 
         ordered = sorted(bars, key=lambda bar: (bar.ts, bar.symbol))
-        ordered_events = sorted(list(intelligence_events or []), key=lambda event: (event.ts, event.scope, event.symbol, event.event_type))
+        ordered_events = sorted(
+            list(intelligence_events or []),
+            key=lambda event: (event.ts, event.scope, event.symbol, event.event_type),
+        )
         event_idx = 0
         for bar in ordered:
-            if self.config.timeframe.endswith("m") and not self._is_tradable_time(bar.ts):
+            if self.config.timeframe.endswith("m") and not self._is_tradable_time(
+                bar.ts
+            ):
                 continue
 
-            while event_idx < len(ordered_events) and ordered_events[event_idx].ts <= bar.ts:
-                self._apply_intelligence_event(symbol_intelligence_state, scoped_intelligence_state, ordered_events[event_idx])
+            while (
+                event_idx < len(ordered_events)
+                and ordered_events[event_idx].ts <= bar.ts
+            ):
+                self._apply_intelligence_event(
+                    symbol_intelligence_state,
+                    scoped_intelligence_state,
+                    ordered_events[event_idx],
+                )
                 event_idx += 1
 
             if bar.symbol not in positions:
@@ -67,7 +83,11 @@ class EventDrivenBacktestEngine(BacktestIntelEventsMixin):
 
             symbol_state = positions[bar.symbol]
             if symbol_state.side == "long":
-                symbol_state.peak_price = max(symbol_state.peak_price, float(bar.high or bar.close or 0.0), float(bar.close or 0.0))
+                symbol_state.peak_price = max(
+                    symbol_state.peak_price,
+                    float(bar.high or bar.close or 0.0),
+                    float(bar.close or 0.0),
+                )
 
             signals = signal_fn(bar, positions) or {}
             meta = signals.get("__meta__", {}) if isinstance(signals, dict) else {}
@@ -115,7 +135,11 @@ class EventDrivenBacktestEngine(BacktestIntelEventsMixin):
 
             fill_action = "sell" if action == "sell_partial" else action
             fill_price = self._apply_costs(bar.close, fill_action)
-            if action in {"buy", "sell", "sell_partial", "short", "cover"} and fill_price > 0 and bar.close > 0:
+            if (
+                action in {"buy", "sell", "sell_partial", "short", "cover"}
+                and fill_price > 0
+                and bar.close > 0
+            ):
                 slip_bps = abs((fill_price - bar.close) / bar.close) * 10000.0
                 recent_slippage_bps.append(slip_bps)
 
@@ -133,11 +157,31 @@ class EventDrivenBacktestEngine(BacktestIntelEventsMixin):
                     symbol_state.entry_price = fill_price
                     symbol_state.peak_price = fill_price
                     symbol_state.last_intel_event_id = ""
-                    trades.append({"ts": bar.ts.isoformat(), "symbol": bar.symbol, "side": "buy", "price": fill_price, "qty": qty})
+                    trades.append(
+                        {
+                            "ts": bar.ts.isoformat(),
+                            "symbol": bar.symbol,
+                            "side": "buy",
+                            "price": fill_price,
+                            "qty": qty,
+                        }
+                    )
 
             elif action == "sell_partial" and symbol_state.side == "long":
-                fraction = max(0.05, min(1.0, float(reduce_fraction if reduce_fraction is not None else self.config.reduce_size_ratio)))
-                qty = min(symbol_state.quantity, max(0.0, symbol_state.quantity * fraction))
+                fraction = max(
+                    0.05,
+                    min(
+                        1.0,
+                        float(
+                            reduce_fraction
+                            if reduce_fraction is not None
+                            else self.config.reduce_size_ratio
+                        ),
+                    ),
+                )
+                qty = min(
+                    symbol_state.quantity, max(0.0, symbol_state.quantity * fraction)
+                )
                 if qty > 0:
                     proceeds = qty * fill_price
                     pnl = (fill_price - symbol_state.entry_price) * qty
@@ -190,7 +234,15 @@ class EventDrivenBacktestEngine(BacktestIntelEventsMixin):
                     symbol_state.side = "short"
                     symbol_state.quantity = qty
                     symbol_state.entry_price = fill_price
-                    trades.append({"ts": bar.ts.isoformat(), "symbol": bar.symbol, "side": "short", "price": fill_price, "qty": qty})
+                    trades.append(
+                        {
+                            "ts": bar.ts.isoformat(),
+                            "symbol": bar.symbol,
+                            "side": "short",
+                            "price": fill_price,
+                            "qty": qty,
+                        }
+                    )
 
             elif action == "cover" and symbol_state.side == "short":
                 cost = symbol_state.quantity * fill_price

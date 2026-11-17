@@ -58,14 +58,28 @@ class TestTimeStopSessionPolicy(unittest.TestCase):
     def test_session_inbound_position_is_excluded_from_time_stop(self):
         trader = _Harness(time_stop_eligible=False)
         trader._on_execution(
-            ExecutionData(code="005930", name="SAMSUNG", exec_price=1000, total_volume=1, ask_price=1000, bid_price=999)
+            ExecutionData(
+                code="005930",
+                name="SAMSUNG",
+                exec_price=1000,
+                total_volume=1,
+                ask_price=1000,
+                bid_price=999,
+            )
         )
         self.assertEqual(trader.sell_calls, [])
 
     def test_session_new_position_applies_time_stop(self):
         trader = _Harness(time_stop_eligible=True)
         trader._on_execution(
-            ExecutionData(code="005930", name="SAMSUNG", exec_price=1000, total_volume=1, ask_price=1000, bid_price=999)
+            ExecutionData(
+                code="005930",
+                name="SAMSUNG",
+                exec_price=1000,
+                total_volume=1,
+                ask_price=1000,
+                bid_price=999,
+            )
         )
         self.assertEqual(len(trader.sell_calls), 1)
         self.assertIn("TIME_STOP", trader.sell_calls[0][3])

@@ -20,7 +20,10 @@ class _Response:
 class TestMarketIntelligenceProviderStatus(unittest.TestCase):
     def test_news_provider_marks_empty_response(self):
         provider = NewsProvider("id", "secret")
-        with patch("data.providers.news_provider.requests.get", return_value=_Response({"items": []})):
+        with patch(
+            "data.providers.news_provider.requests.get",
+            return_value=_Response({"items": []}),
+        ):
             result = provider.search("삼성전자")
 
         self.assertEqual(result, [])
@@ -29,7 +32,10 @@ class TestMarketIntelligenceProviderStatus(unittest.TestCase):
 
     def test_news_provider_marks_error_response(self):
         provider = NewsProvider("id", "secret")
-        with patch("data.providers.news_provider.requests.get", return_value=_Response(error="boom")):
+        with patch(
+            "data.providers.news_provider.requests.get",
+            return_value=_Response(error="boom"),
+        ):
             result = provider.search("삼성전자")
 
         self.assertEqual(result, [])

@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 from collections import deque
 
@@ -8,7 +8,9 @@ from config import TradingConfig
 
 class _Harness(ExecutionEngineMixin):
     def __init__(self):
-        self.config = TradingConfig(use_slippage_guard=True, max_slippage_bps=10.0, slippage_window_trades=3)
+        self.config = TradingConfig(
+            use_slippage_guard=True, max_slippage_bps=10.0, slippage_window_trades=3
+        )
         self._sync_failed_codes = set()
         self._global_risk_mode = "normal"
         self._global_risk_until = None
@@ -28,12 +30,16 @@ class TestSlippageGuardPolicySwitch(unittest.TestCase):
             "avg_value_20": 0,
         }
 
-        blocked, reason = trader._can_enter_trade("005930", info, datetime.datetime.now())
+        blocked, reason = trader._can_enter_trade(
+            "005930", info, datetime.datetime.now()
+        )
         self.assertFalse(blocked)
         self.assertEqual(reason, "slippage_guard")
 
         trader.config.use_slippage_guard = False
-        allowed, reason2 = trader._can_enter_trade("005930", info, datetime.datetime.now())
+        allowed, reason2 = trader._can_enter_trade(
+            "005930", info, datetime.datetime.now()
+        )
         self.assertTrue(allowed)
         self.assertEqual(reason2, "")
 

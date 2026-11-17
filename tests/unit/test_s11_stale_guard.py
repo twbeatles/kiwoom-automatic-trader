@@ -99,14 +99,20 @@ class TestS11StaleGuard(unittest.TestCase):
         cfg.feature_flags["enable_external_data"] = True
         manager = StrategyManager(trader, cfg)
 
-        first_passed, first_conditions, _ = manager.evaluate_buy_conditions("005930", now_ts=1000.0)
-        second_passed, second_conditions, _ = manager.evaluate_buy_conditions("005930", now_ts=1001.0)
+        first_passed, first_conditions, _ = manager.evaluate_buy_conditions(
+            "005930", now_ts=1000.0
+        )
+        second_passed, second_conditions, _ = manager.evaluate_buy_conditions(
+            "005930", now_ts=1001.0
+        )
 
         self.assertFalse(first_passed)
         self.assertFalse(first_conditions["external_data_fresh"])
         self.assertFalse(second_passed)
         self.assertFalse(second_conditions["external_data_fresh"])
-        self.assertEqual(trader.rest_client.calls, 2)  # first evaluation only (investor + program)
+        self.assertEqual(
+            trader.rest_client.calls, 2
+        )  # first evaluation only (investor + program)
 
 
 if __name__ == "__main__":

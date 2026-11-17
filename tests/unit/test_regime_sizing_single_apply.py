@@ -47,7 +47,9 @@ class TestRegimeSizingSingleApply(unittest.TestCase):
         manager.get_regime_profile = lambda code: ("extreme", 0.4, 5.0)
         manager.calculate_atr = lambda *_args, **_kwargs: 10.0
 
-        qty = manager.calculate_position_size("005930", risk_percent=1.0, atr_multiplier=2.0)
+        qty = manager.calculate_position_size(
+            "005930", risk_percent=1.0, atr_multiplier=2.0
+        )
         self.assertEqual(qty, 20)
 
 

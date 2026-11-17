@@ -8,5 +8,6 @@ if TYPE_CHECKING:
     class TraderMixinBase(QMainWindow):
         def __getattr__(self, name: str) -> Any: ...
 else:
+
     class TraderMixinBase:
         pass

@@ -17,17 +17,25 @@ from config import Config
 class TestAPIModeRouting(unittest.TestCase):
     def test_auth_resolves_live_and_mock_endpoints_and_cache_paths(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            live_auth = KiwoomAuth(app_key="live-app", secret_key="secret", is_mock=False, cache_dir=tmpdir)
-            mock_auth = KiwoomAuth(app_key="mock-app", secret_key="secret", is_mock=True, cache_dir=tmpdir)
+            live_auth = KiwoomAuth(
+                app_key="live-app", secret_key="secret", is_mock=False, cache_dir=tmpdir
+            )
+            mock_auth = KiwoomAuth(
+                app_key="mock-app", secret_key="secret", is_mock=True, cache_dir=tmpdir
+            )
 
             self.assertEqual(live_auth.mode, "live")
             self.assertEqual(live_auth.base_url, LIVE_REST_BASE_URL)
             self.assertEqual(live_auth.ws_url, LIVE_WS_URL)
-            self.assertTrue(str(live_auth.cache_path).endswith("kiwoom_token_cache_live.json"))
+            self.assertTrue(
+                str(live_auth.cache_path).endswith("kiwoom_token_cache_live.json")
+            )
             self.assertEqual(mock_auth.mode, "mock")
             self.assertEqual(mock_auth.base_url, MOCK_REST_BASE_URL)
             self.assertEqual(mock_auth.ws_url, MOCK_WS_URL)
-            self.assertTrue(str(mock_auth.cache_path).endswith("kiwoom_token_cache_mock.json"))
+            self.assertTrue(
+                str(mock_auth.cache_path).endswith("kiwoom_token_cache_mock.json")
+            )
             self.assertNotEqual(live_auth.cache_path.name, mock_auth.cache_path.name)
 
     def test_rest_and_websocket_clients_use_auth_mode_endpoints(self):
@@ -48,7 +56,9 @@ class TestAPIModeRouting(unittest.TestCase):
             self.assertEqual(live_ws.ws_url, LIVE_WS_URL)
             self.assertEqual(mock_ws.ws_url, MOCK_WS_URL)
 
-            override_ws = KiwoomWebSocketClient(live_auth, ws_url="wss://example.test/ws")
+            override_ws = KiwoomWebSocketClient(
+                live_auth, ws_url="wss://example.test/ws"
+            )
             self.assertEqual(override_ws.ws_url, "wss://example.test/ws")
 
     def test_config_keeps_backward_compatible_endpoint_aliases(self):
@@ -90,7 +100,9 @@ class TestAPIModeRouting(unittest.TestCase):
 
     def test_auth_cache_defaults_to_base_dir_with_mode_suffix(self):
         auth = KiwoomAuth()
-        self.assertEqual(Path(auth.cache_dir).resolve(), Path(Config.BASE_DIR).resolve())
+        self.assertEqual(
+            Path(auth.cache_dir).resolve(), Path(Config.BASE_DIR).resolve()
+        )
         self.assertEqual(auth.cache_path.name, "kiwoom_token_cache_live.json")
 
 

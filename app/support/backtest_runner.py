@@ -63,7 +63,9 @@ def load_backtest_bars_csv(path: str | Path) -> List[BacktestBar]:
             symbol = str(_first_value(row, "symbol", "code", "종목코드")).strip()
             if not symbol:
                 continue
-            ts = _parse_dt(_first_value(row, "ts", "timestamp", "datetime", "date", "일자"))
+            ts = _parse_dt(
+                _first_value(row, "ts", "timestamp", "datetime", "date", "일자")
+            )
             close = _to_float(_first_value(row, "close", "종가"))
             open_price = _to_float(_first_value(row, "open", "시가"), close)
             high = _to_float(_first_value(row, "high", "고가"), max(open_price, close))
@@ -85,11 +87,15 @@ def load_backtest_bars_csv(path: str | Path) -> List[BacktestBar]:
     return sorted(bars, key=lambda bar: (bar.ts, bar.symbol))
 
 
-def moving_average_signal_fn(lookback: int = 5) -> Callable[[BacktestBar, Dict[str, PositionState]], Dict[str, str]]:
+def moving_average_signal_fn(
+    lookback: int = 5,
+) -> Callable[[BacktestBar, Dict[str, PositionState]], Dict[str, str]]:
     history: Dict[str, List[float]] = {}
     window = max(2, int(lookback))
 
-    def signal_fn(bar: BacktestBar, positions: Dict[str, PositionState]) -> Dict[str, str]:
+    def signal_fn(
+        bar: BacktestBar, positions: Dict[str, PositionState]
+    ) -> Dict[str, str]:
         series = history.setdefault(bar.symbol, [])
         action = "hold"
         if len(series) >= window:
@@ -129,7 +135,9 @@ def run_backtest_from_files(
     if intelligence_path:
         event_path = Path(intelligence_path)
         if event_path.exists():
-            events = EventDrivenBacktestEngine.load_intelligence_events_jsonl(event_path)
+            events = EventDrivenBacktestEngine.load_intelligence_events_jsonl(
+                event_path
+            )
     engine = EventDrivenBacktestEngine(build_backtest_config(config_values))
     return engine.run(
         bars,
@@ -149,4 +157,7 @@ def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
 
 
 def metric_rows(result: BacktestResult) -> List[tuple[str, str]]:
-    return [(str(key), f"{float(value):.4f}") for key, value in sorted((result.metrics or {}).items())]
+    return [
+        (str(key), f"{float(value):.4f}")
+        for key, value in sorted((result.metrics or {}).items())
+    ]

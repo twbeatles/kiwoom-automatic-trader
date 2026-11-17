@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -52,7 +52,10 @@ class _Harness(SystemShellMixin):
 
 
 class TestForceQuitCloseEvent(unittest.TestCase):
-    @patch("app.mixins.system_shell.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes)
+    @patch(
+        "app.mixins.system_shell.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
+    )
     def test_force_quit_bypasses_tray_minimize_path(self, _question):
         trader = _Harness()
         trader._force_quit()
@@ -67,7 +70,6 @@ class TestForceQuitCloseEvent(unittest.TestCase):
         self.assertFalse(event.ignored)
         self.assertEqual(trader.stop_called, 1)
         self.assertFalse(trader._force_quit_requested)
-
 
     def test_close_stops_timers_and_quits_event_loop(self):
         from unittest.mock import MagicMock, patch

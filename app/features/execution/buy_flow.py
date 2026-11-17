@@ -17,6 +17,7 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             return False
         state = str(pending.get("state", "submitted") or "submitted").lower()
         return state in {"submitted", "partial"}
+
     def _on_execution(self, data: ExecutionData):
         """Handle realtime execution tick and evaluate buy/sell conditions."""
         if not self.is_running:
@@ -58,7 +59,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
 
         now = datetime.datetime.now()
-        market_state_updater = getattr(self, "_update_market_state_from_execution", None)
+        market_state_updater = getattr(
+            self, "_update_market_state_from_execution", None
+        )
         if callable(market_state_updater):
             market_state_updater(code, info, data, now)
         shock_updater = getattr(self, "_update_shock_mode", None)
@@ -110,21 +113,36 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             if profit_rate > float(info.get("max_profit_rate", 0)):
                 info["max_profit_rate"] = profit_rate
 
-            defense_getter = getattr(getattr(self, "strategy", None), "get_market_position_defense_policy", None)
+            defense_getter = getattr(
+                getattr(self, "strategy", None),
+                "get_market_position_defense_policy",
+                None,
+            )
             defense_result = defense_getter(code) if callable(defense_getter) else {}
             defense = defense_result if isinstance(defense_result, dict) else {}
             exit_policy = str(defense.get("exit_policy", "none") or "none")
             defense_event_id = str(
-                defense.get("last_event_id", "") or f"{code}:{exit_policy}:{datetime.date.today().isoformat()}"
+                defense.get("last_event_id", "")
+                or f"{code}:{exit_policy}:{datetime.date.today().isoformat()}"
             )
-            state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
-            market_intel_cfg = getattr(getattr(self, "config", None), "market_intelligence", {})
-            defense_cfg = (
-                market_intel_cfg.get("position_defense", {})
-                if isinstance(market_intel_cfg, dict) and isinstance(market_intel_cfg.get("position_defense"), dict)
+            state = (
+                info.get("market_intel", {})
+                if isinstance(info.get("market_intel"), dict)
                 else {}
             )
-            if exit_policy == "force_exit" and state.get("last_position_action_event_id", "") != defense_event_id:
+            market_intel_cfg = getattr(
+                getattr(self, "config", None), "market_intelligence", {}
+            )
+            defense_cfg = (
+                market_intel_cfg.get("position_defense", {})
+                if isinstance(market_intel_cfg, dict)
+                and isinstance(market_intel_cfg.get("position_defense"), dict)
+                else {}
+            )
+            if (
+                exit_policy == "force_exit"
+                and state.get("last_position_action_event_id", "") != defense_event_id
+            ):
                 state["last_position_action_event_id"] = defense_event_id
                 self._record_decision_audit_once(
                     code,
@@ -135,7 +153,10 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 )
                 self._execute_sell(code, held, current_price, "MARKET_INTEL_FORCE_EXIT")
                 return
-            if exit_policy == "reduce_size" and state.get("last_position_action_event_id", "") != defense_event_id:
+            if (
+                exit_policy == "reduce_size"
+                and state.get("last_position_action_event_id", "") != defense_event_id
+            ):
                 reduce_ratio = float(defense_cfg.get("reduce_ratio", 0.5) or 0.5)
                 reduce_qty = min(held, max(1, int(max(1, held) * reduce_ratio)))
                 state["last_position_action_event_id"] = defense_event_id
@@ -146,7 +167,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                     reason="market_intel_reduce_size",
                     quantity=reduce_qty,
                 )
-                self._execute_sell(code, reduce_qty, current_price, "MARKET_INTEL_REDUCE_SIZE")
+                self._execute_sell(
+                    code, reduce_qty, current_price, "MARKET_INTEL_REDUCE_SIZE"
+                )
                 return
 
             atr_triggered, _ = self.strategy.check_atr_stop_loss(code)
@@ -164,30 +187,40 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             loss_limit = float(
                 cfg_value(
                     "loss_cut",
-                    float(self.spin_loss.value()) if hasattr(self, "spin_loss") else Config.DEFAULT_LOSS_CUT,
+                    float(self.spin_loss.value())
+                    if hasattr(self, "spin_loss")
+                    else Config.DEFAULT_LOSS_CUT,
                 )
             )
             if profit_rate <= -loss_limit:
-                self._execute_sell(code, held, current_price, f"STOP_LOSS({profit_rate:.1f}%)")
+                self._execute_sell(
+                    code, held, current_price, f"STOP_LOSS({profit_rate:.1f}%)"
+                )
                 return
 
             partial = self.strategy.calculate_partial_take_profit(code, profit_rate)
             if partial:
                 sell_qty = max(1, int(held * partial["sell_ratio"] / 100))
-                self._execute_sell(code, sell_qty, current_price, f"PARTIAL_TP_L{partial['level'] + 1}")
+                self._execute_sell(
+                    code, sell_qty, current_price, f"PARTIAL_TP_L{partial['level'] + 1}"
+                )
                 self.strategy.mark_partial_profit_executed(code, partial["level"])
                 return
 
             ts_start = float(
                 cfg_value(
                     "ts_start",
-                    float(self.spin_ts_start.value()) if hasattr(self, "spin_ts_start") else Config.DEFAULT_TS_START,
+                    float(self.spin_ts_start.value())
+                    if hasattr(self, "spin_ts_start")
+                    else Config.DEFAULT_TS_START,
                 )
             )
             ts_stop = float(
                 cfg_value(
                     "ts_stop",
-                    float(self.spin_ts_stop.value()) if hasattr(self, "spin_ts_stop") else Config.DEFAULT_TS_STOP,
+                    float(self.spin_ts_stop.value())
+                    if hasattr(self, "spin_ts_stop")
+                    else Config.DEFAULT_TS_STOP,
                 )
             )
             if exit_policy in {"tighten_exit", "force_exit"}:
@@ -198,13 +231,18 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 info["status"] = "trailing"
                 drop_from_high = max_profit - profit_rate
                 if drop_from_high >= ts_stop:
-                    self._execute_sell(code, held, current_price, f"TRAILING_STOP({profit_rate:.1f}%)")
+                    self._execute_sell(
+                        code, held, current_price, f"TRAILING_STOP({profit_rate:.1f}%)"
+                    )
                     return
 
             use_time_stop = bool(
                 cfg_value(
                     "use_time_stop",
-                    bool(hasattr(self, "chk_use_time_stop") and self.chk_use_time_stop.isChecked()),
+                    bool(
+                        hasattr(self, "chk_use_time_stop")
+                        and self.chk_use_time_stop.isChecked()
+                    ),
                 )
             )
             if use_time_stop and bool(info.get("time_stop_eligible", True)):
@@ -219,7 +257,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                         )
                     )
                     if now - buy_time >= datetime.timedelta(minutes=max_minutes):
-                        self._execute_sell(code, held, current_price, f"TIME_STOP({max_minutes}m)")
+                        self._execute_sell(
+                            code, held, current_price, f"TIME_STOP({max_minutes}m)"
+                        )
                         return
 
         elif held == 0 and target > 0 and not no_buy:
@@ -239,7 +279,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                         f"guard:{code}:{reason_code}",
                         f"[진입차단] {info.get('name', code)} reason={reason_code}",
                     )
-                self._record_decision_audit_once(code, info, allowed=False, reason=reason_code)
+                self._record_decision_audit_once(
+                    code, info, allowed=False, reason=reason_code
+                )
                 return
             info["last_guard_reason"] = ""
             guard_map = getattr(self, "_guard_reason_by_code", None)
@@ -250,7 +292,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             max_holdings = int(
                 cfg_value(
                     "max_holdings",
-                    int(self.spin_max_holdings.value()) if hasattr(self, "spin_max_holdings") else Config.DEFAULT_MAX_HOLDINGS,
+                    int(self.spin_max_holdings.value())
+                    if hasattr(self, "spin_max_holdings")
+                    else Config.DEFAULT_MAX_HOLDINGS,
                 )
             )
             max_holdings = max(1, max_holdings - int(holdings_penalty))
@@ -265,7 +309,10 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 use_breakout_confirm = bool(
                     cfg_value(
                         "use_breakout_confirm",
-                        bool(hasattr(self, "chk_use_breakout_confirm") and self.chk_use_breakout_confirm.isChecked()),
+                        bool(
+                            hasattr(self, "chk_use_breakout_confirm")
+                            and self.chk_use_breakout_confirm.isChecked()
+                        ),
                     )
                 )
                 if use_breakout_confirm:
@@ -282,18 +329,26 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                     if hits < required_hits:
                         return
 
-                passed, conditions, metrics = self.strategy.evaluate_buy_conditions(code, now.timestamp())
+                passed, conditions, metrics = self.strategy.evaluate_buy_conditions(
+                    code, now.timestamp()
+                )
                 if passed:
                     use_dynamic_sizing = bool(
                         cfg_value(
                             "use_dynamic_sizing",
-                            bool(hasattr(self, "chk_use_dynamic_sizing") and self.chk_use_dynamic_sizing.isChecked()),
+                            bool(
+                                hasattr(self, "chk_use_dynamic_sizing")
+                                and self.chk_use_dynamic_sizing.isChecked()
+                            ),
                         )
                     )
                     use_atr_sizing = bool(
                         cfg_value(
                             "use_atr_sizing",
-                            bool(hasattr(self, "chk_use_atr_sizing") and self.chk_use_atr_sizing.isChecked()),
+                            bool(
+                                hasattr(self, "chk_use_atr_sizing")
+                                and self.chk_use_atr_sizing.isChecked()
+                            ),
                         )
                     )
 
@@ -308,7 +363,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                                 else Config.DEFAULT_RISK_PERCENT,
                             )
                         )
-                        quantity = self.strategy.calculate_position_size(code, risk_percent)
+                        quantity = self.strategy.calculate_position_size(
+                            code, risk_percent
+                        )
                     else:
                         quantity = self.strategy._default_position_size(code)
 
@@ -337,6 +394,7 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
 
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _execute_buy(self, code: str, quantity: int, price: int):
         """Submit buy order asynchronously."""
         info = self.universe.get(code, {})
@@ -358,20 +416,36 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             self.log(f"BUY failed [{name}]: API/account not ready")
             return
 
-        current_price = int(price) if int(price) > 0 else int(info.get("current", 0) or 0)
+        current_price = (
+            int(price) if int(price) > 0 else int(info.get("current", 0) or 0)
+        )
         if current_price <= 0:
             # 가격 미확정 상태에서는 잔액 검증이 무의미해지고(0원으로 통과)
             # 시장가 주문이 의도치 않게 전송될 수 있으므로 주문 자체를 보류한다.
             self.log(f"BUY skipped [{name}]: price unavailable (current_price=0)")
             return
-        available_cash = getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
+        available_cash = getattr(
+            self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)
+        )
         cfg = getattr(self, "config", None)
-        policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))
+        policy = str(
+            getattr(
+                cfg,
+                "execution_policy",
+                getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"),
+            )
+        )
         use_split = bool(getattr(cfg, "use_split", False)) if cfg is not None else False
 
         if use_split:
-            split_orders = getattr(getattr(self, "strategy", None), "get_split_orders", None)
-            planned_result = split_orders(quantity, current_price, "buy") if callable(split_orders) else []
+            split_orders = getattr(
+                getattr(self, "strategy", None), "get_split_orders", None
+            )
+            planned_result = (
+                split_orders(quantity, current_price, "buy")
+                if callable(split_orders)
+                else []
+            )
             planned_orders = planned_result if isinstance(planned_result, list) else []
             child_orders = [
                 (max(0, int(qty or 0)), max(1, int(child_price or 0)))
@@ -380,16 +454,24 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             ]
             if len(child_orders) > 1:
                 if policy != ExecutionPolicy.LIMIT:
-                    self.log(f"BUY blocked [{name}]: split buy requires limit execution policy")
+                    self.log(
+                        f"BUY blocked [{name}]: split buy requires limit execution policy"
+                    )
                     return
 
-                required_cash = sum(int(qty) * int(child_price) for qty, child_price in child_orders)
+                required_cash = sum(
+                    int(qty) * int(child_price) for qty, child_price in child_orders
+                )
                 if required_cash > available_cash:
                     self.log(
                         f"BUY skipped [{name}]: required={required_cash:,} available(V)={available_cash:,} (INSUFFICIENT_CASH)"
                     )
-                    seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
-                    info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                    seconds = max(
+                        1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10))
+                    )
+                    info["cooldown_until"] = (
+                        datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                    )
                     info["status"] = "cooldown"
                     self.log(f"BUY cooldown [{name}] {seconds}s (INSUFFICIENT_CASH)")
                     self._dirty_codes.add(code)
@@ -404,7 +486,12 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                         quantity=sum(qty for qty, _price in child_orders),
                         price=current_price,
                         reason="BUY_SPLIT",
-                        payload={"child_orders": [{"quantity": qty, "price": child_price} for qty, child_price in child_orders]},
+                        payload={
+                            "child_orders": [
+                                {"quantity": qty, "price": child_price}
+                                for qty, child_price in child_orders
+                            ]
+                        },
                     )
                     return
 
@@ -415,14 +502,23 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 info["status"] = "buying"
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):
-                    diag_touch(code, pending_side="buy", pending_reason="BUY_SPLIT_SUBMITTING", sync_status="buying")
+                    diag_touch(
+                        code,
+                        pending_side="buy",
+                        pending_reason="BUY_SPLIT_SUBMITTING",
+                        sync_status="buying",
+                    )
                 self._dirty_codes.add(code)
 
                 worker = Worker(self._submit_split_buy_orders, code, child_orders)
                 worker.signals.result.connect(
-                    lambda rows: self._on_split_buy_result(rows, code, name, child_orders)
+                    lambda rows: self._on_split_buy_result(
+                        rows, code, name, child_orders
+                    )
                 )
-                worker.signals.error.connect(lambda e: self._on_split_buy_error(e, code, name))
+                worker.signals.error.connect(
+                    lambda e: self._on_split_buy_error(e, code, name)
+                )
                 self.threadpool.start(worker)
                 return
 
@@ -433,7 +529,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 f"BUY skipped [{name}]: required={required_cash:,} available(V)={available_cash:,} (INSUFFICIENT_CASH)"
             )
             seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
-            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(
+                seconds=seconds
+            )
             info["status"] = "cooldown"
             self.log(f"BUY cooldown [{name}] {seconds}s (INSUFFICIENT_CASH)")
             self._dirty_codes.add(code)
@@ -461,14 +559,24 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         info["status"] = "buying"
         diag_touch = getattr(self, "_diag_touch", None)
         if callable(diag_touch):
-            diag_touch(code, pending_side="buy", pending_reason="SUBMITTING", sync_status="buying")
+            diag_touch(
+                code,
+                pending_side="buy",
+                pending_reason="SUBMITTING",
+                sync_status="buying",
+            )
         self._dirty_codes.add(code)
 
-        buy_fn, args = ExecutionPolicy.select_buy(self.rest_client, policy, self.current_account, code, quantity, price)
+        buy_fn, args = ExecutionPolicy.select_buy(
+            self.rest_client, policy, self.current_account, code, quantity, price
+        )
         worker = Worker(buy_fn, *args)
-        worker.signals.result.connect(lambda res: self._on_buy_result(res, code, name, quantity, price))
+        worker.signals.result.connect(
+            lambda res: self._on_buy_result(res, code, name, quantity, price)
+        )
         worker.signals.error.connect(lambda e: self._on_buy_error(e, code, name))
         self.threadpool.start(worker)
+
     def _on_split_buy_error(self, e, code, name):
         self.log(f"BUY split error [{name}]: {e}")
         record_failure = getattr(self, "_record_order_failure", None)
@@ -479,7 +587,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         if code in self.universe:
             info = self.universe[code]
             seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
-            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(
+                seconds=seconds
+            )
             info["status"] = "cooldown"
             self.log(f"BUY cooldown [{name}] {seconds}s (BUY_SPLIT_ERROR)")
             diag_touch = getattr(self, "_diag_touch", None)
@@ -489,7 +599,10 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
-    def _on_split_buy_result(self, rows, code, name, child_orders: list[tuple[int, int]]):
+
+    def _on_split_buy_result(
+        self, rows, code, name, child_orders: list[tuple[int, int]]
+    ):
         normalized_rows = list(rows or [])
         successful: list[dict] = []
         rejected_reserved = 0
@@ -501,7 +614,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             if bool(row.get("success", False)):
                 successful.append(
                     {
-                        "index": max(1, int(row.get("index", 0) or len(successful) + 1)),
+                        "index": max(
+                            1, int(row.get("index", 0) or len(successful) + 1)
+                        ),
                         "submitted_qty": qty,
                         "filled_qty": 0,
                         "remaining_qty": qty,
@@ -517,9 +632,15 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
                 rejected_reserved += qty * price
 
         if successful:
-            success_qty = sum(int(child.get("submitted_qty", 0) or 0) for child in successful)
-            success_cash = sum(int(child.get("reserved_cash", 0) or 0) for child in successful)
-            weighted_price = int(round(success_cash / success_qty)) if success_qty > 0 else 0
+            success_qty = sum(
+                int(child.get("submitted_qty", 0) or 0) for child in successful
+            )
+            success_cash = sum(
+                int(child.get("reserved_cash", 0) or 0) for child in successful
+            )
+            weighted_price = (
+                int(round(success_cash / success_qty)) if success_qty > 0 else 0
+            )
             if code in self.universe:
                 self.universe[code]["status"] = "buy_submitted"
                 self.universe[code]["cooldown_until"] = None
@@ -553,7 +674,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             message = ""
             if normalized_rows:
                 message = str(normalized_rows[0].get("message", "") or "")
-            self.log(f"BUY split rejected [{name}]: {message or 'no child order accepted'}")
+            self.log(
+                f"BUY split rejected [{name}]: {message or 'no child order accepted'}"
+            )
             record_failure = getattr(self, "_record_order_failure", None)
             if callable(record_failure):
                 record_failure("BUY_SPLIT_REJECTED", code=code)
@@ -561,7 +684,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             if code in self.universe:
                 info = self.universe[code]
                 seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
-                info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(
+                    seconds=seconds
+                )
                 info["status"] = "cooldown"
                 self.log(f"BUY cooldown [{name}] {seconds}s (BUY_SPLIT_REJECTED)")
                 diag_touch = getattr(self, "_diag_touch", None)
@@ -573,6 +698,7 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _on_buy_error(self, e, code, name):
         """Handle buy error."""
         self.log(f"BUY error [{name}]: {e}")
@@ -586,7 +712,9 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         if code in self.universe:
             info = self.universe[code]
             seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
-            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+            info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(
+                seconds=seconds
+            )
             info["status"] = "cooldown"
             self.log(f"BUY cooldown [{name}] {seconds}s (BUY_ERROR:{reject_class})")
             diag_touch = getattr(self, "_diag_touch", None)
@@ -596,6 +724,7 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _on_buy_result(self, result, code, name, quantity, price):
         """Handle buy result in main thread."""
         if result.success:
@@ -616,7 +745,11 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
         else:
             self.log(f"BUY rejected [{name}]: {result.message}")
             note_reject = getattr(self, "_note_order_reject", None)
-            reject_class = note_reject(code, result.message) if callable(note_reject) else "unknown"
+            reject_class = (
+                note_reject(code, result.message)
+                if callable(note_reject)
+                else "unknown"
+            )
             record_failure = getattr(self, "_record_order_failure", None)
             if callable(record_failure):
                 record_failure("BUY_REJECTED", code=code)
@@ -624,9 +757,13 @@ class ExecutionBuyFlowMixin(TraderMixinBase):
             if code in self.universe:
                 info = self.universe[code]
                 seconds = max(1, int(getattr(Config, "ORDER_REJECT_COOLDOWN_SEC", 10)))
-                info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                info["cooldown_until"] = datetime.datetime.now() + datetime.timedelta(
+                    seconds=seconds
+                )
                 info["status"] = "cooldown"
-                self.log(f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED:{reject_class})")
+                self.log(
+                    f"BUY cooldown [{name}] {seconds}s (BUY_REJECTED:{reject_class})"
+                )
                 diag_touch = getattr(self, "_diag_touch", None)
                 if callable(diag_touch):
                     diag_touch(code, sync_status="cooldown")

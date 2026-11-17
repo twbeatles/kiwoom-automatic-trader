@@ -76,7 +76,9 @@ class _Harness(OrderSyncMixin):
 class TestOrderSyncPendingStateMachine(unittest.TestCase):
     def test_partial_fill_consumes_only_filled_reservation(self):
         trader = _Harness()
-        trader._set_pending_order("005930", "buy", "BUY", expected_price=1000, submitted_qty=10, order_no="A1")
+        trader._set_pending_order(
+            "005930", "buy", "BUY", expected_price=1000, submitted_qty=10, order_no="A1"
+        )
         trader._reserved_cash_by_code["005930"] = 10_000
 
         trader._on_position_sync_result(
@@ -101,8 +103,12 @@ class TestOrderSyncPendingStateMachine(unittest.TestCase):
 
     def test_pending_timeout_does_not_auto_clear(self):
         trader = _Harness()
-        trader._set_pending_order("005930", "buy", "BUY", expected_price=1000, submitted_qty=5, order_no="A2")
-        trader._pending_order_state["005930"]["until"] = datetime.datetime.now() - datetime.timedelta(seconds=30)
+        trader._set_pending_order(
+            "005930", "buy", "BUY", expected_price=1000, submitted_qty=5, order_no="A2"
+        )
+        trader._pending_order_state["005930"]["until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=30)
+        )
         trader.universe["005930"]["status"] = "buy_submitted"
 
         trader._on_position_sync_result({"005930"}, [])
@@ -113,7 +119,9 @@ class TestOrderSyncPendingStateMachine(unittest.TestCase):
 
     def test_cancel_or_reject_refunds_remaining_reservation(self):
         trader = _Harness()
-        trader._set_pending_order("005930", "buy", "BUY", expected_price=1000, submitted_qty=5, order_no="A3")
+        trader._set_pending_order(
+            "005930", "buy", "BUY", expected_price=1000, submitted_qty=5, order_no="A3"
+        )
         trader._reserved_cash_by_code["005930"] = 5000
 
         trader._on_order_execution(

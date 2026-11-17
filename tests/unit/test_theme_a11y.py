@@ -139,7 +139,9 @@ class TestFontScaling(unittest.TestCase):
         self.assertEqual(clamp_font_scale(0.01), FONT_SCALE_MIN)
         self.assertEqual(clamp_font_scale("bad"), DEFAULT_FONT_SCALE)
         self.assertEqual(clamp_font_scale(None), DEFAULT_FONT_SCALE)
-        self.assertEqual(scaled_sizes("dark", 99.0), scaled_sizes("dark", FONT_SCALE_MAX))
+        self.assertEqual(
+            scaled_sizes("dark", 99.0), scaled_sizes("dark", FONT_SCALE_MAX)
+        )
 
     def test_apply_and_set_scale_on_host(self):
         host = _StubHost()

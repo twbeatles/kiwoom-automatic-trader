@@ -33,7 +33,9 @@ class _Harness(SystemShellMixin):
         self.telegram = None
         self.sound = None
         self._history_dirty = True
-        self.config = type("Cfg", (), {"sync_history_flush_on_exit": bool(sync_flush)})()
+        self.config = type(
+            "Cfg", (), {"sync_history_flush_on_exit": bool(sync_flush)}
+        )()
         self.sync_save_count = 0
         self.async_save_count = 0
 

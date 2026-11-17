@@ -16,10 +16,16 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         stats_group = QGroupBox("오늘의 성과")
         grid = QGridLayout()
 
-        for i, (key, label) in enumerate([
-            ("trades", "총 거래 횟수"), ("wins", "이익 거래"), ("winrate", "승률"),
-            ("profit", "실현 손익"), ("max_profit", "최대 수익"), ("max_loss", "최대 손실")
-        ]):
+        for i, (key, label) in enumerate(
+            [
+                ("trades", "총 거래 횟수"),
+                ("wins", "이익 거래"),
+                ("winrate", "승률"),
+                ("profit", "실현 손익"),
+                ("max_profit", "최대 수익"),
+                ("max_loss", "최대 손실"),
+            ]
+        ):
             grid.addWidget(QLabel(f"{label}:"), i // 3, (i % 3) * 2)
             lbl = QLabel("-")
             lbl.setProperty("value", True)
@@ -31,10 +37,14 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         portfolio_group = QGroupBox("포트폴리오 요약 (PnL/비중/노출)")
         portfolio_grid = QGridLayout()
         self.portfolio_labels = {}
-        for i, (key, label) in enumerate([
-            ("pnl", "실현+평가 PnL"), ("weight", "상위 비중"),
-            ("exposure", "시장/섹터 노출"), ("health", "외부/동기화"),
-        ]):
+        for i, (key, label) in enumerate(
+            [
+                ("pnl", "실현+평가 PnL"),
+                ("weight", "상위 비중"),
+                ("exposure", "시장/섹터 노출"),
+                ("health", "외부/동기화"),
+            ]
+        ):
             portfolio_grid.addWidget(QLabel(f"{label}:"), i // 2, (i % 2) * 2)
             _plbl = QLabel("-")
             _plbl.setWordWrap(True)
@@ -50,6 +60,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         layout.addWidget(btn_refresh)
         layout.addStretch()
         return widget
+
     def _refresh_portfolio_cards(self):
         """통계 탭 포트폴리오 요약 카드 갱신 (보유/외부/내역 기반)."""
         labels = getattr(self, "portfolio_labels", None)
@@ -60,6 +71,7 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         except Exception:
             return
         import datetime as _datetime
+
         today = _datetime.datetime.now().strftime("%Y-%m-%d")
         universe = getattr(self, "universe", {})
         if not isinstance(universe, dict):
@@ -74,15 +86,23 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         labels["pnl"].setText(
             f"실현 {summary['realized_pnl']:+,.0f} / 평가 {summary['unrealized_pnl']:+,.0f} / 합계 {summary['total_pnl']:+,.0f}"
         )
-        top = ", ".join(f"{code} {w * 100:.1f}%"for code, w in summary["top_weights"]) or "-"
+        top = (
+            ", ".join(f"{code} {w * 100:.1f}%" for code, w in summary["top_weights"])
+            or "-"
+        )
         labels["weight"].setText(f"평가 {summary['eval_total']:,.0f} / {top}")
-        market_top = sorted(summary["exposures"]["market"].items(), key=lambda kv: -kv[1])[:2]
-        market_text = ", ".join(f"{name} {amount:,.0f}"for name, amount in market_top) or "-"
+        market_top = sorted(
+            summary["exposures"]["market"].items(), key=lambda kv: -kv[1]
+        )[:2]
+        market_text = (
+            ", ".join(f"{name} {amount:,.0f}" for name, amount in market_top) or "-"
+        )
         labels["exposure"].setText(market_text)
         counts = summary["counts"]
         labels["health"].setText(
             f"외부 {counts['external']}(읽기전용 {counts['read_only']}) / 동기화실패 {counts['sync_failed']}"
         )
+
     def _create_history_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -108,16 +128,21 @@ class UIBuildDataTabsMixin(TraderMixinBase):
 
         self._refresh_history_table()
         return widget
+
     def _create_diagnostics_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
         action_row = QHBoxLayout()
         self.btn_diag_resync_selected = QPushButton("선택 종목 재동기화")
-        self.btn_diag_resync_selected.clicked.connect(self._on_diagnostic_resync_selected)
+        self.btn_diag_resync_selected.clicked.connect(
+            self._on_diagnostic_resync_selected
+        )
         action_row.addWidget(self.btn_diag_resync_selected)
         self.btn_diag_release_sync_failed = QPushButton("동기화 실패 해제 요청")
-        self.btn_diag_release_sync_failed.clicked.connect(self._on_diagnostic_release_sync_failed_selected)
+        self.btn_diag_release_sync_failed.clicked.connect(
+            self._on_diagnostic_release_sync_failed_selected
+        )
         action_row.addWidget(self.btn_diag_release_sync_failed)
         action_row.addStretch()
         layout.addLayout(action_row)
@@ -157,8 +182,12 @@ class UIBuildDataTabsMixin(TraderMixinBase):
             diagnostic_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         if diagnostic_vertical_header is not None:
             diagnostic_vertical_header.setVisible(False)
-        self.diagnostic_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.diagnostic_table.itemSelectionChanged.connect(self._on_diagnostic_selection_changed)
+        self.diagnostic_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.diagnostic_table.itemSelectionChanged.connect(
+            self._on_diagnostic_selection_changed
+        )
         layout.addWidget(self.diagnostic_table)
 
         self.diag_detail_panel = QPlainTextEdit()
@@ -167,10 +196,13 @@ class UIBuildDataTabsMixin(TraderMixinBase):
         self.diag_detail_panel.setPlainText("선택된 종목이 없습니다.")
         layout.addWidget(self.diag_detail_panel)
 
-        info = QLabel("주문/동기화 상태를 실시간으로 진단합니다. 이 화면은 읽기 전용입니다.")
+        info = QLabel(
+            "주문/동기화 상태를 실시간으로 진단합니다. 이 화면은 읽기 전용입니다."
+        )
         info.setWordWrap(True)
         layout.addWidget(info)
         return widget
+
     def _create_api_tab(self):
         """API/알림 설정 탭"""
         tab_widget = QWidget()

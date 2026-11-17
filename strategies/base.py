@@ -1,4 +1,4 @@
-﻿"""Base strategy protocol."""
+"""Base strategy protocol."""
 
 from abc import ABC, abstractmethod
 

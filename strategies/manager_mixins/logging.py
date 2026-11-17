@@ -10,7 +10,9 @@ class StrategyManagerLoggingMixin(StrategyManagerMixinBase):
     def log(self, msg):
         self.trader.log(msg)
 
-    def log_dedup(self, code: str, key: str, message: str, now_ts: Optional[float] = None):
+    def log_dedup(
+        self, code: str, key: str, message: str, now_ts: Optional[float] = None
+    ):
         cooldown_map = getattr(self.trader, "_log_cooldown_map", None)
         if cooldown_map is None:
             cooldown_map = {}

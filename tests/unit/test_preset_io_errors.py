@@ -26,9 +26,11 @@ class _DummyDialog:
 class TestPresetIOErrors(unittest.TestCase):
     def test_preset_load_error_is_logged_and_reported(self):
         dialog = _DummyDialog()
-        with patch("ui_dialogs.os.path.exists", return_value=True), patch(
-            "builtins.open", mock_open(read_data="{")
-        ), patch("ui_dialogs.QMessageBox.warning") as mock_warning:
+        with (
+            patch("ui_dialogs.os.path.exists", return_value=True),
+            patch("builtins.open", mock_open(read_data="{")),
+            patch("ui_dialogs.QMessageBox.warning") as mock_warning,
+        ):
             presets = PresetDialog._load_presets(cast(Any, dialog))
 
         self.assertTrue(mock_warning.called)
@@ -37,9 +39,10 @@ class TestPresetIOErrors(unittest.TestCase):
 
     def test_preset_save_error_is_logged_and_reported(self):
         dialog = _DummyDialog()
-        with patch("builtins.open", side_effect=OSError("disk full")), patch(
-            "ui_dialogs.QMessageBox.warning"
-        ) as mock_warning:
+        with (
+            patch("builtins.open", side_effect=OSError("disk full")),
+            patch("ui_dialogs.QMessageBox.warning") as mock_warning,
+        ):
             PresetDialog._save_presets(cast(Any, dialog))
 
         self.assertTrue(mock_warning.called)

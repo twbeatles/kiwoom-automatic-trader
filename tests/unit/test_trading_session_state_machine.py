@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from typing import Any, Literal, overload
 from unittest.mock import MagicMock, patch
 
@@ -53,12 +53,18 @@ class _Harness(TradingSessionMixin):
         return True
 
     @overload
-    def _init_universe(self, codes, background: Literal[False] = False) -> list[str]: ...
+    def _init_universe(
+        self, codes, background: Literal[False] = False
+    ) -> list[str]: ...
 
     @overload
-    def _init_universe(self, codes, background: Literal[True]) -> BackgroundUniversePayload: ...
+    def _init_universe(
+        self, codes, background: Literal[True]
+    ) -> BackgroundUniversePayload: ...
 
-    def _init_universe(self, codes, background: bool = False) -> list[str] | BackgroundUniversePayload:
+    def _init_universe(
+        self, codes, background: bool = False
+    ) -> list[str] | BackgroundUniversePayload:
         self.init_called_with = list(codes)
         initialized_codes = list(self._init_result)
         if background:
@@ -106,7 +112,9 @@ class TestTradingSessionStateMachine(unittest.TestCase):
 
     @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
     @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
-    def test_start_trading_blocks_split_buy_without_limit_policy(self, warning, _critical):
+    def test_start_trading_blocks_split_buy_without_limit_policy(
+        self, warning, _critical
+    ):
         trader = _Harness("005930", ["005930"])
         trader.config.use_split = True
         trader.config.execution_policy = "market"
@@ -120,13 +128,17 @@ class TestTradingSessionStateMachine(unittest.TestCase):
 
     @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
     @patch("app.features.trading_session.lifecycle.QMessageBox.warning")
-    def test_preflight_explains_signal_only_does_not_send_orders(self, _warning, _critical):
+    def test_preflight_explains_signal_only_does_not_send_orders(
+        self, _warning, _critical
+    ):
         trader = _Harness("005930", ["005930"])
         trader.config.execution_mode = "signal_only"
 
         trader.start_trading()
 
-        self.assertTrue(any("signal_only" in msg and "주문" in msg for msg in trader.logs))
+        self.assertTrue(
+            any("signal_only" in msg and "주문" in msg for msg in trader.logs)
+        )
 
     @patch("app.features.trading_session.lifecycle.QMessageBox.critical")
     @patch("app.features.trading_session.lifecycle.QMessageBox.warning")

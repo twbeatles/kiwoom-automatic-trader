@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 
 from app.support.execution_policy import ExecutionPolicy
 
@@ -20,7 +20,9 @@ class _DummyClient:
 class TestExecutionPolicy(unittest.TestCase):
     def test_select_buy_limit(self):
         client = _DummyClient()
-        fn, args = ExecutionPolicy.select_buy(client, "limit", "acc", "005930", 1, 70000)
+        fn, args = ExecutionPolicy.select_buy(
+            client, "limit", "acc", "005930", 1, 70000
+        )
         self.assertEqual(fn.__name__, "buy_limit")
         self.assertEqual(args, ("acc", "005930", 1, 70000))
 

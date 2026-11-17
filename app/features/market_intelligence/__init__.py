@@ -8,10 +8,18 @@ from .state import MarketIntelStateMixin
 from .views import MarketIntelViewsMixin
 
 
-class MarketIntelligenceMixin(MarketIntelStateMixin, MarketIntelSettingsUIMixin, MarketIntelScoringPolicyMixin, MarketIntelAuditMixin, MarketIntelRuntimeMixin, MarketIntelViewsMixin):
+class MarketIntelligenceMixin(
+    MarketIntelStateMixin,
+    MarketIntelSettingsUIMixin,
+    MarketIntelScoringPolicyMixin,
+    MarketIntelAuditMixin,
+    MarketIntelRuntimeMixin,
+    MarketIntelViewsMixin,
+):
     """Composed MarketIntelligenceMixin split by feature responsibility."""
 
     pass
+
 
 __all__ = [
     "MarketIntelligenceMixin",

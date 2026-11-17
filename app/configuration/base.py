@@ -125,7 +125,12 @@ def _default_market_intel_state() -> Dict[str, Any]:
         "sources": {
             "news": {"status": "idle", "updated_at": None, "count": 0, "error": ""},
             "dart": {"status": "idle", "updated_at": None, "count": 0, "error": ""},
-            "datalab": {"status": "idle", "updated_at": None, "value": 0.0, "error": ""},
+            "datalab": {
+                "status": "idle",
+                "updated_at": None,
+                "value": 0.0,
+                "error": "",
+            },
             "macro": {"status": "idle", "updated_at": None, "summary": "", "error": ""},
             "ai": {"status": "idle", "updated_at": None, "error": ""},
         },
@@ -140,9 +145,11 @@ def _default_market_intel_state() -> Dict[str, Any]:
         "ai_summary": {},
     }
 
+
 @dataclass
 class TradingConfig:
     """실시간 트레이딩 설정 (UI와 로직 분리용)"""
+
     # 기본 설정
     codes: List[str] = field(default_factory=list)
     betting_ratio: float = 10.0
@@ -217,35 +224,43 @@ class TradingConfig:
     entry_score_threshold: int = 60
 
     # 확장 전략팩/포트폴리오/백테스트 (v5.0)
-    strategy_pack: Dict[str, Any] = field(default_factory=lambda: {
-        "primary_strategy": "volatility_breakout",
-        "entry_filters": ["rsi", "volume", "macd"],
-        "exit_overlays": ["trailing_stop", "atr_stop"],
-        "risk_overlays": [
-            "max_holdings",
-            "daily_loss_limit",
-            "news_risk_guard",
-            "disclosure_event_guard",
-            "macro_regime_guard",
-            "intel_fresh_guard",
-        ],
-    })
+    strategy_pack: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "primary_strategy": "volatility_breakout",
+            "entry_filters": ["rsi", "volume", "macd"],
+            "exit_overlays": ["trailing_stop", "atr_stop"],
+            "risk_overlays": [
+                "max_holdings",
+                "daily_loss_limit",
+                "news_risk_guard",
+                "disclosure_event_guard",
+                "macro_regime_guard",
+                "intel_fresh_guard",
+            ],
+        }
+    )
     strategy_params: Dict[str, Any] = field(default_factory=dict)
     portfolio_mode: str = "single_strategy"
     short_enabled: bool = False
     asset_scope: str = "kr_stock_live"
-    backtest_config: Dict[str, Any] = field(default_factory=lambda: {
-        "timeframe": "1d",
-        "lookback_days": 365,
-        "commission_bps": 5.0,
-        "slippage_bps": 3.0,
-    })
-    feature_flags: Dict[str, bool] = field(default_factory=lambda: {
-        "use_modular_strategy_pack": True,
-        "enable_backtest": True,
-        "enable_external_data": True,
-    })
-    market_intelligence: Dict[str, Any] = field(default_factory=_default_market_intelligence_config)
+    backtest_config: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "timeframe": "1d",
+            "lookback_days": 365,
+            "commission_bps": 5.0,
+            "slippage_bps": 3.0,
+        }
+    )
+    feature_flags: Dict[str, bool] = field(
+        default_factory=lambda: {
+            "use_modular_strategy_pack": True,
+            "enable_backtest": True,
+            "enable_external_data": True,
+        }
+    )
+    market_intelligence: Dict[str, Any] = field(
+        default_factory=_default_market_intelligence_config
+    )
 
     # 실행 정책/추가 리스크 옵션 (기존 UI/설정과 정합)
     execution_mode: str = "signal_only"
@@ -405,12 +420,12 @@ class Config:
     ENTRY_SCORE_THRESHOLD = 60
     USE_ENTRY_SCORING = False
     ENTRY_WEIGHTS = {
-        'target_break': 20,
-        'ma_filter': 15,
-        'rsi_optimal': 20,
-        'macd_golden': 20,
-        'volume_confirm': 15,
-        'bb_position': 10,
+        "target_break": 20,
+        "ma_filter": 15,
+        "rsi_optimal": 20,
+        "macd_golden": 20,
+        "volume_confirm": 15,
+        "bb_position": 10,
     }
 
     # =========================================================================
@@ -424,9 +439,9 @@ class Config:
     # 단계별 익절 설정 (v4.3 확장)
     # =========================================================================
     PARTIAL_TAKE_PROFIT = [
-        {'rate': 3.0, 'sell_ratio': 30},
-        {'rate': 5.0, 'sell_ratio': 30},
-        {'rate': 8.0, 'sell_ratio': 20},
+        {"rate": 3.0, "sell_ratio": 30},
+        {"rate": 5.0, "sell_ratio": 30},
+        {"rate": 8.0, "sell_ratio": 20},
     ]
     DEFAULT_USE_PARTIAL_PROFIT = False
 
@@ -464,28 +479,28 @@ class Config:
 
     # 섹터 코드 (참고용)
     SECTOR_CODES = {
-        '음식료품': '001',
-        '섬유의복': '002',
-        '종이목재': '003',
-        '화학': '004',
-        '의약품': '005',
-        '비금속광물': '006',
-        '철강금속': '007',
-        '기계': '008',
-        '전기전자': '009',
-        '의료정밀': '010',
-        '운수장비': '011',
-        '유통업': '012',
-        '전기가스업': '013',
-        '건설업': '014',
-        '운수창고업': '015',
-        '통신업': '016',
-        '금융업': '017',
-        '은행': '018',
-        '증권': '019',
-        '보험': '020',
-        '서비스업': '021',
-        '제조업': '022',
+        "음식료품": "001",
+        "섬유의복": "002",
+        "종이목재": "003",
+        "화학": "004",
+        "의약품": "005",
+        "비금속광물": "006",
+        "철강금속": "007",
+        "기계": "008",
+        "전기전자": "009",
+        "의료정밀": "010",
+        "운수장비": "011",
+        "유통업": "012",
+        "전기가스업": "013",
+        "건설업": "014",
+        "운수창고업": "015",
+        "통신업": "016",
+        "금융업": "017",
+        "은행": "018",
+        "증권": "019",
+        "보험": "020",
+        "서비스업": "021",
+        "제조업": "022",
     }
 
     # =========================================================================
@@ -498,9 +513,9 @@ class Config:
     # =========================================================================
     # 시간대별 전략 설정
     # =========================================================================
-    TIME_STRATEGY_AGGRESSIVE = {'start': '09:00', 'end': '09:30', 'k_mult': 1.4}
-    TIME_STRATEGY_NORMAL = {'start': '09:30', 'end': '14:30', 'k_mult': 1.0}
-    TIME_STRATEGY_CONSERVATIVE = {'start': '14:30', 'end': '15:20', 'k_mult': 0.6}
+    TIME_STRATEGY_AGGRESSIVE = {"start": "09:00", "end": "09:30", "k_mult": 1.4}
+    TIME_STRATEGY_NORMAL = {"start": "09:30", "end": "14:30", "k_mult": 1.0}
+    TIME_STRATEGY_CONSERVATIVE = {"start": "14:30", "end": "15:20", "k_mult": 0.6}
     DEFAULT_USE_TIME_STRATEGY = False
 
     # =========================================================================
@@ -564,11 +579,11 @@ class Config:
     DEFAULT_USE_SOUND = False
     SOUND_USE_CUSTOM = False  # True: 커스텀 비프음, False: 시스템 사운드
     SOUND_EVENTS = {
-        'buy': True,
-        'sell': True,
-        'profit': True,
-        'loss': True,
-        'error': True,
+        "buy": True,
+        "sell": True,
+        "profit": True,
+        "loss": True,
+        "error": True,
     }
 
     # =========================================================================
@@ -580,45 +595,45 @@ class Config:
     # =========================================================================
     # 테마 설정 (v4.3 신규)
     # =========================================================================
-    DEFAULT_THEME = 'dark'  # 'dark' or 'light'
+    DEFAULT_THEME = "dark"  # 'dark' or 'light'
     # Theme mode: 'auto' follows the OS (srtgo Theme.AUTO borrow),
     # 'dark'/'light' pin a theme. Saved alongside 'theme' with parity.
-    DEFAULT_UI_THEME_MODE = 'auto'
-    UI_THEME_MODES = ('auto', 'dark', 'light')
+    DEFAULT_UI_THEME_MODE = "auto"
+    UI_THEME_MODES = ("auto", "dark", "light")
     DEFAULT_UI_FONT_SCALE = 1.0  # Accessibility font scaling (WCAG 1.4.4)
     UI_FONT_SCALE_MIN = 0.85
     UI_FONT_SCALE_MAX = 1.5
     # Menu/content density: 'compact' (legacy metrics) or 'comfortable'
     # (roomier touch targets for HiDPI/high-scale displays).
-    DEFAULT_UI_DENSITY = 'compact'
-    UI_DENSITIES = ('compact', 'comfortable')
+    DEFAULT_UI_DENSITY = "compact"
+    UI_DENSITIES = ("compact", "comfortable")
 
     # =========================================================================
     # 키보드 단축키 설정 (v4.3 신규)
     # =========================================================================
     SHORTCUTS = {
-        'connect': 'Ctrl+L',
-        'start_trading': 'Ctrl+S',
-        'stop_trading': 'Ctrl+Q',
-        'emergency_stop': 'Ctrl+Shift+X',
-        'refresh': 'F5',
-        'export_csv': 'Ctrl+E',
-        'open_profile_manager': 'Ctrl+P',
-        'open_presets': 'Ctrl+Shift+P',
-        'toggle_theme': 'Ctrl+T',
-        'show_help': 'F1',
-        'search_stock': 'Ctrl+F',
-        'manual_order': 'Ctrl+O',
-        'ui_zoom_in': 'Ctrl+=',
-        'ui_zoom_out': 'Ctrl+-',
+        "connect": "Ctrl+L",
+        "start_trading": "Ctrl+S",
+        "stop_trading": "Ctrl+Q",
+        "emergency_stop": "Ctrl+Shift+X",
+        "refresh": "F5",
+        "export_csv": "Ctrl+E",
+        "open_profile_manager": "Ctrl+P",
+        "open_presets": "Ctrl+Shift+P",
+        "toggle_theme": "Ctrl+T",
+        "show_help": "F1",
+        "search_stock": "Ctrl+F",
+        "manual_order": "Ctrl+O",
+        "ui_zoom_in": "Ctrl+=",
+        "ui_zoom_out": "Ctrl+-",
     }
 
     # =========================================================================
     # 예약 매매 설정 (v4.3 신규)
     # =========================================================================
     DEFAULT_USE_SCHEDULE = False
-    DEFAULT_SCHEDULE_START = '09:00'
-    DEFAULT_SCHEDULE_END = '15:19'
+    DEFAULT_SCHEDULE_START = "09:00"
+    DEFAULT_SCHEDULE_END = "15:19"
 
     # =========================================================================
     # 시스템 설정 (v4.4 신규)
@@ -676,9 +691,15 @@ class Config:
     MARKET_INTEL_STALE_SEC = 180
     MARKET_INTEL_ALERT_DEDUP_SEC = 600
     MARKET_INTEL_BRIEFING_TIME = "08:50"
-    MARKET_INTELLIGENCE_EVENTS_FILE = str(_BASE_PATH / "data" / "market_intelligence_events.jsonl")
-    MARKET_INTELLIGENCE_DECISION_AUDIT_FILE = str(_BASE_PATH / "data" / "decision_audit.jsonl")
-    ORDER_LIFECYCLE_EVENTS_FILE = str(_BASE_PATH / "data" / "order_lifecycle_events.jsonl")
+    MARKET_INTELLIGENCE_EVENTS_FILE = str(
+        _BASE_PATH / "data" / "market_intelligence_events.jsonl"
+    )
+    MARKET_INTELLIGENCE_DECISION_AUDIT_FILE = str(
+        _BASE_PATH / "data" / "decision_audit.jsonl"
+    )
+    ORDER_LIFECYCLE_EVENTS_FILE = str(
+        _BASE_PATH / "data" / "order_lifecycle_events.jsonl"
+    )
 
     # =========================================================================
     # 기본 프리셋 정의
@@ -687,27 +708,47 @@ class Config:
         "aggressive": {
             "name": "공격적",
             "description": "높은 수익을 추구하지만 리스크도 높음",
-            "k": 0.6, "ts_start": 2.0, "ts_stop": 1.0, "loss": 3.0,
-            "betting": 15.0, "rsi_upper": 75, "max_holdings": 7
+            "k": 0.6,
+            "ts_start": 2.0,
+            "ts_stop": 1.0,
+            "loss": 3.0,
+            "betting": 15.0,
+            "rsi_upper": 75,
+            "max_holdings": 7,
         },
         "normal": {
             "name": "표준",
             "description": "균형 잡힌 수익과 리스크 관리",
-            "k": 0.5, "ts_start": 3.0, "ts_stop": 1.5, "loss": 2.0,
-            "betting": 10.0, "rsi_upper": 70, "max_holdings": 5
+            "k": 0.5,
+            "ts_start": 3.0,
+            "ts_stop": 1.5,
+            "loss": 2.0,
+            "betting": 10.0,
+            "rsi_upper": 70,
+            "max_holdings": 5,
         },
         "conservative": {
             "name": "보수적",
             "description": "안정적인 수익, 낮은 리스크",
-            "k": 0.4, "ts_start": 4.0, "ts_stop": 2.0, "loss": 1.5,
-            "betting": 5.0, "rsi_upper": 65, "max_holdings": 3
+            "k": 0.4,
+            "ts_start": 4.0,
+            "ts_stop": 2.0,
+            "loss": 1.5,
+            "betting": 5.0,
+            "rsi_upper": 65,
+            "max_holdings": 3,
         },
         "scalping": {
             "name": "스캘핑",
             "description": "빠른 진입/청산, 소량 다회전",
-            "k": 0.3, "ts_start": 1.5, "ts_stop": 0.8, "loss": 1.0,
-            "betting": 5.0, "rsi_upper": 65, "max_holdings": 3
-        }
+            "k": 0.3,
+            "ts_start": 1.5,
+            "ts_stop": 0.8,
+            "loss": 1.0,
+            "betting": 5.0,
+            "rsi_upper": 65,
+            "max_holdings": 3,
+        },
     }
 
     # =========================================================================
@@ -820,7 +861,7 @@ A: 메인 탭의 [인텔리전스 설정]에서 조정합니다.
 
 **Q: 테마 변경은 어떻게 하나요?**
 A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
-        """
+        """,
     }
 
     SETTINGS_SCHEMA_VERSION = 7
@@ -904,22 +945,58 @@ A: 보기 메뉴 > 테마 전환 또는 Ctrl+T
     DEFAULT_EXECUTION_MODE = "signal_only"
     EXECUTION_MODES = {"signal_only", "live"}
     STRATEGY_CAPABILITIES: Dict[str, Dict[str, bool]] = {
-        "volatility_breakout": {"live_supported": True, "requires_external_data": False},
-        "time_series_momentum": {"live_supported": True, "requires_external_data": False},
-        "cross_sectional_momentum": {"live_supported": False, "requires_external_data": False},
+        "volatility_breakout": {
+            "live_supported": True,
+            "requires_external_data": False,
+        },
+        "time_series_momentum": {
+            "live_supported": True,
+            "requires_external_data": False,
+        },
+        "cross_sectional_momentum": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
         "ma_channel_trend": {"live_supported": True, "requires_external_data": False},
-        "orb_donchian_breakout": {"live_supported": True, "requires_external_data": False},
-        "pairs_trading_cointegration": {"live_supported": False, "requires_external_data": False},
+        "orb_donchian_breakout": {
+            "live_supported": True,
+            "requires_external_data": False,
+        },
+        "pairs_trading_cointegration": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
         "stat_arb_residual": {"live_supported": False, "requires_external_data": False},
-        "rsi_bollinger_reversion": {"live_supported": True, "requires_external_data": False},
+        "rsi_bollinger_reversion": {
+            "live_supported": True,
+            "requires_external_data": False,
+        },
         "dmi_trend_strength": {"live_supported": True, "requires_external_data": False},
         "ff5_factor_ls": {"live_supported": False, "requires_external_data": False},
-        "quality_value_lowvol": {"live_supported": False, "requires_external_data": False},
-        "investor_program_flow": {"live_supported": True, "requires_external_data": True},
-        "volatility_targeting_overlay": {"live_supported": False, "requires_external_data": False},
-        "risk_parity_portfolio": {"live_supported": False, "requires_external_data": False},
-        "execution_algo_twap_vwap_pov": {"live_supported": False, "requires_external_data": False},
-        "market_making_spread": {"live_supported": False, "requires_external_data": False},
+        "quality_value_lowvol": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
+        "investor_program_flow": {
+            "live_supported": True,
+            "requires_external_data": True,
+        },
+        "volatility_targeting_overlay": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
+        "risk_parity_portfolio": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
+        "execution_algo_twap_vwap_pov": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
+        "market_making_spread": {
+            "live_supported": False,
+            "requires_external_data": False,
+        },
     }
     AUTOTRADING_UNSUPPORTED_STRATEGIES: Set[str] = {
         "pairs_trading_cointegration",

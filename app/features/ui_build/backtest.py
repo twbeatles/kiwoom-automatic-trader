@@ -16,29 +16,55 @@ from app.support.worker import Worker
 
 class UIBuildBacktestMixin(TraderMixinBase):
     def _select_backtest_bars_file(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "백테스트 가격 CSV 선택", "", "CSV (*.csv)")
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "백테스트 가격 CSV 선택", "", "CSV (*.csv)"
+        )
         if filename and hasattr(self, "input_backtest_bars_path"):
             self.input_backtest_bars_path.setText(filename)
+
     def _select_backtest_intel_file(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "인텔리전스 JSONL 선택", "", "JSONL (*.jsonl);;JSON (*.json);;All Files (*)")
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "인텔리전스 JSONL 선택",
+            "",
+            "JSONL (*.jsonl);;JSON (*.json);;All Files (*)",
+        )
         if filename and hasattr(self, "input_backtest_intel_path"):
             self.input_backtest_intel_path.setText(filename)
+
     def _backtest_config_values_from_ui(self):
         cfg = getattr(self, "config", None)
         values = dict(getattr(cfg, "backtest_config", {}) if cfg is not None else {})
         if hasattr(self, "combo_backtest_timeframe"):
-            values["timeframe"] = self.combo_backtest_timeframe.currentData() or self.combo_backtest_timeframe.currentText()
+            values["timeframe"] = (
+                self.combo_backtest_timeframe.currentData()
+                or self.combo_backtest_timeframe.currentText()
+            )
         if hasattr(self, "spin_backtest_commission"):
             values["commission_bps"] = float(self.spin_backtest_commission.value())
         if hasattr(self, "spin_backtest_slippage"):
             values["slippage_bps"] = float(self.spin_backtest_slippage.value())
         return values
+
     def _run_backtest_from_ui(self):
-        if hasattr(self, "chk_feature_backtest") and not self.chk_feature_backtest.isChecked():
-            self.notify_bar("warning", "백테스트 비활성화", "백테스트 기능이 비활성화되어 있습니다.")
+        if (
+            hasattr(self, "chk_feature_backtest")
+            and not self.chk_feature_backtest.isChecked()
+        ):
+            self.notify_bar(
+                "warning", "백테스트 비활성화", "백테스트 기능이 비활성화되어 있습니다."
+            )
             return
-        bars_path = str(self.input_backtest_bars_path.text()).strip() if hasattr(self, "input_backtest_bars_path") else ""
-        intel_path = str(self.input_backtest_intel_path.text()).strip() if hasattr(self, "input_backtest_intel_path") else ""
+        bars_path = (
+            str(self.input_backtest_bars_path.text()).strip()
+            if hasattr(self, "input_backtest_bars_path")
+            else ""
+        )
+        intel_path = (
+            str(self.input_backtest_intel_path.text()).strip()
+            if hasattr(self, "input_backtest_intel_path")
+            else ""
+        )
         if not bars_path:
             self.notify_bar("warning", "CSV 필요", "백테스트 가격 CSV를 선택해주세요.")
             return
@@ -58,6 +84,7 @@ class UIBuildBacktestMixin(TraderMixinBase):
         worker.signals.result.connect(self._on_backtest_result)
         worker.signals.error.connect(self._on_backtest_error)
         self.threadpool.start(worker)
+
     def _on_backtest_result(self, result):
         self._last_backtest_result = result
         if hasattr(self, "btn_run_backtest"):
@@ -84,14 +111,19 @@ class UIBuildBacktestMixin(TraderMixinBase):
                     f"{float(trade.get('qty', 0.0) or 0.0):.4f}",
                 ]
                 for col_idx, value in enumerate(values):
-                    self.backtest_trades_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+                    self.backtest_trades_table.setItem(
+                        row_idx, col_idx, QTableWidgetItem(str(value))
+                    )
         if hasattr(self, "log"):
-            self.log(f"백테스트 완료: trades={len(getattr(result, 'trades', []) or [])}")
+            self.log(
+                f"백테스트 완료: trades={len(getattr(result, 'trades', []) or [])}"
+            )
         self.notify_bar(
             "success",
             "백테스트 완료",
             f"trades={len(getattr(result, 'trades', []) or [])}",
         )
+
     def _on_backtest_error(self, error):
         if hasattr(self, "btn_run_backtest"):
             self.btn_run_backtest.setEnabled(True)
@@ -100,14 +132,19 @@ class UIBuildBacktestMixin(TraderMixinBase):
         if hasattr(self, "log"):
             self.log(f"백테스트 실패: {error}")
         self.notify_bar("error", "백테스트 실패", str(error))
+
     def _save_backtest_result(self):
         result = getattr(self, "_last_backtest_result", None)
         if result is None:
             return
-        filename, _ = QFileDialog.getSaveFileName(self, "백테스트 결과 저장", "backtest_result.json", "JSON (*.json)")
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "백테스트 결과 저장", "backtest_result.json", "JSON (*.json)"
+        )
         if not filename:
             return
         with open(filename, "w", encoding="utf-8") as handle:
-            json.dump(backtest_result_to_dict(result), handle, ensure_ascii=False, indent=2)
+            json.dump(
+                backtest_result_to_dict(result), handle, ensure_ascii=False, indent=2
+            )
         if hasattr(self, "log"):
             self.log(f"백테스트 결과 저장: {filename}")

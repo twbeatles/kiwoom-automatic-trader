@@ -10,16 +10,22 @@ class ExecutionCashReservationMixin(TraderMixinBase):
             mapping = {}
             self._reserved_cash_by_code = mapping
         return mapping
+
     def _reserve_cash_for_buy(self, code: str, amount: int):
         amount = max(0, int(amount or 0))
         if not code or amount <= 0:
             return 0
         mapping = self._reserved_cash_map()
         mapping[code] = int(mapping.get(code, 0)) + amount
-        current_v = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+        current_v = int(
+            getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0
+        )
         self.virtual_deposit = max(0, current_v - amount)
         return amount
-    def _release_reserved_cash(self, code: str, reason: str = "", refund: bool = True) -> int:
+
+    def _release_reserved_cash(
+        self, code: str, reason: str = "", refund: bool = True
+    ) -> int:
         if not code:
             return 0
         mapping = self._reserved_cash_map()
@@ -28,14 +34,20 @@ class ExecutionCashReservationMixin(TraderMixinBase):
             return 0
 
         if refund:
-            base = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+            base = int(
+                getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
+                or 0
+            )
             self.virtual_deposit = max(0, base + amount)
 
         if reason and hasattr(self, "log"):
             action = "refunded" if refund else "released"
             self.log(f"Reserved cash {action} [{code}]: {amount:,} ({reason})")
         return amount
-    def _release_reserved_cash_amount(self, code: str, amount: int, reason: str = "", refund: bool = True) -> int:
+
+    def _release_reserved_cash_amount(
+        self, code: str, amount: int, reason: str = "", refund: bool = True
+    ) -> int:
         amount = max(0, int(amount or 0))
         if not code or amount <= 0:
             return 0
@@ -53,13 +65,17 @@ class ExecutionCashReservationMixin(TraderMixinBase):
             mapping.pop(code, None)
 
         if refund:
-            base = int(getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0)) or 0)
+            base = int(
+                getattr(self, "virtual_deposit", int(getattr(self, "deposit", 0) or 0))
+                or 0
+            )
             self.virtual_deposit = max(0, base + released)
 
         if reason and hasattr(self, "log"):
             action = "refunded" if refund else "released"
             self.log(f"Reserved cash {action} [{code}]: {released:,} ({reason})")
         return released
+
     def _release_all_reserved_cash(self, reason: str = "STOP_TRADING") -> int:
         mapping = self._reserved_cash_map()
         if not mapping:
@@ -68,6 +84,7 @@ class ExecutionCashReservationMixin(TraderMixinBase):
         for code in list(mapping.keys()):
             total += self._release_reserved_cash(code, reason=reason, refund=True)
         return total
+
     def _consume_reserved_cash(self, code: str, amount: int, reason: str = "") -> int:
         amount = max(0, int(amount or 0))
         if not code or amount <= 0:
@@ -83,6 +100,7 @@ class ExecutionCashReservationMixin(TraderMixinBase):
         if consumed > 0 and reason and hasattr(self, "log"):
             self.log(f"Reserved cash consumed [{code}]: {consumed:,} ({reason})")
         return consumed
+
     def _recompute_holding_or_pending_count(self) -> int:
         universe = getattr(self, "universe", {})
         external_positions = getattr(self, "external_positions", {})
@@ -90,7 +108,9 @@ class ExecutionCashReservationMixin(TraderMixinBase):
         manual_pending_state = getattr(self, "_manual_pending_state", {})
         held_count = sum(1 for v in universe.values() if int(v.get("held", 0)) > 0)
         if isinstance(external_positions, dict):
-            held_count += sum(1 for v in external_positions.values() if int(v.get("held", 0)) > 0)
+            held_count += sum(
+                1 for v in external_positions.values() if int(v.get("held", 0)) > 0
+            )
         pending_buy = sum(
             1
             for c, state in pending_state.items()
@@ -100,9 +120,12 @@ class ExecutionCashReservationMixin(TraderMixinBase):
                 (
                     universe.get(c, {})
                     if c in universe
-                    else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                    else external_positions.get(c, {})
+                    if isinstance(external_positions, dict)
+                    else {}
                 ).get("held", 0)
-            ) == 0
+            )
+            == 0
         )
         manual_pending_buy = sum(
             1
@@ -113,13 +136,19 @@ class ExecutionCashReservationMixin(TraderMixinBase):
                 (
                     universe.get(c, {})
                     if c in universe
-                    else external_positions.get(c, {}) if isinstance(external_positions, dict) else {}
+                    else external_positions.get(c, {})
+                    if isinstance(external_positions, dict)
+                    else {}
                 ).get("held", 0)
-            ) == 0
+            )
+            == 0
         )
         self._holding_or_pending_count = held_count + pending_buy + manual_pending_buy
         return self._holding_or_pending_count
-    def _submit_split_buy_orders(self, code: str, child_orders: list[tuple[int, int]]) -> list[dict]:
+
+    def _submit_split_buy_orders(
+        self, code: str, child_orders: list[tuple[int, int]]
+    ) -> list[dict]:
         results: list[dict] = []
         account = str(getattr(self, "current_account", "") or "")
         client = getattr(self, "rest_client", None)

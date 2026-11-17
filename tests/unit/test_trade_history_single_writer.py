@@ -58,7 +58,9 @@ class _Harness(PersistenceSettingsMixin):
         self._history_save_pending_snapshot = None
         self.threadpool = _ThreadPool()
         self.logger = _DummyLogger()
-        self.config = type("Cfg", (), {"sync_history_flush_on_exit": bool(sync_flush)})()
+        self.config = type(
+            "Cfg", (), {"sync_history_flush_on_exit": bool(sync_flush)}
+        )()
         self.saved_payloads = []
         self.synced_payload = None
 
@@ -67,7 +69,11 @@ class _Harness(PersistenceSettingsMixin):
         return None
 
     def _save_trade_history_sync(self, history_snapshot=None):
-        payload = list(self.trade_history) if history_snapshot is None else list(history_snapshot)
+        payload = (
+            list(self.trade_history)
+            if history_snapshot is None
+            else list(history_snapshot)
+        )
         self.synced_payload = payload
         self._history_dirty = False
         self._history_save_pending_snapshot = None

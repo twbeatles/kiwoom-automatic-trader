@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin
@@ -7,7 +7,9 @@ from config import TradingConfig
 
 class _Harness(ExecutionEngineMixin):
     def __init__(self):
-        self.config = TradingConfig(use_liquidity_stress_guard=True, stress_spread_pct=1.0)
+        self.config = TradingConfig(
+            use_liquidity_stress_guard=True, stress_spread_pct=1.0
+        )
         self._sync_failed_codes = set()
         self._global_risk_mode = "normal"
         self._global_risk_until = None

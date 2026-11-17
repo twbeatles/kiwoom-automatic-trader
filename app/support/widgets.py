@@ -11,10 +11,12 @@ class NoScrollSpinBox(QSpinBox):
         if e is not None:
             e.ignore()
 
+
 class NoScrollDoubleSpinBox(QDoubleSpinBox):
     def wheelEvent(self, e):
         if e is not None:
             e.ignore()
+
 
 class NoScrollComboBox(QComboBox):
     def wheelEvent(self, e):
@@ -90,5 +92,3 @@ def update_plain_text_panel(
                 pass
 
     return True
-
-

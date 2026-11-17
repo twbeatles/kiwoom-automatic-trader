@@ -3,6 +3,7 @@
 멀티스레드에서 동시에 get_token(force_refresh=True) 호출 시 네트워크 발급
 요청(_request_new_token)이 정확히 1회만 실행되는지 확인한다.
 """
+
 import tempfile
 import threading
 import unittest
@@ -33,6 +34,7 @@ def _make_auth_with_spy(tmpdir, app_key="appkey", secret_key="secretkey"):
             call_count["n"] += 1
         # 다른 스레드가 lock 경쟁 중임을 확인하기 위해 약간 대기
         import time as _t
+
         _t.sleep(0.05)
         # 원래 발급 로직(requests.post)은 patch 로 가로챈 뒤 고정 토큰 반환
         self_inner._access_token = _TOKEN_VALUE
@@ -62,7 +64,9 @@ class TestAuthTokenConcurrentRefresh(unittest.TestCase):
                 except Exception as exc:
                     errors.append(exc)
 
-            threads = [threading.Thread(target=worker, args=(i,)) for i in range(num_threads)]
+            threads = [
+                threading.Thread(target=worker, args=(i,)) for i in range(num_threads)
+            ]
             for t in threads:
                 t.start()
             for t in threads:
@@ -70,9 +74,13 @@ class TestAuthTokenConcurrentRefresh(unittest.TestCase):
 
             self.assertEqual(errors, [])
             # 모든 스레드가 동일한 토큰을 받았다.
-            self.assertTrue(all(r == _TOKEN_VALUE for r in results), f"results={results}")
+            self.assertTrue(
+                all(r == _TOKEN_VALUE for r in results), f"results={results}"
+            )
             # 발급 요청은 정확히 1회만 수행되었다(double-checked locking 효과).
-            self.assertEqual(count["n"], 1, f"expected 1 token request, got {count['n']}")
+            self.assertEqual(
+                count["n"], 1, f"expected 1 token request, got {count['n']}"
+            )
 
     def test_cached_token_does_not_trigger_request(self):
         with tempfile.TemporaryDirectory() as tmpdir:

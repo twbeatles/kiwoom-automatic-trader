@@ -4,6 +4,7 @@
 - 비동기 cleanup 경로 사용 시 동기 cleanup을 호출하지 않는다.
 - live 모드에서 실거래 guard 미통과 시 매도를 제출하지 않는다.
 """
+
 import unittest
 from unittest.mock import patch
 
@@ -81,8 +82,20 @@ class TestLiquidationAggregation(unittest.TestCase):
     def test_final_report_only_after_all_settled(self):
         trader = _AggHarness()
         trader._liquidation_batch = {
-            "005930": {"name": "SAMSUNG", "qty": 10, "settled": False, "ok": False, "detail": ""},
-            "000660": {"name": "HYNIX", "qty": 5, "settled": False, "ok": False, "detail": ""},
+            "005930": {
+                "name": "SAMSUNG",
+                "qty": 10,
+                "settled": False,
+                "ok": False,
+                "detail": "",
+            },
+            "000660": {
+                "name": "HYNIX",
+                "qty": 5,
+                "settled": False,
+                "ok": False,
+                "detail": "",
+            },
         }
         trader._note_liquidation_settlement("005930", True, "10주 제출")
         # 아직 전건 결착 전이므로 최종 보고가 없고 배치는 유지된다.

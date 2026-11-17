@@ -24,7 +24,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         atr = self.calculate_atr(high_list, low_list, close_list, period=14)
         if atr <= 0:
-            loss_cut = self.config.loss_cut if self.config else self.trader.spin_loss.value()
+            loss_cut = (
+                self.config.loss_cut if self.config else self.trader.spin_loss.value()
+            )
             return buy_price * (1 - loss_cut / 100)
 
         stop_price = buy_price - (atr * multiplier)
@@ -36,7 +38,10 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
                 return False, 0
             mult = self.config.atr_mult
         else:
-            if not hasattr(self.trader, "chk_use_atr_stop") or not self.trader.chk_use_atr_stop.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_atr_stop")
+                or not self.trader.chk_use_atr_stop.isChecked()
+            ):
                 return False, 0
             multiplier = getattr(self.trader, "spin_atr_mult", None)
             mult = multiplier.value() if multiplier else 2.0
@@ -46,15 +51,19 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         stop_price = self.calculate_atr_stop_loss(code, mult)
 
         if stop_price > 0 and current_price <= stop_price:
-            self.log(f"[{info.get('name', code)}] ATR 손절 발동: 현재가 {current_price:,} <= 손절가 {stop_price:,.0f}")
+            self.log(
+                f"[{info.get('name', code)}] ATR 손절 발동: 현재가 {current_price:,} <= 손절가 {stop_price:,.0f}"
+            )
             return True, stop_price
 
         return False, stop_price
 
-    def calculate_chandelier_stop(self, code: str, multiplier: float = 2.5, period: int = 14) -> float:
+    def calculate_chandelier_stop(
+        self, code: str, multiplier: float = 2.5, period: int = 14
+    ) -> float:
         """
         Chandelier Exit (ATR 기반 동적 트레일링 스탑) 가격 계산
-        
+
         최고가 - (ATR * multiplier)
         """
         info = self.trader.universe.get(code, {})
@@ -147,7 +156,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         rsi = self.calculate_rsi(code, rsi_period)
         if rsi >= upper_limit:
             info = self.trader.universe.get(code, {})
-            self.log(f"[{info.get('name', code)}] RSI {rsi:.1f} >= {upper_limit} (과매수) 진입 보류")
+            self.log(
+                f"[{info.get('name', code)}] RSI {rsi:.1f} >= {upper_limit} (과매수) 진입 보류"
+            )
             return False
 
         return True
@@ -181,7 +192,10 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
                 return True
             min_value = self.config.min_avg_value * 100_000_000
         else:
-            if not hasattr(self.trader, "chk_use_liquidity") or not self.trader.chk_use_liquidity.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_liquidity")
+                or not self.trader.chk_use_liquidity.isChecked()
+            ):
                 return True
             min_value = Config.DEFAULT_MIN_AVG_VALUE
             min_value_spin = getattr(self.trader, "spin_min_value", None)
@@ -194,7 +208,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
             return True
 
         if avg_value < min_value:
-            self.log(f"[{info.get('name', code)}] 유동성 부족: 평균 거래대금 {avg_value:,.0f}원 < 기준 {min_value:,.0f}원")
+            self.log(
+                f"[{info.get('name', code)}] 유동성 부족: 평균 거래대금 {avg_value:,.0f}원 < 기준 {min_value:,.0f}원"
+            )
             return False
 
         return True
@@ -205,10 +221,17 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
                 return True
             max_spread = self.config.max_spread
         else:
-            if not hasattr(self.trader, "chk_use_spread") or not self.trader.chk_use_spread.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_spread")
+                or not self.trader.chk_use_spread.isChecked()
+            ):
                 return True
             max_spread_spin = getattr(self.trader, "spin_spread_max", None)
-            max_spread = max_spread_spin.value() if max_spread_spin else Config.DEFAULT_MAX_SPREAD_PCT
+            max_spread = (
+                max_spread_spin.value()
+                if max_spread_spin
+                else Config.DEFAULT_MAX_SPREAD_PCT
+            )
 
         info = self.trader.universe.get(code, {})
         ask = info.get("ask_price", 0)
@@ -222,7 +245,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         spread_pct = (ask - bid) / mid * 100
         if spread_pct > max_spread:
-            self.log(f"[{info.get('name', code)}] 스프레드 {spread_pct:.2f}% > {max_spread:.2f}% 진입 보류")
+            self.log(
+                f"[{info.get('name', code)}] 스프레드 {spread_pct:.2f}% > {max_spread:.2f}% 진입 보류"
+            )
             return False
 
         return True
@@ -250,7 +275,10 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
             if not self.config.use_macd:
                 return True
         else:
-            if not hasattr(self.trader, "chk_use_macd") or not self.trader.chk_use_macd.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_macd")
+                or not self.trader.chk_use_macd.isChecked()
+            ):
                 return True
 
         info = self.trader.universe.get(code, {})
@@ -260,7 +288,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
 
         macd, signal, _hist = self.calculate_macd(prices)
         if macd <= signal:
-            self.log(f"[{info.get('name', code)}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류")
+            self.log(
+                f"[{info.get('name', code)}] MACD {macd:.2f} <= Signal {signal:.2f} 진입 보류"
+            )
             return False
         return True
 
@@ -271,7 +301,7 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         subset = prices[-period:]
         avg = sum(subset) / period
         variance = sum((x - avg) ** 2 for x in subset) / period
-        std_dev = variance ** 0.5
+        std_dev = variance**0.5
 
         upper = avg + (std_dev * k)
         lower = avg - (std_dev * k)
@@ -283,7 +313,10 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
                 return True
             k = self.config.bb_k
         else:
-            if not hasattr(self.trader, "chk_use_bb") or not self.trader.chk_use_bb.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_bb")
+                or not self.trader.chk_use_bb.isChecked()
+            ):
                 return True
             k = self.trader.spin_bb_k.value()
 
@@ -295,7 +328,9 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         upper, _middle, _lower = self.calculate_bollinger(prices, k=k)
         if current_price >= upper:
             info = self.trader.universe.get(code, {})
-            self.log(f"[{info.get('name', code)}] 볼린저 상단 돌파 ({current_price:,} >= {upper:,.0f}) 진입 보류")
+            self.log(
+                f"[{info.get('name', code)}] 볼린저 상단 돌파 ({current_price:,} >= {upper:,.0f}) 진입 보류"
+            )
             return False
 
         return True
@@ -378,7 +413,10 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
                 return True
             threshold = self.config.adx_threshold
         else:
-            if not hasattr(self.trader, "chk_use_dmi") or not self.trader.chk_use_dmi.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_dmi")
+                or not self.trader.chk_use_dmi.isChecked()
+            ):
                 return True
             threshold = self.trader.spin_adx.value()
 
@@ -417,7 +455,10 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
             short_period = self.config.ma_short
             long_period = self.config.ma_long
         else:
-            if not hasattr(self.trader, "chk_use_ma") or not self.trader.chk_use_ma.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_ma")
+                or not self.trader.chk_use_ma.isChecked()
+            ):
                 return None
             short_period = Config.DEFAULT_MA_SHORT
 
@@ -440,10 +481,14 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
             return None
 
         if short_ma_prev <= long_ma_prev and short_ma_now > long_ma_now:
-            self.log(f"[{info.get('name', code)}] 🌟 골든크로스 발생 (MA{short_period}>{long_period})")
+            self.log(
+                f"[{info.get('name', code)}] 🌟 골든크로스 발생 (MA{short_period}>{long_period})"
+            )
             return "golden"
         if short_ma_prev >= long_ma_prev and short_ma_now < long_ma_now:
-            self.log(f"[{info.get('name', code)}] ☠️ 데드크로스 발생 (MA{short_period}<{long_period})")
+            self.log(
+                f"[{info.get('name', code)}] ☠️ 데드크로스 발생 (MA{short_period}<{long_period})"
+            )
             return "dead"
         return None
 
@@ -467,10 +512,18 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         cfg = self.config
         if cfg and bool(getattr(cfg, "use_regime_sizing", True)):
             elevated = float(
-                getattr(cfg, "regime_elevated_atr_pct", getattr(Config, "DEFAULT_REGIME_ELEVATED_ATR_PCT", 2.5))
+                getattr(
+                    cfg,
+                    "regime_elevated_atr_pct",
+                    getattr(Config, "DEFAULT_REGIME_ELEVATED_ATR_PCT", 2.5),
+                )
             )
             extreme = float(
-                getattr(cfg, "regime_extreme_atr_pct", getattr(Config, "DEFAULT_REGIME_EXTREME_ATR_PCT", 4.0))
+                getattr(
+                    cfg,
+                    "regime_extreme_atr_pct",
+                    getattr(Config, "DEFAULT_REGIME_EXTREME_ATR_PCT", 4.0),
+                )
             )
             scale_elevated = float(
                 getattr(
@@ -489,8 +542,12 @@ class StrategyManagerIndicatorMixin(StrategyManagerMixinBase):
         else:
             elevated = float(getattr(Config, "DEFAULT_REGIME_ELEVATED_ATR_PCT", 2.5))
             extreme = float(getattr(Config, "DEFAULT_REGIME_EXTREME_ATR_PCT", 4.0))
-            scale_elevated = float(getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_ELEVATED", 0.7))
-            scale_extreme = float(getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_EXTREME", 0.4))
+            scale_elevated = float(
+                getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_ELEVATED", 0.7)
+            )
+            scale_extreme = float(
+                getattr(Config, "DEFAULT_REGIME_SIZE_SCALE_EXTREME", 0.4)
+            )
 
         if atr_pct >= extreme:
             return "extreme", max(0.1, scale_extreme), atr_pct

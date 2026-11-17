@@ -1,4 +1,4 @@
-﻿"""Core strategy data structures for modular strategy packs."""
+"""Core strategy data structures for modular strategy packs."""
 
 from dataclasses import dataclass, field
 from enum import Enum

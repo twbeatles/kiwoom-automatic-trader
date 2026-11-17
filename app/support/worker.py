@@ -60,4 +60,3 @@ class Worker(QRunnable):
             self.signals.publish(False, e)
         else:
             self.signals.publish(True, result)
-

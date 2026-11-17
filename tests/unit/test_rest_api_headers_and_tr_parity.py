@@ -1,4 +1,5 @@
 """REST API 요청 헤더 및 주문 TR/URL 패리티 검증."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -33,7 +34,9 @@ class TestRestApiHeadersAndTrParity(unittest.TestCase):
 
     @patch("requests.Session.post")
     def test_request_without_tr_code_does_not_call_network(self, mock_post):
-        result = self.client._request("POST", "/api/dostk/stkprice", data={"stk_cd": "005930"})
+        result = self.client._request(
+            "POST", "/api/dostk/stkprice", data={"stk_cd": "005930"}
+        )
 
         self.assertIsNone(result)
         mock_post.assert_not_called()

@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin
@@ -9,7 +9,9 @@ class _Harness(ExecutionEngineMixin):
     def __init__(self):
         self.config = TradingConfig()
         self._global_risk_mode = "shock"
-        self._global_risk_until = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        self._global_risk_until = datetime.datetime.now() + datetime.timedelta(
+            minutes=5
+        )
         self._order_health_mode = "normal"
         self._order_health_until = None
         self._sync_failed_codes = set()

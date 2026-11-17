@@ -12,10 +12,16 @@ class HelpDialog(QDialog):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
 
-        for key, title in [("quick_start", "빠른 시작"), ("strategy", "전략"), ("faq", "FAQ")]:
+        for key, title in [
+            ("quick_start", "빠른 시작"),
+            ("strategy", "전략"),
+            ("faq", "FAQ"),
+        ]:
             text = QTextEdit()
             text.setReadOnly(True)
-            text.setHtml(f"<div style='font-size:13px'>{Config.HELP_CONTENT.get(key, '')}</div>")
+            text.setHtml(
+                f"<div style='font-size:13px'>{Config.HELP_CONTENT.get(key, '')}</div>"
+            )
             tabs.addTab(text, title)
 
         layout.addWidget(tabs)

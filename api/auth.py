@@ -1,4 +1,4 @@
-﻿"""
+"""
 키움증권 REST API OAuth2 인증 모듈
 
 토큰 발급, 갱신 및 자격증명 관리를 담당합니다.
@@ -23,16 +23,21 @@ from .endpoints import LIVE_REST_BASE_URL, resolve_api_endpoints
 
 class KiwoomAuth:
     """OAuth2 토큰 기반 인증 관리 클래스"""
-    
+
     # 키움증권 REST API 엔드포인트
     BASE_URL = LIVE_REST_BASE_URL
     TOKEN_ENDPOINT = "/oauth2/token"
-    
+
     # 토큰 캐시 파일
     TOKEN_CACHE_FILE = "kiwoom_token_cache.json"
-    
-    def __init__(self, app_key: str = "", secret_key: str = "", 
-                 is_mock: bool = False, cache_dir: Optional[str] = None):
+
+    def __init__(
+        self,
+        app_key: str = "",
+        secret_key: str = "",
+        is_mock: bool = False,
+        cache_dir: Optional[str] = None,
+    ):
         """
         Args:
             app_key: 키움증권 REST API App Key
@@ -43,9 +48,9 @@ class KiwoomAuth:
         self.app_key = app_key
         self.secret_key = secret_key
         self.is_mock = bool(is_mock)
-        
+
         # 로거 설정
-        self.logger = logging.getLogger('KiwoomAuth')
+        self.logger = logging.getLogger("KiwoomAuth")
 
         # 토큰 저장소
         self._access_token: Optional[str] = None
@@ -55,16 +60,16 @@ class KiwoomAuth:
 
         # 토큰 갱신 동시성 보호 (WebSocket/REST Worker/UI 스레드 동시 호출 대응)
         self._token_lock = threading.Lock()
-        
+
         # 캐시 디렉토리 설정
         base_dir = Path(getattr(Config, "BASE_DIR", Path.cwd()))
         self.cache_dir = Path(cache_dir) if cache_dir else base_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._configure_mode(self.is_mock)
-        
+
         # 캐싱된 토큰 로드 시도
         self._load_cached_token()
-    
+
     def set_credentials(self, app_key: str, secret_key: str, is_mock: bool = False):
         """자격증명 설정/업데이트"""
         with self._token_lock:
@@ -84,7 +89,7 @@ class KiwoomAuth:
         self.ws_url = endpoints.ws_url
         self.session_namespace = endpoints.session_namespace
         self.cache_path = self.cache_dir / endpoints.token_cache_file
-    
+
     def get_token(self, force_refresh: bool = False) -> Optional[str]:
         """
         유효한 액세스 토큰을 반환합니다.
@@ -97,16 +102,24 @@ class KiwoomAuth:
             액세스 토큰 문자열, 실패 시 None
         """
         # 빠른 경로: 캐시 hit는 lock 없이 읽는다.
-        if not force_refresh and self._access_token and time.time() < (self._expires_at - 300):
+        if (
+            not force_refresh
+            and self._access_token
+            and time.time() < (self._expires_at - 300)
+        ):
             return self._access_token
 
         # 느린 경로: lock 내에서 캐시를 재확인(double-checked locking)한 뒤 갱신.
         # 여러 스레드가 동시에 만료 시점에 도달해도 발급 요청은 1회로 수렴한다.
         with self._token_lock:
-            if not force_refresh and self._access_token and time.time() < (self._expires_at - 300):
+            if (
+                not force_refresh
+                and self._access_token
+                and time.time() < (self._expires_at - 300)
+            ):
                 return self._access_token
             return self._request_new_token()
-    
+
     def _format_token_failure_message(self, error_msg: str) -> str:
         """토큰 실패 메시지를 요청 모드와 함께 사용자 안내로 변환합니다."""
         detail = str(error_msg or "").strip()
@@ -134,21 +147,21 @@ class KiwoomAuth:
         if not self.app_key or not self.secret_key:
             self._fail_token_request("App Key 또는 Secret Key가 설정되지 않았습니다.")
             return None
-        
+
         try:
             url = f"{self.base_url}{self.TOKEN_ENDPOINT}"
-            
+
             payload = {
                 "grant_type": "client_credentials",
                 "appkey": self.app_key,
-                "secretkey": self.secret_key
+                "secretkey": self.secret_key,
             }
-            
-            headers = {
-                "Content-Type": "application/json"
-            }
-            
-            self.logger.info(f"토큰 발급 요청 중... (mode={self.mode}, endpoint={self.base_url})")
+
+            headers = {"Content-Type": "application/json"}
+
+            self.logger.info(
+                f"토큰 발급 요청 중... (mode={self.mode}, endpoint={self.base_url})"
+            )
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             data: Dict[str, Any] = {}
             try:
@@ -167,12 +180,12 @@ class KiwoomAuth:
                 #   "return_code": 0,
                 #   "return_msg": "정상적으로 처리되었습니다."
                 # }
-                
+
                 if data.get("return_code") == 0:
                     self._access_token = data.get("token")
                     self._token_type = data.get("token_type", "bearer")
                     self._last_error = ""
-                    
+
                     # 만료 시간 파싱 (YYYYMMDDHHMMSS 형식)
                     expires_dt = data.get("expires_dt", "")
                     if expires_dt:
@@ -182,31 +195,35 @@ class KiwoomAuth:
                         except ValueError:
                             # 파싱 실패 시 24시간 후로 설정
                             self._expires_at = time.time() + 86400
-                    
+
                     # 캐시에 저장
                     self._save_token_cache()
-                    
+
                     self.logger.info(f"토큰 발급 성공 (만료: {expires_dt})")
                     return self._access_token
                 else:
-                    self._fail_token_request(str(data.get("return_msg", "알 수 없는 오류")))
+                    self._fail_token_request(
+                        str(data.get("return_msg", "알 수 없는 오류"))
+                    )
                     return None
             else:
-                http_detail = str(data.get("return_msg") or f"HTTP {response.status_code}")
+                http_detail = str(
+                    data.get("return_msg") or f"HTTP {response.status_code}"
+                )
                 self._fail_token_request(http_detail)
                 return None
-                
+
         except requests.RequestException as e:
             self._fail_token_request(f"네트워크 오류: {e}")
             return None
         except Exception as e:
             self._fail_token_request(f"예외: {e}")
             return None
-    
+
     def get_auth_header(self) -> Dict[str, str]:
         """
         API 요청에 사용할 인증 헤더를 반환합니다.
-        
+
         Returns:
             {"Authorization": "bearer TOKEN"} 형태의 딕셔너리
         """
@@ -214,11 +231,11 @@ class KiwoomAuth:
         if token:
             return {"Authorization": f"{self._token_type} {token}"}
         return {}
-    
+
     def is_authenticated(self) -> bool:
         """현재 유효한 토큰이 있는지 확인합니다."""
         return self._access_token is not None and time.time() < self._expires_at
-    
+
     def invalidate_token(self):
         """현재 토큰을 무효화합니다 (로그아웃)."""
         with self._token_lock:
@@ -231,7 +248,7 @@ class KiwoomAuth:
                     self.cache_path.unlink()
                 except OSError:
                     pass
-    
+
     def _save_token_cache(self):
         """토큰을 캐시 파일에 저장합니다."""
         try:
@@ -244,7 +261,7 @@ class KiwoomAuth:
             }
 
             tmp_path = self.cache_path.with_name(f"{self.cache_path.name}.tmp")
-            with open(tmp_path, 'w', encoding='utf-8') as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(cache_data, f)
             try:
                 os.chmod(tmp_path, 0o600)
@@ -255,19 +272,19 @@ class KiwoomAuth:
                 os.chmod(self.cache_path, 0o600)
             except OSError:
                 pass
-                
+
         except Exception as e:
             self.logger.warning(f"토큰 캐시 저장 실패: {e}")
-    
+
     def _load_cached_token(self):
         """캐시된 토큰을 로드합니다."""
         if not self.cache_path.exists():
             return
-        
+
         try:
-            with open(self.cache_path, 'r', encoding='utf-8') as f:
+            with open(self.cache_path, "r", encoding="utf-8") as f:
                 cache_data = json.load(f)
-            
+
             if str(cache_data.get("mode", "live")) != str(self.endpoints.mode):
                 self.logger.info("Auth mode changed, cached token invalidated")
                 return
@@ -276,7 +293,7 @@ class KiwoomAuth:
             if cache_data.get("app_key_hash") != self._app_key_hash():
                 self.logger.info("App Key changed, cached token invalidated")
                 return
-            
+
             # 토큰이 아직 유효한지 확인
             expires_at = cache_data.get("expires_at", 0)
             if time.time() < expires_at - 300:  # 5분 여유
@@ -284,19 +301,19 @@ class KiwoomAuth:
                 self._token_type = cache_data.get("token_type", "bearer")
                 self._expires_at = expires_at
                 self.logger.info("캐시된 토큰 로드 완료")
-                
+
         except Exception as e:
             self.logger.warning(f"토큰 캐시 로드 실패: {e}")
 
     def _app_key_hash(self) -> str:
         """자격증명 식별자 해시 (Secret 교체 시 캐시 무효화)."""
         material = f"{self.app_key}:{self.secret_key or ''}"
-        return hashlib.sha256(material.encode('utf-8')).hexdigest()
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
     def test_connection(self) -> Dict[str, Any]:
         """
         연결 테스트를 수행합니다.
-        
+
         Returns:
             {
                 "success": bool,
@@ -305,16 +322,19 @@ class KiwoomAuth:
             }
         """
         token = self.get_token(force_refresh=True)
-        
+
         if token:
-            expires_str = datetime.fromtimestamp(self._expires_at).strftime("%Y-%m-%d %H:%M:%S")
+            expires_str = datetime.fromtimestamp(self._expires_at).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             return {
                 "success": True,
                 "message": "토큰 발급 성공",
-                "token_expires": expires_str
+                "token_expires": expires_str,
             }
         return {
             "success": False,
-            "message": self._last_error or "토큰 발급 실패 - App Key/Secret Key를 확인해주세요.",
-            "token_expires": None
+            "message": self._last_error
+            or "토큰 발급 실패 - App Key/Secret Key를 확인해주세요.",
+            "token_expires": None,
         }

@@ -1,4 +1,5 @@
 """Phase-2: token cache secret binding + reject classification + stale cancel."""
+
 import datetime
 import time
 import unittest
@@ -33,13 +34,19 @@ class TestSecretBinding(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            first = KiwoomAuth(app_key="K", secret_key="S1", is_mock=True, cache_dir=tmp)
+            first = KiwoomAuth(
+                app_key="K", secret_key="S1", is_mock=True, cache_dir=tmp
+            )
             first._access_token = "T1"
             first._expires_at = time.time() + 3600
             first._save_token_cache()
-            second = KiwoomAuth(app_key="K", secret_key="S2", is_mock=True, cache_dir=tmp)
+            second = KiwoomAuth(
+                app_key="K", secret_key="S2", is_mock=True, cache_dir=tmp
+            )
             self.assertIsNone(second._access_token)
-            third = KiwoomAuth(app_key="K", secret_key="S1", is_mock=True, cache_dir=tmp)
+            third = KiwoomAuth(
+                app_key="K", secret_key="S1", is_mock=True, cache_dir=tmp
+            )
             self.assertEqual(third._access_token, "T1")
 
 
@@ -105,7 +112,9 @@ class _CancelClient:
 
     def cancel_order(self, account_no, order_no, code, quantity):
         self.calls.append((account_no, order_no, code, quantity))
-        return OrderResult(success=self.ok, order_no=order_no, code=code, message="취소 성공")
+        return OrderResult(
+            success=self.ok, order_no=order_no, code=code, message="취소 성공"
+        )
 
 
 class TestStaleLimitCancel(unittest.TestCase):
@@ -137,18 +146,12 @@ class TestStaleLimitCancel(unittest.TestCase):
         trader._pending_order_state["005930"]["updated_at"] = (
             datetime.datetime.now() - datetime.timedelta(seconds=3600)
         )
-        with patch.object(
-            config_mod.Config, "STALE_LIMIT_ORDER_CANCEL_SEC", 60
-        ):
+        with patch.object(config_mod.Config, "STALE_LIMIT_ORDER_CANCEL_SEC", 60):
             self.assertEqual(trader._sweep_stale_limit_orders(), 1)
-        self.assertEqual(
-            trader.rest_client.calls, [("00000000", "O1", "005930", 5)]
-        )
+        self.assertEqual(trader.rest_client.calls, [("00000000", "O1", "005930", 5)])
         self.assertTrue(any("[자동취소]" in m for m in trader.logs))
         # 같은 창에서는 중복 요청하지 않는다.
-        with patch.object(
-            config_mod.Config, "STALE_LIMIT_ORDER_CANCEL_SEC", 60
-        ):
+        with patch.object(config_mod.Config, "STALE_LIMIT_ORDER_CANCEL_SEC", 60):
             self.assertEqual(trader._sweep_stale_limit_orders(), 0)
         self.assertEqual(len(trader.rest_client.calls), 1)
 
@@ -159,9 +162,7 @@ class TestStaleLimitCancel(unittest.TestCase):
         trader._set_pending_order(
             "005930", "buy", "BUY", expected_price=1000, submitted_qty=5, order_no="O1"
         )
-        with patch.object(
-            config_mod.Config, "STALE_LIMIT_ORDER_CANCEL_SEC", 60
-        ):
+        with patch.object(config_mod.Config, "STALE_LIMIT_ORDER_CANCEL_SEC", 60):
             self.assertEqual(trader._sweep_stale_limit_orders(), 0)
         self.assertEqual(trader.rest_client.calls, [])
 

@@ -20,73 +20,126 @@ class RestMarketMixin(RestTransport):
     def get_stock_quote(self, code: str) -> Optional[StockQuote]:
         """
         주식 현재가 조회
-        
+
         Args:
             code: 종목코드 (예: "005930")
-            
+
         Returns:
             StockQuote 객체, 실패 시 None
         """
         tr_code = self.TR_CODES["STOCK_CURRENT"]
-        result = self._request("POST", self.PATHS["stkinfo"], tr_code=tr_code, data={"stk_cd": code})
-        
+        result = self._request(
+            "POST", self.PATHS["stkinfo"], tr_code=tr_code, data={"stk_cd": code}
+        )
+
         if result and result.get("return_code") == 0:
             output = _payload_dict(result, "output")
-            
+
             return StockQuote(
                 code=code,
                 name=str(_pick(output, "stk_nm", default="")),
                 current_price=_safe_int(_pick(output, "cur_prc"), absolute=True),
                 change=_safe_int(_pick(output, "pred_pre", "chg_amt")),
                 change_rate=_safe_float(_pick(output, "flu_rt", "chg_rt")),
-                open_price=_safe_int(_pick(output, "open_pric", "open_prc"), absolute=True),
-                high_price=_safe_int(_pick(output, "high_pric", "high_prc"), absolute=True),
-                low_price=_safe_int(_pick(output, "low_pric", "low_prc"), absolute=True),
+                open_price=_safe_int(
+                    _pick(output, "open_pric", "open_prc"), absolute=True
+                ),
+                high_price=_safe_int(
+                    _pick(output, "high_pric", "high_prc"), absolute=True
+                ),
+                low_price=_safe_int(
+                    _pick(output, "low_pric", "low_prc"), absolute=True
+                ),
                 volume=_safe_int(_pick(output, "trde_qty", "acc_vol")),
-                prev_close=_safe_int(_pick(output, "base_pric", "yes_prc"), absolute=True),
-                ask_price=_safe_int(_pick(output, "ask_prc", "sel_fpr_bid"), absolute=True),
-                bid_price=_safe_int(_pick(output, "bid_prc", "buy_fpr_bid"), absolute=True),
+                prev_close=_safe_int(
+                    _pick(output, "base_pric", "yes_prc"), absolute=True
+                ),
+                ask_price=_safe_int(
+                    _pick(output, "ask_prc", "sel_fpr_bid"), absolute=True
+                ),
+                bid_price=_safe_int(
+                    _pick(output, "bid_prc", "buy_fpr_bid"), absolute=True
+                ),
                 timestamp=str(_pick(output, "stk_tm", default="")),
                 market_type=self._parse_market_type(output),
                 sector=str(_pick(output, "sect_nm", default="기타") or "기타"),
             )
-        
+
         return None
 
     def get_order_book(self, code: str) -> Optional[OrderBook]:
         """
         호가 정보 조회
-        
+
         Args:
             code: 종목코드
-            
+
         Returns:
             OrderBook 객체, 실패 시 None
         """
         tr_code = self.TR_CODES["STOCK_HOGA"]
-        result = self._request("POST", self.PATHS["mrkcond"], tr_code=tr_code, data={"stk_cd": code})
-        
+        result = self._request(
+            "POST", self.PATHS["mrkcond"], tr_code=tr_code, data={"stk_cd": code}
+        )
+
         if result and result.get("return_code") == 0:
             output = _payload_dict(result, "output")
-            ordinals = ("1th", "2th", "3th", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
-            
+            ordinals = (
+                "1th",
+                "2th",
+                "3th",
+                "4th",
+                "5th",
+                "6th",
+                "7th",
+                "8th",
+                "9th",
+                "10th",
+            )
+
             ask_prices = []
             ask_volumes = []
             bid_prices = []
             bid_volumes = []
-            
+
             for i, ordinal in enumerate(ordinals, start=1):
                 if i == 1:
-                    ask_prices.append(_safe_int(_pick(output, "sel_fpr_bid", f"ask_prc{i}"), absolute=True))
-                    ask_volumes.append(_safe_int(_pick(output, "sel_fpr_req", f"ask_vol{i}")))
-                    bid_prices.append(_safe_int(_pick(output, "buy_fpr_bid", f"bid_prc{i}"), absolute=True))
-                    bid_volumes.append(_safe_int(_pick(output, "buy_fpr_req", f"bid_vol{i}")))
+                    ask_prices.append(
+                        _safe_int(
+                            _pick(output, "sel_fpr_bid", f"ask_prc{i}"), absolute=True
+                        )
+                    )
+                    ask_volumes.append(
+                        _safe_int(_pick(output, "sel_fpr_req", f"ask_vol{i}"))
+                    )
+                    bid_prices.append(
+                        _safe_int(
+                            _pick(output, "buy_fpr_bid", f"bid_prc{i}"), absolute=True
+                        )
+                    )
+                    bid_volumes.append(
+                        _safe_int(_pick(output, "buy_fpr_req", f"bid_vol{i}"))
+                    )
                     continue
-                ask_prices.append(_safe_int(_pick(output, f"sel_{ordinal}_pre_bid", f"ask_prc{i}"), absolute=True))
-                ask_volumes.append(_safe_int(_pick(output, f"sel_{ordinal}_pre_req", f"ask_vol{i}")))
-                bid_prices.append(_safe_int(_pick(output, f"buy_{ordinal}_pre_bid", f"bid_prc{i}"), absolute=True))
-                bid_volumes.append(_safe_int(_pick(output, f"buy_{ordinal}_pre_req", f"bid_vol{i}")))
-            
+                ask_prices.append(
+                    _safe_int(
+                        _pick(output, f"sel_{ordinal}_pre_bid", f"ask_prc{i}"),
+                        absolute=True,
+                    )
+                )
+                ask_volumes.append(
+                    _safe_int(_pick(output, f"sel_{ordinal}_pre_req", f"ask_vol{i}"))
+                )
+                bid_prices.append(
+                    _safe_int(
+                        _pick(output, f"buy_{ordinal}_pre_bid", f"bid_prc{i}"),
+                        absolute=True,
+                    )
+                )
+                bid_volumes.append(
+                    _safe_int(_pick(output, f"buy_{ordinal}_pre_req", f"bid_vol{i}"))
+                )
+
             return OrderBook(
                 code=code,
                 ask_prices=ask_prices,
@@ -97,17 +150,17 @@ class RestMarketMixin(RestTransport):
                 total_bid_volume=_safe_int(_pick(output, "tot_buy_req", "tot_bid_vol")),
                 timestamp=str(_pick(output, "bid_req_base_tm", "stk_tm", default="")),
             )
-        
+
         return None
 
     def get_daily_chart(self, code: str, count: int = 60) -> List[DailyOHLC]:
         """
         일봉 차트 데이터 조회
-        
+
         Args:
             code: 종목코드
             count: 조회할 봉 개수 (최대 100)
-            
+
         Returns:
             DailyOHLC 리스트 (최신순)
         """
@@ -118,31 +171,43 @@ class RestMarketMixin(RestTransport):
             "upd_stkpc_tp": "1",
         }
         result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
-        
+
         candles = []
         if result and result.get("return_code") == 0:
             output_list = _payload_records(result, "stk_dt_pole_chart_qry", "output")
             for item in output_list[: max(1, min(count, 100))]:
-                candles.append(DailyOHLC(
-                    date=str(_pick(item, "dt", "date", default="")),
-                    open_price=_safe_int(_pick(item, "open_pric", "open_prc"), absolute=True),
-                    high_price=_safe_int(_pick(item, "high_pric", "high_prc"), absolute=True),
-                    low_price=_safe_int(_pick(item, "low_pric", "low_prc"), absolute=True),
-                    close_price=_safe_int(_pick(item, "cur_prc", "close_prc"), absolute=True),
-                    volume=_safe_int(_pick(item, "trde_qty", "vol")),
-                ))
-        
+                candles.append(
+                    DailyOHLC(
+                        date=str(_pick(item, "dt", "date", default="")),
+                        open_price=_safe_int(
+                            _pick(item, "open_pric", "open_prc"), absolute=True
+                        ),
+                        high_price=_safe_int(
+                            _pick(item, "high_pric", "high_prc"), absolute=True
+                        ),
+                        low_price=_safe_int(
+                            _pick(item, "low_pric", "low_prc"), absolute=True
+                        ),
+                        close_price=_safe_int(
+                            _pick(item, "cur_prc", "close_prc"), absolute=True
+                        ),
+                        volume=_safe_int(_pick(item, "trde_qty", "vol")),
+                    )
+                )
+
         return candles
 
-    def get_minute_chart(self, code: str, interval: int = 1, count: int = 60) -> List[DailyOHLC]:
+    def get_minute_chart(
+        self, code: str, interval: int = 1, count: int = 60
+    ) -> List[DailyOHLC]:
         """
         분봉 차트 데이터 조회
-        
+
         Args:
             code: 종목코드
             interval: 분봉 간격 (1, 3, 5, 10, 15, 30, 60)
             count: 조회할 봉 개수 (최대 100)
-            
+
         Returns:
             DailyOHLC 리스트 (최신순)
         """
@@ -154,20 +219,30 @@ class RestMarketMixin(RestTransport):
             "base_dt": datetime.now().strftime("%Y%m%d"),
         }
         result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
-        
+
         candles = []
         if result and result.get("return_code") == 0:
             output_list = _payload_records(result, "stk_min_pole_chart_qry", "output")
             for item in output_list[: max(1, min(count, 100))]:
-                candles.append(DailyOHLC(
-                    date=str(_pick(item, "cntr_tm", "datetime", "dt", default="")),
-                    open_price=_safe_int(_pick(item, "open_pric", "open_prc"), absolute=True),
-                    high_price=_safe_int(_pick(item, "high_pric", "high_prc"), absolute=True),
-                    low_price=_safe_int(_pick(item, "low_pric", "low_prc"), absolute=True),
-                    close_price=_safe_int(_pick(item, "cur_prc", "close_prc"), absolute=True),
-                    volume=_safe_int(_pick(item, "trde_qty", "vol")),
-                ))
-        
+                candles.append(
+                    DailyOHLC(
+                        date=str(_pick(item, "cntr_tm", "datetime", "dt", default="")),
+                        open_price=_safe_int(
+                            _pick(item, "open_pric", "open_prc"), absolute=True
+                        ),
+                        high_price=_safe_int(
+                            _pick(item, "high_pric", "high_prc"), absolute=True
+                        ),
+                        low_price=_safe_int(
+                            _pick(item, "low_pric", "low_prc"), absolute=True
+                        ),
+                        close_price=_safe_int(
+                            _pick(item, "cur_prc", "close_prc"), absolute=True
+                        ),
+                        volume=_safe_int(_pick(item, "trde_qty", "vol")),
+                    )
+                )
+
         return candles
 
     def get_weekly_chart(self, code: str, count: int = 52) -> List[DailyOHLC]:
@@ -179,30 +254,40 @@ class RestMarketMixin(RestTransport):
             "upd_stkpc_tp": "1",
         }
         result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
-        
+
         candles = []
         if result and result.get("return_code") == 0:
             output_list = _payload_records(result, "stk_wk_pole_chart_qry", "output")
             for item in output_list[: max(1, min(count, 100))]:
-                candles.append(DailyOHLC(
-                    date=str(_pick(item, "dt", "date", default="")),
-                    open_price=_safe_int(_pick(item, "open_pric", "open_prc"), absolute=True),
-                    high_price=_safe_int(_pick(item, "high_pric", "high_prc"), absolute=True),
-                    low_price=_safe_int(_pick(item, "low_pric", "low_prc"), absolute=True),
-                    close_price=_safe_int(_pick(item, "cur_prc", "close_prc"), absolute=True),
-                    volume=_safe_int(_pick(item, "trde_qty", "vol")),
-                ))
-        
+                candles.append(
+                    DailyOHLC(
+                        date=str(_pick(item, "dt", "date", default="")),
+                        open_price=_safe_int(
+                            _pick(item, "open_pric", "open_prc"), absolute=True
+                        ),
+                        high_price=_safe_int(
+                            _pick(item, "high_pric", "high_prc"), absolute=True
+                        ),
+                        low_price=_safe_int(
+                            _pick(item, "low_pric", "low_prc"), absolute=True
+                        ),
+                        close_price=_safe_int(
+                            _pick(item, "cur_prc", "close_prc"), absolute=True
+                        ),
+                        volume=_safe_int(_pick(item, "trde_qty", "vol")),
+                    )
+                )
+
         return candles
 
     def get_tick_chart(self, code: str, count: int = 60) -> List[TickCandle]:
         """
         틱 차트 데이터 조회 (ka10079)
-        
+
         Args:
             code: 종목코드
             count: 조회할 틱 개수 (최대 100)
-            
+
         Returns:
             TickCandle 리스트 (최신순)
         """
@@ -213,20 +298,24 @@ class RestMarketMixin(RestTransport):
             "upd_stkpc_tp": "1",
         }
         result = self._request("POST", self.PATHS["chart"], tr_code=tr_code, data=data)
-        
+
         candles: List[TickCandle] = []
         if result and result.get("return_code") == 0:
-            output_list = _payload_records(result, "stk_tic_chart_qry", "output")[: max(1, min(count, 100))]
+            output_list = _payload_records(result, "stk_tic_chart_qry", "output")[
+                : max(1, min(count, 100))
+            ]
             for item in output_list:
-                candles.append(TickCandle(
-                    time=str(item.get("time") or item.get("stk_tm") or "").strip(),
-                    price=_safe_int(item.get("cur_prc", 0), absolute=True),
-                    volume=_safe_int(item.get("vol", item.get("cntr_qty", 0))),
-                    change=_safe_int(item.get("chg_amt", 0)),
-                    change_rate=_safe_float(item.get("chg_rt", 0.0)),
-                    side=str(item.get("cntr_tp") or "").strip(),
-                    cum_volume=_safe_int(item.get("acc_vol", 0)),
-                ))
+                candles.append(
+                    TickCandle(
+                        time=str(item.get("time") or item.get("stk_tm") or "").strip(),
+                        price=_safe_int(item.get("cur_prc", 0), absolute=True),
+                        volume=_safe_int(item.get("vol", item.get("cntr_qty", 0))),
+                        change=_safe_int(item.get("chg_amt", 0)),
+                        change_rate=_safe_float(item.get("chg_rt", 0.0)),
+                        side=str(item.get("cntr_tp") or "").strip(),
+                        cum_volume=_safe_int(item.get("acc_vol", 0)),
+                    )
+                )
         return candles
 
     def get_stock_name(self, code: str) -> str:
@@ -247,7 +336,11 @@ class RestMarketMixin(RestTransport):
             try:
                 snapshot = snapshot_getter() or {}
                 if isinstance(snapshot, dict) and snapshot:
-                    return {str(k): v for k, v in snapshot.items()} if isinstance(snapshot, dict) else {}
+                    return (
+                        {str(k): v for k, v in snapshot.items()}
+                        if isinstance(snapshot, dict)
+                        else {}
+                    )
             except Exception as exc:
                 self.logger.warning(f"장상태 스냅샷 조회 실패(프록시 폴백): {exc}")
         return {}
@@ -258,7 +351,12 @@ class RestMarketMixin(RestTransport):
             return {}
         data = {"stk_cd": str(code)}
         try:
-            result = self._request("POST", self.PATHS["stkinfo"], tr_code=self.TR_CODES["STOCK_INFO_DETAIL"], data=data)
+            result = self._request(
+                "POST",
+                self.PATHS["stkinfo"],
+                tr_code=self.TR_CODES["STOCK_INFO_DETAIL"],
+                data=data,
+            )
         except Exception as exc:
             self.logger.warning(f"종목정보 조회 예외: {exc}")
             return {}
@@ -273,7 +371,9 @@ class RestMarketMixin(RestTransport):
             "listed_shares": _safe_int(_pick(info, "listCount", "listed_qty")),
             "audit_info": str(_pick(info, "auditInfo", default="") or ""),
             "listed_date": str(_pick(info, "regDay", "listed_dt", default="") or ""),
-            "prev_close": _safe_int(_pick(info, "lastPrice", "prev_close"), absolute=True),
+            "prev_close": _safe_int(
+                _pick(info, "lastPrice", "prev_close"), absolute=True
+            ),
             "state": str(_pick(info, "state", default="") or ""),
             "market_code": str(_pick(info, "marketCode", default="") or ""),
             "market_name": str(_pick(info, "marketName", default="") or ""),
@@ -287,7 +387,12 @@ class RestMarketMixin(RestTransport):
         """업종코드 리스트 조회 (ka10101 /api/dostk/stkinfo)."""
         data = {"mrkt_tp": str(market or "0")}
         try:
-            result = self._request("POST", self.PATHS["stkinfo"], tr_code=self.TR_CODES["SECTOR_CODE_LIST"], data=data)
+            result = self._request(
+                "POST",
+                self.PATHS["stkinfo"],
+                tr_code=self.TR_CODES["SECTOR_CODE_LIST"],
+                data=data,
+            )
         except Exception as exc:
             self.logger.warning(f"업종코드 조회 예외: {exc}")
             return []
@@ -298,18 +403,25 @@ class RestMarketMixin(RestTransport):
         for item in rows:
             if not isinstance(item, dict):
                 continue
-            sectors.append({
-                "market_code": str(_pick(item, "marketCode", default="") or ""),
-                "code": str(_pick(item, "code", "sect_cd", default="") or ""),
-                "name": str(_pick(item, "name", "sect_nm", default="") or ""),
-                "group": str(_pick(item, "group", default="") or ""),
-            })
+            sectors.append(
+                {
+                    "market_code": str(_pick(item, "marketCode", default="") or ""),
+                    "code": str(_pick(item, "code", "sect_cd", default="") or ""),
+                    "name": str(_pick(item, "name", "sect_nm", default="") or ""),
+                    "group": str(_pick(item, "group", default="") or ""),
+                }
+            )
         return [row for row in sectors if row.get("code") or row.get("name")]
 
     def get_member_list(self) -> List[Dict[str, Any]]:
         """회원사 리스트 조회 (ka10102 /api/dostk/stkinfo, ka10078 mbrm_cd 참조용)."""
         try:
-            result = self._request("POST", self.PATHS["stkinfo"], tr_code=self.TR_CODES["MEMBER_LIST"], data={})
+            result = self._request(
+                "POST",
+                self.PATHS["stkinfo"],
+                tr_code=self.TR_CODES["MEMBER_LIST"],
+                data={},
+            )
         except Exception as exc:
             self.logger.warning(f"회원사 조회 예외: {exc}")
             return []
@@ -320,11 +432,13 @@ class RestMarketMixin(RestTransport):
         for item in rows:
             if not isinstance(item, dict):
                 continue
-            members.append({
-                "code": str(_pick(item, "code", "mbrm_cd", default="") or ""),
-                "name": str(_pick(item, "name", "mbrm_nm", default="") or ""),
-                "gb": str(_pick(item, "gb", default="") or ""),
-            })
+            members.append(
+                {
+                    "code": str(_pick(item, "code", "mbrm_cd", default="") or ""),
+                    "name": str(_pick(item, "name", "mbrm_nm", default="") or ""),
+                    "gb": str(_pick(item, "gb", default="") or ""),
+                }
+            )
         return [row for row in members if row.get("code") or row.get("name")]
 
     def get_index_quote(self, index_code: str) -> Dict[str, Any]:
@@ -343,7 +457,12 @@ class RestMarketMixin(RestTransport):
         current = _safe_float(_pick(output, "cur_prc", "cur_idx"))
         change = _safe_float(_pick(output, "pred_pre", "chg_idx"))
         change_rate = _safe_float(_pick(output, "flu_rt", "chg_rt"))
-        if current == 0.0 and change == 0.0 and change_rate == 0.0 and not _pick(output, "cur_prc", "cur_idx"):
+        if (
+            current == 0.0
+            and change == 0.0
+            and change_rate == 0.0
+            and not _pick(output, "cur_prc", "cur_idx")
+        ):
             return {}
         return {
             "idx_cd": str(index_code),
@@ -363,7 +482,7 @@ class RestMarketMixin(RestTransport):
     def get_market_indexes(self) -> List[SectorQuote]:
         """
         주요 시장 지수 시세 조회 (코스피: 001, 코스닥: 101, 코스피200: 201)
-        
+
         Returns:
             SectorQuote 리스트
         """
@@ -377,18 +496,22 @@ class RestMarketMixin(RestTransport):
             try:
                 res = self.get_index_quote(idx_cd)
                 if res:
-                    quotes.append(SectorQuote(
-                        code=idx_cd,
-                        name=str(_pick(res, "idx_nm", default="") or name),
-                        current_price=_safe_float(_pick(res, "cur_idx", "cur_prc")),
-                        change=_safe_float(_pick(res, "chg_idx", "pred_pre")),
-                        change_rate=_safe_float(_pick(res, "chg_rt", "flu_rt")),
-                        open_price=_safe_float(_pick(res, "open_idx", "open_pric")),
-                        high_price=_safe_float(_pick(res, "high_idx", "high_pric")),
-                        low_price=_safe_float(_pick(res, "low_idx", "low_pric")),
-                        volume=_safe_int(_pick(res, "acc_vol", "trde_qty")),
-                        volume_amount=_safe_int(_pick(res, "acc_trd_val", "trde_prica")),
-                    ))
+                    quotes.append(
+                        SectorQuote(
+                            code=idx_cd,
+                            name=str(_pick(res, "idx_nm", default="") or name),
+                            current_price=_safe_float(_pick(res, "cur_idx", "cur_prc")),
+                            change=_safe_float(_pick(res, "chg_idx", "pred_pre")),
+                            change_rate=_safe_float(_pick(res, "chg_rt", "flu_rt")),
+                            open_price=_safe_float(_pick(res, "open_idx", "open_pric")),
+                            high_price=_safe_float(_pick(res, "high_idx", "high_pric")),
+                            low_price=_safe_float(_pick(res, "low_idx", "low_pric")),
+                            volume=_safe_int(_pick(res, "acc_vol", "trde_qty")),
+                            volume_amount=_safe_int(
+                                _pick(res, "acc_trd_val", "trde_prica")
+                            ),
+                        )
+                    )
             except Exception as exc:
                 self.logger.warning(f"지수({idx_cd}) 조회 실패: {exc}")
                 continue

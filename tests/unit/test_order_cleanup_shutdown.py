@@ -21,7 +21,8 @@ class _DummyREST:
                 "order_no": str(order_no),
                 "code": str(code),
                 "quantity": int(quantity),
-                "pending_present": code in self.trader._pending_order_state or code in self.trader._manual_pending_state,
+                "pending_present": code in self.trader._pending_order_state
+                or code in self.trader._manual_pending_state,
             }
         )
 
@@ -116,13 +117,20 @@ class _Harness(TradingSessionMixin, OrderSyncMixin, ExecutionEngineMixin):
 
 
 class TestOrderCleanupShutdown(unittest.TestCase):
-    def test_cleanup_cancels_split_children_and_manual_live_orders_before_local_clear(self):
+    def test_cleanup_cancels_split_children_and_manual_live_orders_before_local_clear(
+        self,
+    ):
         trader = _Harness()
 
         result = trader._cleanup_active_orders("unit_test", timeout_sec=0.0)
 
-        self.assertEqual({call["order_no"] for call in trader.rest_client.cancel_calls}, {"A1-1", "A1-2", "M1"})
-        self.assertTrue(all(call["pending_present"] for call in trader.rest_client.cancel_calls))
+        self.assertEqual(
+            {call["order_no"] for call in trader.rest_client.cancel_calls},
+            {"A1-1", "A1-2", "M1"},
+        )
+        self.assertTrue(
+            all(call["pending_present"] for call in trader.rest_client.cancel_calls)
+        )
         self.assertEqual(result["unresolved_codes"], ["005930", "123456"])
         self.assertEqual(trader._pending_order_state, {})
         self.assertEqual(trader._manual_pending_state, {})

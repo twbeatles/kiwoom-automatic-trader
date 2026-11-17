@@ -64,7 +64,9 @@ class TestSettingsMergeAndAPITab(unittest.TestCase):
 
         _SettingsHarness()._apply_settings_schema_migration(settings)
 
-        self.assertEqual(settings["strategy_pack"]["primary_strategy"], "ma_channel_trend")
+        self.assertEqual(
+            settings["strategy_pack"]["primary_strategy"], "ma_channel_trend"
+        )
         self.assertIn("risk_overlays", settings["strategy_pack"])
         self.assertIn("intel_fresh_guard", settings["strategy_pack"]["risk_overlays"])
         self.assertEqual(settings["backtest_config"]["commission_bps"], 1.0)

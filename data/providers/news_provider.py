@@ -25,7 +25,9 @@ class NewsProvider:
     def available(self) -> bool:
         return bool(self.client_id and self.client_secret)
 
-    def search(self, query: str, display: int = 10, sort: str = "date") -> List[Dict[str, Any]]:
+    def search(
+        self, query: str, display: int = 10, sort: str = "date"
+    ) -> List[Dict[str, Any]]:
         if not self.available() or not query:
             self._mark("disabled" if not self.available() else "ok_empty")
             return []
@@ -39,14 +41,18 @@ class NewsProvider:
             "sort": str(sort or "date"),
         }
         try:
-            response = requests.get(self.BASE_URL, headers=headers, params=params, timeout=10)
+            response = requests.get(
+                self.BASE_URL, headers=headers, params=params, timeout=10
+            )
             response.raise_for_status()
             payload = response.json()
             items = payload.get("items", [])
             if not isinstance(items, list):
                 self._mark("ok_empty")
                 return []
-            normalized = [self._normalize_item(item) for item in items if isinstance(item, dict)]
+            normalized = [
+                self._normalize_item(item) for item in items if isinstance(item, dict)
+            ]
             self._mark("ok_with_data" if normalized else "ok_empty")
             return normalized
         except Exception as exc:

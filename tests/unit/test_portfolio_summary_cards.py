@@ -16,28 +16,47 @@ class TestPortfolioSummary(unittest.TestCase):
     def _universe(self):
         return {
             "005930": {
-                "name": "삼성전자", "held": 10, "buy_price": 70000, "current": 75000,
-                "invest_amount": 700000, "market_type": "KOSPI", "sector": "전기전자",
+                "name": "삼성전자",
+                "held": 10,
+                "buy_price": 70000,
+                "current": 75000,
+                "invest_amount": 700000,
+                "market_type": "KOSPI",
+                "sector": "전기전자",
                 "status": "holding",
             },
             "000660": {
-                "name": "SK하이닉스", "held": 5, "buy_price": 200000, "current": 190000,
-                "invest_amount": 1000000, "market_type": "KOSPI", "sector": "전기전자",
-                "status": "sync_failed", "sync_failed_reason": "조회 실패",
+                "name": "SK하이닉스",
+                "held": 5,
+                "buy_price": 200000,
+                "current": 190000,
+                "invest_amount": 1000000,
+                "market_type": "KOSPI",
+                "sector": "전기전자",
+                "status": "sync_failed",
+                "sync_failed_reason": "조회 실패",
             },
         }
 
     def _external(self):
         return {
             "035420": {
-                "name": "NAVER", "held": 3, "buy_price": 200000, "current": 210000,
-                "invest_amount": 600000, "market_type": "KOSPI", "sector": "서비스업",
-                "status": "external_holding", "read_only": True,
+                "name": "NAVER",
+                "held": 3,
+                "buy_price": 200000,
+                "current": 210000,
+                "invest_amount": 600000,
+                "market_type": "KOSPI",
+                "sector": "서비스업",
+                "status": "external_holding",
+                "read_only": True,
             },
         }
 
     def test_position_eval_math(self):
-        snap = position_eval({"held": 10, "buy_price": 70000, "current": 75000, "invest_amount": 700000})
+        snap = position_eval(
+            {"held": 10, "buy_price": 70000, "current": 75000, "invest_amount": 700000}
+        )
         self.assertEqual(snap["eval_amount"], 750000.0)
         self.assertEqual(snap["unrealized_pnl"], 50000.0)
 
@@ -48,14 +67,18 @@ class TestPortfolioSummary(unittest.TestCase):
             {"timestamp": f"{today}T11:00:00", "type": "매도", "profit": -10000},
             {"timestamp": f"{today}T09:00:00", "type": "매수", "profit": 0},
         ]
-        summary = compute_portfolio_summary(self._universe(), self._external(), history, today=today)
+        summary = compute_portfolio_summary(
+            self._universe(), self._external(), history, today=today
+        )
         self.assertEqual(summary["realized_pnl"], 40000.0)
         # unrealized: 50000 (005930) - 50000 (000660) + 30000 (035420)
         self.assertEqual(summary["unrealized_pnl"], 30000.0)
         self.assertEqual(summary["total_pnl"], 70000.0)
         self.assertAlmostEqual(sum(summary["weights"].values()), 1.0)
         self.assertEqual(summary["top_weights"][0][0], "000660")
-        self.assertEqual(summary["exposures"]["sector"]["전기전자"], 750000.0 + 950000.0)
+        self.assertEqual(
+            summary["exposures"]["sector"]["전기전자"], 750000.0 + 950000.0
+        )
         self.assertEqual(summary["exposures"]["sector"]["서비스업"], 630000.0)
         self.assertEqual(summary["counts"]["external"], 1)
         self.assertEqual(summary["counts"]["read_only"], 1)
@@ -80,7 +103,10 @@ class TestPortfolioSummary(unittest.TestCase):
                 self.universe = universe
                 self.external_positions = external
                 self.trade_history = history
-                self.portfolio_labels = {key: _DummyLabel() for key in ("pnl", "weight", "exposure", "health")}
+                self.portfolio_labels = {
+                    key: _DummyLabel()
+                    for key in ("pnl", "weight", "exposure", "health")
+                }
 
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         harness = Harness(

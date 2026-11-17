@@ -7,6 +7,7 @@ import os
 
 try:
     import keyring
+
     KEYRING_AVAILABLE = True
 except ModuleNotFoundError:
     KEYRING_AVAILABLE = False
@@ -77,23 +78,28 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self.win_count += 1
         self.total_realized_profit += record.get("profit", 0)
         if record.get("type") == "매도":
-            self.daily_realized_profit = int(getattr(self, "daily_realized_profit", 0) or 0) + int(
-                record.get("profit", 0) or 0
-            )
+            self.daily_realized_profit = int(
+                getattr(self, "daily_realized_profit", 0) or 0
+            ) + int(record.get("profit", 0) or 0)
             # 매도 체결 누적 직후 일일 손실 한도를 즉시 평가하여 다음 timer tick 전 진입을 차단.
             check_fn = getattr(self, "_check_daily_loss_limit", None)
             if callable(check_fn):
                 check_fn()
+
     def _refresh_history_table(self):
         today = datetime.datetime.now().strftime("%Y-%m-%d")
-        today_history = [r for r in self.trade_history if r.get("timestamp", "").startswith(today)]
+        today_history = [
+            r for r in self.trade_history if r.get("timestamp", "").startswith(today)
+        ]
 
         self.history_table.setUpdatesEnabled(False)
         try:
             self.history_table.setRowCount(len(today_history))
             for row, record in enumerate(reversed(today_history)):
                 timestamp = record.get("timestamp", "")
-                time_str = timestamp.split("T")[-1][:8] if "T" in timestamp else timestamp
+                time_str = (
+                    timestamp.split("T")[-1][:8] if "T" in timestamp else timestamp
+                )
                 items = [
                     time_str,
                     record.get("name", record.get("code", "")),
@@ -126,9 +132,12 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self.history_table.setUpdatesEnabled(True)
         if hasattr(self, "stats_labels"):
             self._update_stats()
+
     def _export_csv(self):
         if not self.trade_history:
-            self._notice_or_box("info", "알림", "내보낼 내역이 없습니다.", QMessageBox.information)
+            self._notice_or_box(
+                "info", "알림", "내보낼 내역이 없습니다.", QMessageBox.information
+            )
             return
         filename, _ = QFileDialog.getSaveFileName(
             self,
@@ -139,7 +148,19 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
         if filename:
             with open(filename, "w", newline="", encoding="utf-8-sig") as file:
                 writer = csv.writer(file)
-                writer.writerow(["시간", "코드", "종목", "구분", "가격", "수량", "금액", "손익", "사유"])
+                writer.writerow(
+                    [
+                        "시간",
+                        "코드",
+                        "종목",
+                        "구분",
+                        "가격",
+                        "수량",
+                        "금액",
+                        "손익",
+                        "사유",
+                    ]
+                )
                 for record in self.trade_history:
                     writer.writerow(
                         [
@@ -155,18 +176,31 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
                         ]
                     )
             self.log(f"📤 CSV 저장: {filename}")
+
     def _clear_today_history(self):
         today = datetime.datetime.now().strftime("%Y-%m-%d")
-        count = sum(1 for r in self.trade_history if r.get("timestamp", "").startswith(today))
+        count = sum(
+            1 for r in self.trade_history if r.get("timestamp", "").startswith(today)
+        )
         if count == 0:
             return
-        if QMessageBox.question(self, "확인", f"오늘 기록 {count}건 삭제?") == QMessageBox.StandardButton.Yes:
-            self.trade_history = [r for r in self.trade_history if not r.get("timestamp", "").startswith(today)]
+        if (
+            QMessageBox.question(self, "확인", f"오늘 기록 {count}건 삭제?")
+            == QMessageBox.StandardButton.Yes
+        ):
+            self.trade_history = [
+                r
+                for r in self.trade_history
+                if not r.get("timestamp", "").startswith(today)
+            ]
             self._save_trade_history()
             self._refresh_history_table()
+
     def _update_stats(self):
         today = datetime.datetime.now().strftime("%Y-%m-%d")
-        today_trades = [r for r in self.trade_history if r.get("timestamp", "").startswith(today)]
+        today_trades = [
+            r for r in self.trade_history if r.get("timestamp", "").startswith(today)
+        ]
         sells = [r for r in today_trades if r.get("type") == "매도"]
 
         wins = sum(1 for r in sells if r.get("profit", 0) > 0)
@@ -175,13 +209,18 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
 
         self.stats_labels["trades"].setText(str(len(today_trades)))
         self.stats_labels["wins"].setText(f"{wins}/{len(sells)}")
-        self.stats_labels["winrate"].setText(f"{wins / len(sells) * 100:.1f}%" if sells else "-")
+        self.stats_labels["winrate"].setText(
+            f"{wins / len(sells) * 100:.1f}%" if sells else "-"
+        )
         self.stats_labels["profit"].setText(f"{total_profit:+,} 원")
-        self.stats_labels["max_profit"].setText(f"{max(profits):+,}" if profits else "-")
+        self.stats_labels["max_profit"].setText(
+            f"{max(profits):+,}" if profits else "-"
+        )
         self.stats_labels["max_loss"].setText(f"{min(profits):+,}" if profits else "-")
         refresher = getattr(self, "_refresh_portfolio_cards", None)
         if callable(refresher):
             refresher()
+
     def _load_trade_history(self):
         """거래 내역 로드."""
         try:
@@ -193,6 +232,7 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self.trade_history = []
         except OSError as exc:
             self.logger.warning(f"거래 내역 로드 실패: {exc}")
+
     def _save_trade_history(self):
         """거래 내역 저장 (single-writer 비동기)."""
         history_snapshot = list(self.trade_history)
@@ -206,6 +246,7 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
         if bool(getattr(self, "_history_save_inflight", False)):
             return
         self._start_next_trade_history_save()
+
     def _start_next_trade_history_save(self):
         if bool(getattr(self, "_history_save_inflight", False)):
             return
@@ -217,12 +258,18 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
         self._history_save_inflight = True
 
         worker = Worker(self._save_trade_history_worker, list(snapshot))
-        worker.signals.result.connect(lambda _res=None: self._on_trade_history_save_done(success=True, error=None))
-        worker.signals.error.connect(lambda err: self._on_trade_history_save_done(success=False, error=err))
+        worker.signals.result.connect(
+            lambda _res=None: self._on_trade_history_save_done(success=True, error=None)
+        )
+        worker.signals.error.connect(
+            lambda err: self._on_trade_history_save_done(success=False, error=err)
+        )
         self.threadpool.start(worker)
+
     def _save_trade_history_worker(self, history: list):
         """실제 파일 IO 수행 워커"""
         self._atomic_write_json(Config.TRADE_HISTORY_FILE, history)
+
     def _on_trade_history_save_done(self, success: bool, error=None):
         self._history_save_inflight = False
         if not success:
@@ -236,10 +283,15 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
             self._start_next_trade_history_save()
             return
         self._history_dirty = False
+
     def _save_trade_history_sync(self, history_snapshot=None):
         """동기 거래 내역 저장 (테스트용)"""
         try:
-            payload = list(self.trade_history) if history_snapshot is None else list(history_snapshot)
+            payload = (
+                list(self.trade_history)
+                if history_snapshot is None
+                else list(history_snapshot)
+            )
             self._atomic_write_json(Config.TRADE_HISTORY_FILE, payload)
             self._history_dirty = False
             self._history_save_pending_snapshot = None
@@ -247,6 +299,7 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
         except Exception as exc:
             self.logger.error(f"거래 내역 동기 저장 실패: {exc}")
             self._history_dirty = True
+
     def _flush_trade_history_on_exit(self):
         if (
             not bool(getattr(self, "_history_dirty", False))
@@ -270,5 +323,8 @@ class PersistenceTradeHistoryMixin(TraderMixinBase):
 
         self._save_trade_history()
         # Exit path hardening: if async save may still be inflight, force sync flush with latest snapshot.
-        if bool(getattr(self, "_history_save_inflight", False)) or getattr(self, "_history_save_pending_snapshot", None) is not None:
+        if (
+            bool(getattr(self, "_history_save_inflight", False))
+            or getattr(self, "_history_save_pending_snapshot", None) is not None
+        ):
             self._save_trade_history_sync(latest_snapshot)

@@ -16,7 +16,9 @@ from app.support.widgets import NoScrollComboBox
 
 class UIBuildLayoutMixin(TraderMixinBase):
     def _init_ui(self):
-        self.setWindowTitle("키움 자동매매 도우미 v4.5 | Kiwoom Pro Algo-Trader [REST API]")
+        self.setWindowTitle(
+            "키움 자동매매 도우미 v4.5 | Kiwoom Pro Algo-Trader [REST API]"
+        )
         self._apply_hidpi_defaults()
         self._apply_display_aware_geometry()
         startup_theme = getattr(self, "_apply_startup_theme", None)
@@ -52,6 +54,7 @@ class UIBuildLayoutMixin(TraderMixinBase):
         installer = getattr(self, "_install_system_theme_watcher", None)
         if callable(installer):
             installer()
+
     def _screen_scale_hints(self):
         """Return (device_pixel_ratio, logical_dpi) of the current screen."""
         try:
@@ -214,11 +217,12 @@ class UIBuildLayoutMixin(TraderMixinBase):
         right_panel.addWidget(self.btn_emergency, 1, 2, 1, 2)
 
         # 메인 레이아웃에 패널 추가
-        main_layout.addLayout(left_panel, 65) # 너비 65%
-        main_layout.addLayout(right_panel, 35) # 너비 35%
+        main_layout.addLayout(left_panel, 65)  # 너비 65%
+        main_layout.addLayout(right_panel, 35)  # 너비 35%
 
         group.setLayout(main_layout)
         return group
+
     def _create_tabs(self):
         """좌측 Fluent 레일 + 5-워크스페이스 스택 (규칙 §9: 상단 탭바 내비게이션 금지).
 
@@ -248,7 +252,17 @@ class UIBuildLayoutMixin(TraderMixinBase):
 
         # 주식 테이블
         self.table = QTableWidget()
-        cols = ["종목명", "현재가", "목표가", "상태", "보유", "매입가", "수익률", "최고수익", "투자금"]
+        cols = [
+            "종목명",
+            "현재가",
+            "목표가",
+            "상태",
+            "보유",
+            "매입가",
+            "수익률",
+            "최고수익",
+            "투자금",
+        ]
         self.table.setColumnCount(len(cols))
         self.table.setHorizontalHeaderLabels(cols)
         table_vertical_header = self.table.verticalHeader()
@@ -256,7 +270,9 @@ class UIBuildLayoutMixin(TraderMixinBase):
         if table_vertical_header is not None:
             table_vertical_header.setVisible(False)
         if table_horizontal_header is not None:
-            table_horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+            table_horizontal_header.setSectionResizeMode(
+                QHeaderView.ResizeMode.Interactive
+            )
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         splitter.addWidget(self.table)
@@ -271,6 +287,7 @@ class UIBuildLayoutMixin(TraderMixinBase):
         splitter.setSizes([600, 200])
 
         return splitter
+
     def _create_statusbar(self):
         # 시간 표시
         self.status_time = QLabel()

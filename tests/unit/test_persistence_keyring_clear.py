@@ -42,7 +42,12 @@ class _Harness(PersistenceSettingsMixin):
     def __init__(self):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
-        self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
+        self.schedule = {
+            "enabled": False,
+            "start": "09:00",
+            "end": "15:19",
+            "liquidate": True,
+        }
         self.config = type(
             "Cfg",
             (),
@@ -79,13 +84,22 @@ class TestPersistenceKeyringClear(unittest.TestCase):
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
             settings_path.write_text(
-                json.dumps({"app_key": "legacy", "secret_key": "legacy"}, ensure_ascii=False),
+                json.dumps(
+                    {"app_key": "legacy", "secret_key": "legacy"}, ensure_ascii=False
+                ),
                 encoding="utf-8",
             )
 
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.KEYRING_AVAILABLE", True
-            ), patch("app.features.persistence.settings_io.keyring.delete_password") as mock_delete:
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch("app.features.persistence.settings_io.KEYRING_AVAILABLE", True),
+                patch(
+                    "app.features.persistence.settings_io.keyring.delete_password"
+                ) as mock_delete,
+            ):
                 trader._save_settings()
 
             self.assertEqual(mock_delete.call_count, 7)

@@ -16,17 +16,29 @@ from data.providers import DartProvider, MacroProvider, NaverTrendProvider, News
 class MarketIntelRuntimeMixin(TraderMixinBase):
     def _build_news_provider(self) -> NewsProvider:
         creds = self._market_api_credentials()
-        return NewsProvider(creds.get("naver_client_id", ""), creds.get("naver_client_secret", ""))
+        return NewsProvider(
+            creds.get("naver_client_id", ""), creds.get("naver_client_secret", "")
+        )
+
     def _build_dart_provider(self) -> DartProvider:
         creds = self._market_api_credentials()
-        return DartProvider(creds.get("dart_api_key", ""), cache_dir=getattr(Config, "DATA_DIR", "data"))
+        return DartProvider(
+            creds.get("dart_api_key", ""), cache_dir=getattr(Config, "DATA_DIR", "data")
+        )
+
     def _build_macro_provider(self) -> MacroProvider:
         creds = self._market_api_credentials()
         return MacroProvider(creds.get("fred_api_key", ""))
+
     def _build_trend_provider(self) -> NaverTrendProvider:
         creds = self._market_api_credentials()
-        return NaverTrendProvider(creds.get("naver_client_id", ""), creds.get("naver_client_secret", ""))
-    def _apply_market_intelligence_payload(self, code: str, row: Dict[str, Any], macro_values: Dict[str, float]):
+        return NaverTrendProvider(
+            creds.get("naver_client_id", ""), creds.get("naver_client_secret", "")
+        )
+
+    def _apply_market_intelligence_payload(
+        self, code: str, row: Dict[str, Any], macro_values: Dict[str, float]
+    ):
         info = self._market_intel_entity(code)
         if not info:
             return
@@ -43,24 +55,50 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
             ranking_overlap=ranking_overlap,
         )
         macro = self._derive_macro_regime(macro_values)
-        session_block_until = datetime.datetime.combine(now_dt.date(), datetime.time(15, 30))
-        source_meta = row.get("source_meta", {}) if isinstance(row.get("source_meta"), dict) else {}
+        session_block_until = datetime.datetime.combine(
+            now_dt.date(), datetime.time(15, 30)
+        )
+        source_meta = (
+            row.get("source_meta", {})
+            if isinstance(row.get("source_meta"), dict)
+            else {}
+        )
         self._sync_source_meta(state, source_meta)
         symbol_status = self._determine_symbol_status(source_meta)
-        velocity_threshold = int(self._market_intelligence_config().get("scoring", {}).get("headline_velocity_threshold", 5))
-        theme_threshold = float(self._market_intelligence_config().get("scoring", {}).get("theme_heat_threshold", 60))
-        latest_event_id = str(dart.get("latest_event_id", "") or (news["headlines"][0].get("event_id", "") if news["headlines"] else ""))
+        velocity_threshold = int(
+            self._market_intelligence_config()
+            .get("scoring", {})
+            .get("headline_velocity_threshold", 5)
+        )
+        theme_threshold = float(
+            self._market_intelligence_config()
+            .get("scoring", {})
+            .get("theme_heat_threshold", 60)
+        )
+        latest_event_id = str(
+            dart.get("latest_event_id", "")
+            or (news["headlines"][0].get("event_id", "") if news["headlines"] else "")
+        )
         effective_event_type = str(dart.get("event_type", "") or "")
-        if not effective_event_type and int(news.get("headline_velocity", 0) or 0) >= velocity_threshold:
+        if (
+            not effective_event_type
+            and int(news.get("headline_velocity", 0) or 0) >= velocity_threshold
+        ):
             effective_event_type = "headline_velocity"
-        elif not effective_event_type and float(theme.get("score", 0.0) or 0.0) >= theme_threshold:
+        elif (
+            not effective_event_type
+            and float(theme.get("score", 0.0) or 0.0) >= theme_threshold
+        ):
             effective_event_type = "theme_heat"
         event_ids = [
             str(item.get("event_id", "") or "")
-            for item in list(news.get("headlines", []) or []) + list(dart.get("events", []) or [])
+            for item in list(news.get("headlines", []) or [])
+            + list(dart.get("events", []) or [])
             if str(item.get("event_id", "") or "")
         ]
-        seen_event_ids = list(dict.fromkeys(list(state.get("seen_event_ids", []) or []) + event_ids))[-200:]
+        seen_event_ids = list(
+            dict.fromkeys(list(state.get("seen_event_ids", []) or []) + event_ids)
+        )[-200:]
         state.update(
             {
                 "status": symbol_status,
@@ -72,7 +110,9 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 "relevance_score": news["relevance_score"],
                 "dart_events": dart["events"],
                 "dart_risk_level": dart["risk_level"],
-                "dart_block_until": session_block_until if bool(dart.get("blocking", False)) else None,
+                "dart_block_until": session_block_until
+                if bool(dart.get("blocking", False))
+                else None,
                 "event_type": effective_event_type,
                 "event_severity": str(dart.get("severity", "low") or "low"),
                 "theme_score": theme["score"],
@@ -81,7 +121,9 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 "source_health": str(state.get("source_health", "") or ""),
                 "intel_updated_at": now_dt,
                 "intel_status": symbol_status,
-                "intel_error": "" if symbol_status not in {"error", "partial"} else state.get("source_health", ""),
+                "intel_error": ""
+                if symbol_status not in {"error", "partial"}
+                else state.get("source_health", ""),
                 "last_event_id": latest_event_id,
                 "seen_event_ids": seen_event_ids,
             }
@@ -95,16 +137,26 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
         if bool(self._market_intelligence_config().get("ai", {}).get("enabled", False)):
             triggers = [
                 abs(float(state.get("news_score", 0.0) or 0.0))
-                >= float(self._market_intelligence_config().get("ai", {}).get("min_score_to_call", 60)),
+                >= float(
+                    self._market_intelligence_config()
+                    .get("ai", {})
+                    .get("min_score_to_call", 60)
+                ),
                 bool(dart.get("blocking", False)),
                 int(state.get("headline_velocity", 0) or 0)
-                >= int(self._market_intelligence_config().get("scoring", {}).get("headline_velocity_threshold", 5)),
+                >= int(
+                    self._market_intelligence_config()
+                    .get("scoring", {})
+                    .get("headline_velocity_threshold", 5)
+                ),
             ]
             if any(triggers):
                 self._maybe_run_ai_summary(code, info, reason="event_trigger")
                 state.update(self._resolve_market_intel_policy(code, info))
         else:
-            state["ai_summary"] = self._rules_based_ai_fallback(code, info, reason="disabled")
+            state["ai_summary"] = self._rules_based_ai_fallback(
+                code, info, reason="disabled"
+            )
         if dart.get("blocking", False):
             self._maybe_emit_market_intel_alert(
                 code,
@@ -133,7 +185,11 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 summary=f"{info.get('name', code)} 헤드라인 급증 감지 ({state.get('headline_velocity', 0)}건/5분)",
                 blocking=False,
                 tags=list(state.get("theme_keywords", []) or []),
-                event_id=str(news["headlines"][0].get("event_id", "") if news["headlines"] else ""),
+                event_id=str(
+                    news["headlines"][0].get("event_id", "")
+                    if news["headlines"]
+                    else ""
+                ),
                 payload={
                     "news_score": state.get("news_score", 0.0),
                     "headline_velocity": state.get("headline_velocity", 0),
@@ -150,7 +206,12 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 summary=f"{info.get('name', code)} 테마 과열 감지 (점수 {state.get('theme_score', 0.0):.0f})",
                 blocking=False,
                 tags=list(state.get("theme_keywords", []) or []),
-                event_id=str(state.get("last_event_id", "") or self._build_market_intel_event_id(code, "theme", now_dt.isoformat())),
+                event_id=str(
+                    state.get("last_event_id", "")
+                    or self._build_market_intel_event_id(
+                        code, "theme", now_dt.isoformat()
+                    )
+                ),
                 payload={
                     "theme_score": state.get("theme_score", 0.0),
                     "theme_keywords": state.get("theme_keywords", []),
@@ -158,11 +219,19 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 },
             )
         self._market_intel_dirty_codes.add(code)
+
     def _fetch_market_intelligence_worker(self, codes: List[str]) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"codes": {}, "source_statuses": {}, "macro_values": {}}
+        payload: Dict[str, Any] = {
+            "codes": {},
+            "source_statuses": {},
+            "macro_values": {},
+        }
         if not self._market_intelligence_enabled():
             for source in ("news", "dart", "datalab", "macro"):
-                payload["source_statuses"][source] = {"status": "disabled", "error": "market_intelligence_disabled"}
+                payload["source_statuses"][source] = {
+                    "status": "disabled",
+                    "error": "market_intelligence_disabled",
+                }
             return payload
         source_buckets = {
             source: {"statuses": [], "errors": []}
@@ -170,7 +239,9 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
         }
 
         def _track_source(source_name: str, status: str, error: str = ""):
-            bucket = source_buckets.setdefault(source_name, {"statuses": [], "errors": []})
+            bucket = source_buckets.setdefault(
+                source_name, {"statuses": [], "errors": []}
+            )
             bucket["statuses"].append(str(status or "idle"))
             if error:
                 bucket["errors"].append(str(error))
@@ -184,7 +255,9 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 cache = getattr(self, "_market_macro_cache", None)
                 now_ts = time.time()
                 macro_refresh_sec = int(
-                    self._market_intelligence_config().get("refresh_sec", {}).get(
+                    self._market_intelligence_config()
+                    .get("refresh_sec", {})
+                    .get(
                         "macro", getattr(Config, "MARKET_INTEL_MACRO_REFRESH_SEC", 300)
                     )
                 )
@@ -192,15 +265,23 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                     isinstance(cache, dict)
                     and isinstance(cache.get("values"), dict)
                     and cache.get("values")
-                    and (now_ts - float(cache.get("ts", 0.0))) < max(30, macro_refresh_sec)
+                    and (now_ts - float(cache.get("ts", 0.0)))
+                    < max(30, macro_refresh_sec)
                 ):
                     macro_values = dict(cache.get("values", {}))
                     macro_status = "fresh"
                     macro_error = ""
                 else:
-                    macro_values = provider.latest_values(list(self._market_intelligence_config().get("macro_series", [])))
-                    self._market_macro_cache = {"values": dict(macro_values), "ts": now_ts}
-                    macro_status = str(getattr(provider, "last_status", "idle") or "idle")
+                    macro_values = provider.latest_values(
+                        list(self._market_intelligence_config().get("macro_series", []))
+                    )
+                    self._market_macro_cache = {
+                        "values": dict(macro_values),
+                        "ts": now_ts,
+                    }
+                    macro_status = str(
+                        getattr(provider, "last_status", "idle") or "idle"
+                    )
                     macro_error = str(getattr(provider, "last_error", "") or "")
             else:
                 macro_status = "disabled_by_missing_credentials"
@@ -232,20 +313,56 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 "trend_ratio": 0.0,
                 "source_meta": {
                     "news": {
-                        "status": "idle" if news_available else ("disabled" if not news_enabled else "disabled_by_missing_credentials"),
-                        "error": "" if news_available else ("provider_disabled" if not news_enabled else "api_key_missing"),
+                        "status": "idle"
+                        if news_available
+                        else (
+                            "disabled"
+                            if not news_enabled
+                            else "disabled_by_missing_credentials"
+                        ),
+                        "error": ""
+                        if news_available
+                        else (
+                            "provider_disabled"
+                            if not news_enabled
+                            else "api_key_missing"
+                        ),
                         "updated_at": datetime.datetime.now(),
                         "count": 0,
                     },
                     "dart": {
-                        "status": "idle" if dart_available else ("disabled" if not dart_enabled else "disabled_by_missing_credentials"),
-                        "error": "" if dart_available else ("provider_disabled" if not dart_enabled else "api_key_missing"),
+                        "status": "idle"
+                        if dart_available
+                        else (
+                            "disabled"
+                            if not dart_enabled
+                            else "disabled_by_missing_credentials"
+                        ),
+                        "error": ""
+                        if dart_available
+                        else (
+                            "provider_disabled"
+                            if not dart_enabled
+                            else "api_key_missing"
+                        ),
                         "updated_at": datetime.datetime.now(),
                         "count": 0,
                     },
                     "datalab": {
-                        "status": "idle" if datalab_available else ("disabled" if not datalab_enabled else "disabled_by_missing_credentials"),
-                        "error": "" if datalab_available else ("provider_disabled" if not datalab_enabled else "api_key_missing"),
+                        "status": "idle"
+                        if datalab_available
+                        else (
+                            "disabled"
+                            if not datalab_enabled
+                            else "disabled_by_missing_credentials"
+                        ),
+                        "error": ""
+                        if datalab_available
+                        else (
+                            "provider_disabled"
+                            if not datalab_enabled
+                            else "api_key_missing"
+                        ),
                         "updated_at": datetime.datetime.now(),
                         "value": 0.0,
                     },
@@ -253,7 +370,11 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                         "status": macro_status,
                         "error": macro_error,
                         "updated_at": datetime.datetime.now(),
-                        "summary": self._derive_macro_regime(macro_values).get("summary", "") if macro_values else "",
+                        "summary": self._derive_macro_regime(macro_values).get(
+                            "summary", ""
+                        )
+                        if macro_values
+                        else "",
                     },
                 },
             }
@@ -267,7 +388,9 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                         items = news_provider.search(query, display=10, sort="date")
                     except Exception:
                         items = []
-                    current_status = str(getattr(news_provider, "last_status", "idle") or "idle")
+                    current_status = str(
+                        getattr(news_provider, "last_status", "idle") or "idle"
+                    )
                     current_error = str(getattr(news_provider, "last_error", "") or "")
                     query_statuses.append(current_status)
                     if current_error:
@@ -278,7 +401,9 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                             continue
                         item_id = self._build_market_intel_event_id(
                             self._clean_text(item.get("title")),
-                            self._normalize_link(item.get("origin_link") or item.get("link")),
+                            self._normalize_link(
+                                item.get("origin_link") or item.get("link")
+                            ),
                             self._published_bucket(item.get("published_at")),
                         )
                         if item_id in seen_ids:
@@ -289,31 +414,45 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 row["news"] = merged_news
                 row["source_meta"]["news"] = {
                     "status": news_status,
-                    "error": " | ".join(dict.fromkeys([error for error in query_errors if error])),
+                    "error": " | ".join(
+                        dict.fromkeys([error for error in query_errors if error])
+                    ),
                     "updated_at": datetime.datetime.now(),
                     "count": len(merged_news),
                 }
             elif not news_enabled:
                 _track_source("news", "disabled", "provider_disabled")
             else:
-                _track_source("news", "disabled_by_missing_credentials", "api_key_missing")
+                _track_source(
+                    "news", "disabled_by_missing_credentials", "api_key_missing"
+                )
             if dart_available:
                 try:
-                    disclosures = dart_provider.get_recent_disclosures(code, start_date=start_date, end_date=end_date, page_count=10)
+                    disclosures = dart_provider.get_recent_disclosures(
+                        code, start_date=start_date, end_date=end_date, page_count=10
+                    )
                 except Exception:
                     disclosures = []
-                cursor = str(getattr(self, "_market_dart_cursor_by_code", {}).get(code, "") or "")
+                cursor = str(
+                    getattr(self, "_market_dart_cursor_by_code", {}).get(code, "") or ""
+                )
                 fresh_disclosures = []
                 max_cursor = cursor
                 for item in disclosures:
-                    receipt_no = str(item.get("rcept_no", "") or item.get("rcp_no", "") or "")
+                    receipt_no = str(
+                        item.get("rcept_no", "") or item.get("rcp_no", "") or ""
+                    )
                     if receipt_no and receipt_no > max_cursor:
                         max_cursor = receipt_no
                     if not cursor or (receipt_no and receipt_no > cursor):
                         fresh_disclosures.append(item)
-                row["dart"] = fresh_disclosures if fresh_disclosures else disclosures[:3]
+                row["dart"] = (
+                    fresh_disclosures if fresh_disclosures else disclosures[:3]
+                )
                 getattr(self, "_market_dart_cursor_by_code", {})[code] = max_cursor
-                dart_status = str(getattr(dart_provider, "last_status", "idle") or "idle")
+                dart_status = str(
+                    getattr(dart_provider, "last_status", "idle") or "idle"
+                )
                 dart_error = str(getattr(dart_provider, "last_error", "") or "")
                 _track_source("dart", dart_status, dart_error)
                 row["source_meta"]["dart"] = {
@@ -325,14 +464,20 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
             elif not dart_enabled:
                 _track_source("dart", "disabled", "provider_disabled")
             else:
-                _track_source("dart", "disabled_by_missing_credentials", "api_key_missing")
+                _track_source(
+                    "dart", "disabled_by_missing_credentials", "api_key_missing"
+                )
             if datalab_available:
-                ratios = trend_provider.latest_ratios(self._news_queries_for_symbol(info, code))
+                ratios = trend_provider.latest_ratios(
+                    self._news_queries_for_symbol(info, code)
+                )
                 best_ratio = 0.0
                 for query in self._news_queries_for_symbol(info, code):
                     best_ratio = max(best_ratio, float(ratios.get(query, 0.0) or 0.0))
                 row["trend_ratio"] = best_ratio
-                datalab_status = str(getattr(trend_provider, "last_status", "idle") or "idle")
+                datalab_status = str(
+                    getattr(trend_provider, "last_status", "idle") or "idle"
+                )
                 datalab_error = str(getattr(trend_provider, "last_error", "") or "")
                 _track_source("datalab", datalab_status, datalab_error)
                 row["source_meta"]["datalab"] = {
@@ -344,30 +489,58 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
             elif not datalab_enabled:
                 _track_source("datalab", "disabled", "provider_disabled")
             else:
-                _track_source("datalab", "disabled_by_missing_credentials", "api_key_missing")
+                _track_source(
+                    "datalab", "disabled_by_missing_credentials", "api_key_missing"
+                )
             payload["codes"][code] = row
         for source_name, bucket in source_buckets.items():
             status = self._combine_source_statuses(list(bucket.get("statuses", [])))
-            errors = [str(error) for error in bucket.get("errors", []) if str(error or "").strip()]
+            errors = [
+                str(error)
+                for error in bucket.get("errors", [])
+                if str(error or "").strip()
+            ]
             payload["source_statuses"][source_name] = {
                 "status": status,
                 "error": " | ".join(dict.fromkeys(errors)),
             }
         return payload
-    def _on_market_intelligence_result(self, requested_codes: List[str], payload: Dict[str, Any]):
-        source_statuses = payload.get("source_statuses", {}) if isinstance(payload, dict) else {}
+
+    def _on_market_intelligence_result(
+        self, requested_codes: List[str], payload: Dict[str, Any]
+    ):
+        source_statuses = (
+            payload.get("source_statuses", {}) if isinstance(payload, dict) else {}
+        )
         for source, row in source_statuses.items():
             if isinstance(row, dict):
-                self._set_market_intel_source_status(source, str(row.get("status", "idle") or "idle"), str(row.get("error", "") or ""))
-        macro_values = payload.get("macro_values", {}) if isinstance(payload, dict) else {}
+                self._set_market_intel_source_status(
+                    source,
+                    str(row.get("status", "idle") or "idle"),
+                    str(row.get("error", "") or ""),
+                )
+        macro_values = (
+            payload.get("macro_values", {}) if isinstance(payload, dict) else {}
+        )
         for code in requested_codes:
-            row = payload.get("codes", {}).get(code, {}) if isinstance(payload, dict) else {}
-            self._apply_market_intelligence_payload(code, row if isinstance(row, dict) else {}, macro_values if isinstance(macro_values, dict) else {})
+            row = (
+                payload.get("codes", {}).get(code, {})
+                if isinstance(payload, dict)
+                else {}
+            )
+            self._apply_market_intelligence_payload(
+                code,
+                row if isinstance(row, dict) else {},
+                macro_values if isinstance(macro_values, dict) else {},
+            )
         self._refresh_candidate_universe_state()
         self._update_global_market_intel_state()
         self._last_market_intel_fetch_ts = time.time()
         self._refresh_market_intelligence_table()
-    def _on_market_intelligence_error(self, requested_codes: List[str], error: Exception):
+
+    def _on_market_intelligence_error(
+        self, requested_codes: List[str], error: Exception
+    ):
         for code in requested_codes:
             info = self._market_intel_entity(code)
             if not info:
@@ -382,12 +555,17 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
         for source in ("news", "dart", "datalab", "macro"):
             self._set_market_intel_source_status(source, "error", error=str(error))
         self._refresh_market_intelligence_table()
-    def _request_market_intelligence_refresh_batch(self, codes: List[str], reason: str = "periodic", force: bool = False) -> bool:
+
+    def _request_market_intelligence_refresh_batch(
+        self, codes: List[str], reason: str = "periodic", force: bool = False
+    ) -> bool:
         if not codes:
             return False
         if not self._market_intelligence_enabled():
             for source in ("news", "dart", "datalab", "macro"):
-                self._set_market_intel_source_status(source, "disabled", error="market_intelligence_disabled")
+                self._set_market_intel_source_status(
+                    source, "disabled", error="market_intelligence_disabled"
+                )
             for code in codes:
                 info = self._market_intel_entity(code)
                 if not info:
@@ -400,13 +578,28 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
                 info["external_error"] = "market_intelligence_disabled"
             return False
         now_ts = time.time()
-        min_interval = max(1, int(self._market_intelligence_config().get("refresh_sec", {}).get("news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60))))
-        if not force and (now_ts - float(getattr(self, "_last_market_intel_fetch_ts", 0.0))) < min_interval:
+        min_interval = max(
+            1,
+            int(
+                self._market_intelligence_config()
+                .get("refresh_sec", {})
+                .get("news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60))
+            ),
+        )
+        if (
+            not force
+            and (now_ts - float(getattr(self, "_last_market_intel_fetch_ts", 0.0)))
+            < min_interval
+        ):
             return False
         selected = [code for code in codes if code in self.universe]
         active_candidates = getattr(self, "_active_market_candidates", {})
         if isinstance(active_candidates, dict):
-            selected.extend(code for code in codes if code in active_candidates and code not in selected)
+            selected.extend(
+                code
+                for code in codes
+                if code in active_candidates and code not in selected
+            )
         if not selected:
             return False
         now_dt = datetime.datetime.now()
@@ -426,8 +619,16 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
             from app.support.worker import Worker
 
             worker = Worker(self._fetch_market_intelligence_worker, selected)
-            worker.signals.result.connect(lambda payload, requested=selected: self._on_market_intelligence_result(requested, payload))
-            worker.signals.error.connect(lambda error, requested=selected: self._on_market_intelligence_error(requested, error))
+            worker.signals.result.connect(
+                lambda payload, requested=selected: self._on_market_intelligence_result(
+                    requested, payload
+                )
+            )
+            worker.signals.error.connect(
+                lambda error, requested=selected: self._on_market_intelligence_error(
+                    requested, error
+                )
+            )
             self.threadpool.start(worker)
         else:
             try:
@@ -436,6 +637,7 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
             except Exception as exc:
                 self._on_market_intelligence_error(selected, exc)
         return True
+
     def _start_market_intelligence_loop(self, codes: List[str]):
         if not hasattr(self, "_market_intel_timer") or self._market_intel_timer is None:
             try:
@@ -443,31 +645,55 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
             except TypeError:
                 self._market_intel_timer = QTimer()
             self._market_intel_timer.timeout.connect(self._on_market_intelligence_timer)
-        refresh_sec = int(self._market_intelligence_config().get("refresh_sec", {}).get("news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60)))
+        refresh_sec = int(
+            self._market_intelligence_config()
+            .get("refresh_sec", {})
+            .get("news", getattr(Config, "MARKET_INTEL_REFRESH_SEC", 60))
+        )
         self._market_intel_timer.setInterval(max(1, refresh_sec) * 1000)
         self._refresh_candidate_universe_state()
-        combined_codes = list(dict.fromkeys(list(codes) + list(getattr(self, "_active_market_candidates", {}).keys())))
+        combined_codes = list(
+            dict.fromkeys(
+                list(codes)
+                + list(getattr(self, "_active_market_candidates", {}).keys())
+            )
+        )
         if combined_codes:
-            self._request_market_intelligence_refresh_batch(combined_codes, reason="startup", force=True)
+            self._request_market_intelligence_refresh_batch(
+                combined_codes, reason="startup", force=True
+            )
             if not self._market_intel_timer.isActive():
                 self._market_intel_timer.start()
+
     def _stop_market_intelligence_loop(self):
         timer = getattr(self, "_market_intel_timer", None)
         if timer is not None:
             timer.stop()
+
     def _on_market_intelligence_timer(self):
         if not getattr(self, "is_running", False):
             return
         self._refresh_candidate_universe_state()
         combined_codes = list(
-            dict.fromkeys(list(self.universe.keys()) + list(getattr(self, "_active_market_candidates", {}).keys()))
+            dict.fromkeys(
+                list(self.universe.keys())
+                + list(getattr(self, "_active_market_candidates", {}).keys())
+            )
         )
-        self._request_market_intelligence_refresh_batch(combined_codes, reason="periodic", force=True)
+        self._request_market_intelligence_refresh_batch(
+            combined_codes, reason="periodic", force=True
+        )
         self._maybe_publish_market_briefing(force=False)
+
     def _maybe_publish_market_briefing(self, force: bool = False):
         if not getattr(self, "is_running", False):
             return
-        briefing_time = str(self._market_intelligence_config().get("briefing_time", getattr(Config, "MARKET_INTEL_BRIEFING_TIME", "08:50")) or "08:50")
+        briefing_time = str(
+            self._market_intelligence_config().get(
+                "briefing_time", getattr(Config, "MARKET_INTEL_BRIEFING_TIME", "08:50")
+            )
+            or "08:50"
+        )
         now = datetime.datetime.now()
         today = now.date().isoformat()
         if not force and now.strftime("%H:%M") != briefing_time:
@@ -477,13 +703,21 @@ class MarketIntelRuntimeMixin(TraderMixinBase):
         lines = []
         for code, info in self._market_intel_entities().items():
             state = self._ensure_market_intel_state(info)
-            if int(info.get("held", 0) or 0) > 0 or float(state.get("news_score", 0.0) or 0.0) != 0.0:
-                lines.append(state.get("briefing_summary") or self._build_briefing_summary(code, info))
+            if (
+                int(info.get("held", 0) or 0) > 0
+                or float(state.get("news_score", 0.0) or 0.0) != 0.0
+            ):
+                lines.append(
+                    state.get("briefing_summary")
+                    or self._build_briefing_summary(code, info)
+                )
         if not lines:
             return
         message = "[장전 브리핑]\n" + "\n".join(lines[:10])
         self._market_briefing_sent_day = today
         if self._market_intelligence_config().get("alert_channels", {}).get("ui", True):
             self.log(message)
-        if self._market_intelligence_config().get("alert_channels", {}).get("telegram", True) and getattr(self, "telegram", None):
+        if self._market_intelligence_config().get("alert_channels", {}).get(
+            "telegram", True
+        ) and getattr(self, "telegram", None):
             self.telegram.send(message)

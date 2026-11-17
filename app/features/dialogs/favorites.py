@@ -19,20 +19,25 @@ class FavoritesMixin(TraderMixinBase):
         fav_file = Path(Config.DATA_DIR) / "favorites.json"
         try:
             if fav_file.exists():
-                with open(fav_file, 'r', encoding='utf-8') as f:
+                with open(fav_file, "r", encoding="utf-8") as f:
                     self.favorites = json.load(f)
                 for name in self.favorites.keys():
                     self.combo_favorites.addItem(f"{name}")
             else:
                 self.favorites = {}
         except Exception as exc:
-            self.logger.warning(f"즐겨찾기 파일 로드 실패 (기존 데이터 백업 시도): {exc}")
+            self.logger.warning(
+                f"즐겨찾기 파일 로드 실패 (기존 데이터 백업 시도): {exc}"
+            )
             try:
                 if fav_file.exists():
                     bak_file = fav_file.with_suffix(".json.bak")
                     import shutil
+
                     shutil.copy2(fav_file, bak_file)
-                    self.logger.info(f"손상 가능성이 있는 즐겨찾기 백업 저장: {bak_file}")
+                    self.logger.info(
+                        f"손상 가능성이 있는 즐겨찾기 백업 저장: {bak_file}"
+                    )
             except Exception:
                 pass
             self.favorites = {}
@@ -51,22 +56,27 @@ class FavoritesMixin(TraderMixinBase):
         """현재 종목을 즐겨찾기에 저장"""
         codes = [c.strip() for c in self.input_codes.text().split(",") if c.strip()]
         if not codes:
-            self._notice_or_box("warning", "경고", "저장할 종목이 없습니다.", QMessageBox.warning)
+            self._notice_or_box(
+                "warning", "경고", "저장할 종목이 없습니다.", QMessageBox.warning
+            )
             return
-        
+
         name, ok = QInputDialog.getText(self, "즐겨찾기 저장", "그룹 이름:")
         if ok and name:
             self.favorites[name] = codes
             # 콤보박스에 추가 (중복 확인)
-            existing = [self.combo_favorites.itemText(i) for i in range(self.combo_favorites.count())]
+            existing = [
+                self.combo_favorites.itemText(i)
+                for i in range(self.combo_favorites.count())
+            ]
             if f"{name}" not in existing:
                 self.combo_favorites.addItem(f"{name}")
-            
+
             # 파일 저장
             try:
                 fav_file = Path(Config.DATA_DIR) / "favorites.json"
                 fav_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(fav_file, 'w', encoding='utf-8') as f:
+                with open(fav_file, "w", encoding="utf-8") as f:
                     json.dump(self.favorites, f, ensure_ascii=False, indent=2)
                 self.log(f"⭐ 즐겨찾기 저장: {name} ({len(codes)}개)")
             except Exception as e:
@@ -81,7 +91,7 @@ class FavoritesMixin(TraderMixinBase):
         """드롭 이벤트 - 텍스트에서 종목코드 추출"""
         text = event.mimeData().text()
         # 숫자 6자리 패턴 추출 (종목코드)
-        codes = re.findall(r'\b\d{6}\b', text)
+        codes = re.findall(r"\b\d{6}\b", text)
         if codes:
             current = self.input_codes.text()
             if current:

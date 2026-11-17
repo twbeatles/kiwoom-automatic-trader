@@ -27,7 +27,9 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
             return None
 
     @classmethod
-    def load_intelligence_events_jsonl(cls, path: str | Path) -> List[BacktestIntelligenceEvent]:
+    def load_intelligence_events_jsonl(
+        cls, path: str | Path
+    ) -> List[BacktestIntelligenceEvent]:
         records: List[BacktestIntelligenceEvent] = []
         file_path = Path(path)
         if not file_path.exists():
@@ -73,7 +75,16 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
                         raw_ref=raw_ref,
                     )
                 )
-        return sorted(records, key=lambda event: (event.ts, event.scope, event.symbol, event.event_type, event.event_id))
+        return sorted(
+            records,
+            key=lambda event: (
+                event.ts,
+                event.scope,
+                event.symbol,
+                event.event_type,
+                event.event_id,
+            ),
+        )
 
     @staticmethod
     def _payload_from_event(event: BacktestIntelligenceEvent) -> Dict[str, Any]:
@@ -90,27 +101,52 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
                 return {}
         return {}
 
-    def _merge_scope_state(self, state: Dict[str, Any], event: BacktestIntelligenceEvent, payload: Dict[str, Any]):
+    def _merge_scope_state(
+        self,
+        state: Dict[str, Any],
+        event: BacktestIntelligenceEvent,
+        payload: Dict[str, Any],
+    ):
         state["intel_status"] = "fresh"
         state["status"] = "fresh"
         state["last_event_ts"] = event.ts
         state["source"] = str(event.source or state.get("source", ""))
-        state["event_type"] = str(event.event_type or payload.get("event_type", state.get("event_type", "")) or "")
+        state["event_type"] = str(
+            event.event_type
+            or payload.get("event_type", state.get("event_type", ""))
+            or ""
+        )
         state["event_severity"] = str(
-            payload.get("event_severity", "critical" if event.blocking else ("high" if float(event.score or 0.0) <= -60 else "low"))
+            payload.get(
+                "event_severity",
+                "critical"
+                if event.blocking
+                else ("high" if float(event.score or 0.0) <= -60 else "low"),
+            )
             or "low"
         )
         if payload:
             state.update(payload)
         if event.event_id or payload.get("event_id"):
-            state["last_event_id"] = str(event.event_id or payload.get("event_id") or "")
+            state["last_event_id"] = str(
+                event.event_id or payload.get("event_id") or ""
+            )
 
         if event.source == "news":
             state["news_score"] = float(payload.get("news_score", event.score))
             if event.event_type == "headline_velocity":
-                state["headline_velocity"] = int(payload.get("headline_velocity", max(1, int(abs(event.score) or len(event.tags)))))
+                state["headline_velocity"] = int(
+                    payload.get(
+                        "headline_velocity",
+                        max(1, int(abs(event.score) or len(event.tags))),
+                    )
+                )
         elif event.source == "dart":
-            state["dart_risk_level"] = "high" if event.blocking or float(event.score or 0.0) <= -60 else str(payload.get("dart_risk_level", "normal"))
+            state["dart_risk_level"] = (
+                "high"
+                if event.blocking or float(event.score or 0.0) <= -60
+                else str(payload.get("dart_risk_level", "normal"))
+            )
         elif event.source == "macro":
             if "macro_regime" in payload:
                 state["macro_regime"] = str(payload.get("macro_regime", "neutral"))
@@ -128,21 +164,35 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
         if "action_policy" in payload:
             current = str(state.get("action_policy", "allow") or "allow")
             incoming = str(payload.get("action_policy", "allow") or "allow")
-            state["action_policy"] = incoming if self._policy_rank(incoming) >= self._policy_rank(current) else current
-        elif event.blocking and self._policy_rank(str(state.get("action_policy", "allow") or "allow")) < self._policy_rank("block_entry"):
+            state["action_policy"] = (
+                incoming
+                if self._policy_rank(incoming) >= self._policy_rank(current)
+                else current
+            )
+        elif event.blocking and self._policy_rank(
+            str(state.get("action_policy", "allow") or "allow")
+        ) < self._policy_rank("block_entry"):
             state["action_policy"] = "block_entry"
 
         if "exit_policy" in payload:
             current_exit = str(state.get("exit_policy", "none") or "none")
             incoming_exit = str(payload.get("exit_policy", "none") or "none")
-            if self._exit_policy_rank(incoming_exit) >= self._exit_policy_rank(current_exit):
+            if self._exit_policy_rank(incoming_exit) >= self._exit_policy_rank(
+                current_exit
+            ):
                 state["exit_policy"] = incoming_exit
-        elif str(state.get("action_policy", "allow") or "allow") in {"reduce_size", "tighten_exit", "force_exit"}:
+        elif str(state.get("action_policy", "allow") or "allow") in {
+            "reduce_size",
+            "tighten_exit",
+            "force_exit",
+        }:
             state["exit_policy"] = str(state.get("action_policy", "allow") or "allow")
 
         if "portfolio_budget_scale" in payload:
             current_scale = float(state.get("portfolio_budget_scale", 1.0) or 1.0)
-            incoming_scale = max(0.1, float(payload.get("portfolio_budget_scale", 1.0) or 1.0))
+            incoming_scale = max(
+                0.1, float(payload.get("portfolio_budget_scale", 1.0) or 1.0)
+            )
             state["portfolio_budget_scale"] = min(current_scale, incoming_scale)
 
     def _apply_intelligence_event(
@@ -156,15 +206,29 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
         if scope == "market":
             state = scoped_intelligence_state.setdefault("market", {})
         elif scope == "sector":
-            sector = str(payload.get("sector", "") or payload.get("scope_key", "") or event.symbol or "")
+            sector = str(
+                payload.get("sector", "")
+                or payload.get("scope_key", "")
+                or event.symbol
+                or ""
+            )
             if not sector:
                 return
-            state = scoped_intelligence_state.setdefault("sector", {}).setdefault(sector, {})
+            state = scoped_intelligence_state.setdefault("sector", {}).setdefault(
+                sector, {}
+            )
         elif scope == "theme":
-            theme = str(payload.get("theme", "") or payload.get("scope_key", "") or event.symbol or "")
+            theme = str(
+                payload.get("theme", "")
+                or payload.get("scope_key", "")
+                or event.symbol
+                or ""
+            )
             if not theme:
                 return
-            state = scoped_intelligence_state.setdefault("theme", {}).setdefault(theme, {})
+            state = scoped_intelligence_state.setdefault("theme", {}).setdefault(
+                theme, {}
+            )
         else:
             symbol = str(event.symbol or payload.get("symbol", "") or "")
             if not symbol:
@@ -196,7 +260,11 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
         if isinstance(themes_raw, str) and themes_raw.strip():
             theme_names = [themes_raw.strip()]
         elif isinstance(themes_raw, list):
-            theme_names = [str(theme or "").strip() for theme in themes_raw if str(theme or "").strip()]
+            theme_names = [
+                str(theme or "").strip()
+                for theme in themes_raw
+                if str(theme or "").strip()
+            ]
         for theme in theme_names:
             theme_state = scoped_intelligence_state.get("theme", {}).get(theme, {})
             if isinstance(theme_state, dict) and theme_state:
@@ -233,7 +301,9 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
         for layer in layers:
             if not isinstance(layer, dict):
                 continue
-            status = str(layer.get("status", layer.get("intel_status", "idle")) or "idle")
+            status = str(
+                layer.get("status", layer.get("intel_status", "idle")) or "idle"
+            )
             if status in {"error", "partial", "stale"}:
                 combined["status"] = status
                 combined["intel_status"] = status
@@ -242,8 +312,13 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
                 combined["intel_status"] = status
 
             cumulative_news_score += float(layer.get("news_score", 0.0) or 0.0)
-            combined["theme_score"] = max(combined["theme_score"], float(layer.get("theme_score", 0.0) or 0.0))
-            combined["headline_velocity"] = max(combined["headline_velocity"], int(layer.get("headline_velocity", 0) or 0))
+            combined["theme_score"] = max(
+                combined["theme_score"], float(layer.get("theme_score", 0.0) or 0.0)
+            )
+            combined["headline_velocity"] = max(
+                combined["headline_velocity"],
+                int(layer.get("headline_velocity", 0) or 0),
+            )
             if str(layer.get("dart_risk_level", "normal") or "normal") == "high":
                 combined["dart_risk_level"] = "high"
             macro_regime = str(layer.get("macro_regime", "neutral") or "neutral")
@@ -275,11 +350,20 @@ class BacktestIntelEventsMixin(BacktestGuardsMixin):
             if source_health_text:
                 source_health.append(source_health_text)
             layer_ts = layer.get("last_event_ts")
-            if isinstance(layer_ts, datetime) and (latest_ts is None or layer_ts >= latest_ts):
+            if isinstance(layer_ts, datetime) and (
+                latest_ts is None or layer_ts >= latest_ts
+            ):
                 latest_ts = layer_ts
-                combined["last_event_id"] = str(layer.get("last_event_id", "") or combined.get("last_event_id", ""))
-                combined["event_type"] = str(layer.get("event_type", "") or combined.get("event_type", ""))
-                combined["event_severity"] = str(layer.get("event_severity", "low") or combined.get("event_severity", "low"))
+                combined["last_event_id"] = str(
+                    layer.get("last_event_id", "") or combined.get("last_event_id", "")
+                )
+                combined["event_type"] = str(
+                    layer.get("event_type", "") or combined.get("event_type", "")
+                )
+                combined["event_severity"] = str(
+                    layer.get("event_severity", "low")
+                    or combined.get("event_severity", "low")
+                )
 
         combined["news_score"] = max(-100.0, min(100.0, cumulative_news_score))
         combined["size_multiplier"] = max(0.1, min(2.0, combined_size_multiplier))

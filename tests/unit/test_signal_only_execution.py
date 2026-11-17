@@ -63,9 +63,12 @@ class _Harness(ExecutionEngineMixin):
 class TestSignalOnlyExecution(unittest.TestCase):
     def test_signal_only_buy_never_calls_broker_or_reserves_cash(self):
         trader = _Harness()
-        with tempfile.TemporaryDirectory() as tmpdir, patch(
-            "app.features.execution.mode_lifecycle.Config.ORDER_LIFECYCLE_EVENTS_FILE",
-            str(Path(tmpdir) / "orders.jsonl"),
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch(
+                "app.features.execution.mode_lifecycle.Config.ORDER_LIFECYCLE_EVENTS_FILE",
+                str(Path(tmpdir) / "orders.jsonl"),
+            ),
         ):
             trader._execute_buy("005930", quantity=2, price=1000)
 
@@ -73,20 +76,27 @@ class TestSignalOnlyExecution(unittest.TestCase):
             self.assertEqual(trader.threadpool.started, 0)
             self.assertEqual(trader._reserved_cash_by_code, {})
             self.assertEqual(trader.virtual_deposit, trader.deposit)
-            self.assertTrue(any("[signal-only] BUY skipped" in msg for msg in trader.logs))
+            self.assertTrue(
+                any("[signal-only] BUY skipped" in msg for msg in trader.logs)
+            )
 
     def test_signal_only_sell_never_calls_broker(self):
         trader = _Harness()
-        with tempfile.TemporaryDirectory() as tmpdir, patch(
-            "app.features.execution.mode_lifecycle.Config.ORDER_LIFECYCLE_EVENTS_FILE",
-            str(Path(tmpdir) / "orders.jsonl"),
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch(
+                "app.features.execution.mode_lifecycle.Config.ORDER_LIFECYCLE_EVENTS_FILE",
+                str(Path(tmpdir) / "orders.jsonl"),
+            ),
         ):
             trader._execute_sell("005930", quantity=1, price=1000, reason="TEST")
 
             self.assertEqual(trader.rest_client.calls, [])
             self.assertEqual(trader.threadpool.started, 0)
             self.assertEqual(trader.universe["005930"]["status"], "watch")
-            self.assertTrue(any("[signal-only] SELL skipped" in msg for msg in trader.logs))
+            self.assertTrue(
+                any("[signal-only] SELL skipped" in msg for msg in trader.logs)
+            )
 
 
 if __name__ == "__main__":

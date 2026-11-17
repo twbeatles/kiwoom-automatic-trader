@@ -1,4 +1,5 @@
 """Issue #3: WebSocket owns condition search; REST entry points stay compatible."""
+
 import logging
 import unittest
 from unittest.mock import MagicMock
@@ -21,37 +22,68 @@ class TestConditionSearchOwnership(unittest.TestCase):
         self.mock_request_once.return_value = {
             "data": [{"seq": "1", "name": "급등주"}, ["2", "거래량"]],
         }
-        self.assertEqual(self.ws.get_condition_list(), [
-            {"index": 1, "name": "급등주"}, {"index": 2, "name": "거래량"},
-        ])
+        self.assertEqual(
+            self.ws.get_condition_list(),
+            [
+                {"index": 1, "name": "급등주"},
+                {"index": 2, "name": "거래량"},
+            ],
+        )
         self.mock_request_once.assert_called_once_with({"trnm": "CNSRLST"})
 
     def test_ws_normal_search_payload_and_stock_normalization(self):
-        self.mock_request_once.return_value = {"data": [{
-            "9001": "A005930", "302": "삼성전자", "10": "-70,000",
-            "12": "1.2%", "13": "1,000",
-        }]}
-        self.assertEqual(self.ws.search_by_condition(4, "unused"), [{
-            "code": "005930", "name": "삼성전자", "current_price": 70000,
-            "change_rate": 1.2, "volume": 1000,
-        }])
-        self.mock_request_once.assert_called_once_with({
-            "trnm": "CNSRREQ", "seq": "4", "search_type": "0", "stex_tp": "K",
-        })
+        self.mock_request_once.return_value = {
+            "data": [
+                {
+                    "9001": "A005930",
+                    "302": "삼성전자",
+                    "10": "-70,000",
+                    "12": "1.2%",
+                    "13": "1,000",
+                }
+            ]
+        }
+        self.assertEqual(
+            self.ws.search_by_condition(4, "unused"),
+            [
+                {
+                    "code": "005930",
+                    "name": "삼성전자",
+                    "current_price": 70000,
+                    "change_rate": 1.2,
+                    "volume": 1000,
+                }
+            ],
+        )
+        self.mock_request_once.assert_called_once_with(
+            {
+                "trnm": "CNSRREQ",
+                "seq": "4",
+                "search_type": "0",
+                "stex_tp": "K",
+            }
+        )
 
     def test_ws_realtime_snapshot_uses_same_parser(self):
-        self.mock_request_once.return_value = {"output": [
-            ["a005930", "삼성전자", "-70,000", "", "", "-1.2", "1000"],
-            {"code": "", "name": "invalid"},
-        ]}
+        self.mock_request_once.return_value = {
+            "output": [
+                ["a005930", "삼성전자", "-70,000", "", "", "-1.2", "1000"],
+                {"code": "", "name": "invalid"},
+            ]
+        }
         rows = self.ws.request_condition_realtime(4)
         self.assertEqual(rows[0]["code"], "005930")
         self.assertEqual(rows[0]["current_price"], 70000)
         self.assertEqual(rows[0]["change_rate"], -1.2)
         self.assertEqual(len(rows), 1)
-        self.mock_request_once.assert_called_once_with({
-            "trnm": "CNSRREQ", "seq": "4", "search_type": "1", "stex_tp": "K",
-        })
+        self.mock_request_once.assert_called_once_with(
+            {
+                "trnm": "CNSRREQ",
+                "seq": "4",
+                "search_type": "1",
+                "stex_tp": "K",
+            }
+        )
 
     def test_ws_stop_payload(self):
         self.mock_request_once.return_value = {"trnm": "CNSRCLR", "return_code": 0}

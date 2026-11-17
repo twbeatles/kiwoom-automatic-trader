@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from unittest.mock import patch
 
 from app.mixins.order_sync import OrderSyncMixin
@@ -40,11 +40,15 @@ class _Harness(OrderSyncMixin):
         self._last_exec_event = {}
         self._dirty_codes = set()
         self.logger = _DummyLogger()
-        self.strategy = type("S", (), {
-            "update_market_investment": lambda *a, **k: None,
-            "update_sector_investment": lambda *a, **k: None,
-            "update_consecutive_results": lambda *a, **k: None,
-        })()
+        self.strategy = type(
+            "S",
+            (),
+            {
+                "update_market_investment": lambda *a, **k: None,
+                "update_sector_investment": lambda *a, **k: None,
+                "update_consecutive_results": lambda *a, **k: None,
+            },
+        )()
         self.sound = None
         self.telegram = None
         self.sig_update_table = _DummySignal()
@@ -58,7 +62,10 @@ class TestPositionSyncDebounce(unittest.TestCase):
         trader = _Harness()
         callbacks = []
 
-        with patch("app.features.order_sync.position_sync.QTimer.singleShot", side_effect=lambda _ms, cb: callbacks.append(cb)):
+        with patch(
+            "app.features.order_sync.position_sync.QTimer.singleShot",
+            side_effect=lambda _ms, cb: callbacks.append(cb),
+        ):
             trader._sync_position_from_account("005930")
             trader._sync_position_from_account("000660")
 

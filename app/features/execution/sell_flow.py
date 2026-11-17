@@ -10,7 +10,11 @@ class ExecutionSellFlowMixin(TraderMixinBase):
     def _execute_sell(self, code: str, quantity: int, price: int, reason: str):
         """Submit sell order asynchronously."""
         tracked_getter = getattr(self, "_get_tracked_position_info", None)
-        raw_info = tracked_getter(code) if callable(tracked_getter) else self.universe.get(code, {})
+        raw_info = (
+            tracked_getter(code)
+            if callable(tracked_getter)
+            else self.universe.get(code, {})
+        )
         info = raw_info if isinstance(raw_info, dict) else {}
         name = info.get("name", code)
         buy_price = info.get("buy_price", 0)
@@ -46,18 +50,31 @@ class ExecutionSellFlowMixin(TraderMixinBase):
         info["status"] = "selling"
         diag_touch = getattr(self, "_diag_touch", None)
         if callable(diag_touch):
-            diag_touch(code, pending_side="sell", pending_reason=reason, sync_status="selling")
+            diag_touch(
+                code, pending_side="sell", pending_reason=reason, sync_status="selling"
+            )
         self._dirty_codes.add(code)
 
         cfg = getattr(self, "config", None)
-        policy = str(getattr(cfg, "execution_policy", getattr(Config, "DEFAULT_EXECUTION_POLICY", "market")))
-        sell_fn, args = ExecutionPolicy.select_sell(self.rest_client, policy, self.current_account, code, quantity, price)
+        policy = str(
+            getattr(
+                cfg,
+                "execution_policy",
+                getattr(Config, "DEFAULT_EXECUTION_POLICY", "market"),
+            )
+        )
+        sell_fn, args = ExecutionPolicy.select_sell(
+            self.rest_client, policy, self.current_account, code, quantity, price
+        )
         worker = Worker(sell_fn, *args)
         worker.signals.result.connect(
-            lambda res: self._on_sell_result(res, code, name, quantity, price, buy_price, reason)
+            lambda res: self._on_sell_result(
+                res, code, name, quantity, price, buy_price, reason
+            )
         )
         worker.signals.error.connect(lambda e: self._on_sell_error(e, code, name))
         self.threadpool.start(worker)
+
     def _on_sell_error(self, e, code, name):
         """Handle sell error."""
         self.log(f"SELL error [{name}]: {e}")
@@ -78,6 +95,7 @@ class ExecutionSellFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
+
     def _on_sell_result(self, result, code, name, quantity, price, buy_price, reason):
         """Handle sell result in main thread."""
         external_positions = getattr(self, "external_positions", {})
@@ -115,7 +133,10 @@ class ExecutionSellFlowMixin(TraderMixinBase):
         self._dirty_codes.add(code)
         if not hasattr(self, "_ui_flush_timer"):
             self.sig_update_table.emit()
-    def _note_liquidation_settlement(self, code: str, ok: bool, detail: str = "") -> None:
+
+    def _note_liquidation_settlement(
+        self, code: str, ok: bool, detail: str = ""
+    ) -> None:
         """긴급청산 배치 결과 집계. 전건 결착 시 최종 보고 후 배치 해제."""
         batch = getattr(self, "_liquidation_batch", None)
         if not isinstance(batch, dict) or not batch or code not in batch:
@@ -129,12 +150,17 @@ class ExecutionSellFlowMixin(TraderMixinBase):
         if not all(isinstance(v, dict) and v.get("settled") for v in batch.values()):
             return
         total = len(batch)
-        succeeded = sum(1 for v in batch.values() if isinstance(v, dict) and v.get("ok"))
-        failed = [(c, v) for c, v in batch.items() if isinstance(v, dict) and not v.get("ok")]
+        succeeded = sum(
+            1 for v in batch.values() if isinstance(v, dict) and v.get("ok")
+        )
+        failed = [
+            (c, v) for c, v in batch.items() if isinstance(v, dict) and not v.get("ok")
+        ]
         summary = f"긴급 청산 결과: 제출 성공 {succeeded}/{total}"
         if failed:
             summary += " / 실패: " + ", ".join(
-                f"{v.get('name', c)}({v.get('detail', '') or '원인 미상'})" for c, v in failed
+                f"{v.get('name', c)}({v.get('detail', '') or '원인 미상'})"
+                for c, v in failed
             )
         if hasattr(self, "log"):
             self.log(summary)

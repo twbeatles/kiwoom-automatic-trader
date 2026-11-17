@@ -1,4 +1,4 @@
-﻿"""Portfolio allocation utilities for multi-strategy simulation."""
+"""Portfolio allocation utilities for multi-strategy simulation."""
 
 from dataclasses import dataclass
 from typing import Dict, Iterable, List
@@ -26,7 +26,7 @@ class RiskBudgetAllocator:
         for item in rows:
             vol = max(item.volatility, 1e-8)
             score = max(0.0, item.signal_strength)
-            raw[item.strategy_id] = (score / vol)
+            raw[item.strategy_id] = score / vol
 
         total = sum(raw.values())
         if total <= 0:

@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import unittest
 from unittest.mock import MagicMock
 

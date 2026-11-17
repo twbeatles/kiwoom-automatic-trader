@@ -14,7 +14,9 @@ from data.providers import AIProvider
 
 
 class MarketIntelScoringPolicyMixin(TraderMixinBase):
-    def _score_news_items(self, info: Dict[str, Any], items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _score_news_items(
+        self, info: Dict[str, Any], items: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         seen = set()
         unique_items: List[Dict[str, Any]] = []
         positive_hits = 0
@@ -29,7 +31,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                     code = candidate_code
                     break
         min_relevance = float(
-            self._market_intelligence_config().get("scoring", {}).get("min_relevance_score", 0.4)
+            self._market_intelligence_config()
+            .get("scoring", {})
+            .get("min_relevance_score", 0.4)
         )
         for raw in items:
             if not isinstance(raw, dict):
@@ -58,13 +62,29 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             unique_items.append(item)
             relevance_total += relevance_score
             lowered = title.lower()
-            if any(keyword.lower() in lowered for keyword in getattr(Config, "MARKET_INTELLIGENCE_POSITIVE_KEYWORDS", set())):
+            if any(
+                keyword.lower() in lowered
+                for keyword in getattr(
+                    Config, "MARKET_INTELLIGENCE_POSITIVE_KEYWORDS", set()
+                )
+            ):
                 positive_hits += max(1, int(round(relevance_score * 2)))
-            if any(keyword.lower() in lowered for keyword in getattr(Config, "MARKET_INTELLIGENCE_NEGATIVE_KEYWORDS", set())):
+            if any(
+                keyword.lower() in lowered
+                for keyword in getattr(
+                    Config, "MARKET_INTELLIGENCE_NEGATIVE_KEYWORDS", set()
+                )
+            ):
                 negative_hits += max(1, int(round(relevance_score * 2)))
             if isinstance(published_at, datetime.datetime):
-                published = published_at.astimezone(now.tzinfo) if published_at.tzinfo else published_at.replace(tzinfo=now.tzinfo)
-                if relevance_score >= min_relevance and (now - published) <= datetime.timedelta(minutes=5):
+                published = (
+                    published_at.astimezone(now.tzinfo)
+                    if published_at.tzinfo
+                    else published_at.replace(tzinfo=now.tzinfo)
+                )
+                if relevance_score >= min_relevance and (
+                    now - published
+                ) <= datetime.timedelta(minutes=5):
                     velocity += 1
         score = max(-100, min(100, positive_hits * 20 - negative_hits * 25))
         sentiment = "neutral"
@@ -80,6 +100,7 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             "headline_velocity": velocity,
             "relevance_score": float(relevance),
         }
+
     def _score_dart_events(self, disclosures: List[Dict[str, Any]]) -> Dict[str, Any]:
         normalized: List[Dict[str, Any]] = []
         risk_level = "normal"
@@ -91,15 +112,22 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         for row in disclosures:
             if not isinstance(row, dict):
                 continue
-            title = self._clean_text(row.get("report_nm") or row.get("report_name") or row.get("rpt_nm"))
+            title = self._clean_text(
+                row.get("report_nm") or row.get("report_name") or row.get("rpt_nm")
+            )
             if not title:
                 continue
             lowered = title.lower()
             row_event_type = self._classify_disclosure_event(title)
             receipt_no = str(row.get("rcept_no", "") or row.get("rcp_no", "") or "")
-            event_id = self._build_market_intel_event_id(receipt_no or title, row.get("rcept_dt", "") or row.get("filing_date", ""))
+            event_id = self._build_market_intel_event_id(
+                receipt_no or title,
+                row.get("rcept_dt", "") or row.get("filing_date", ""),
+            )
             tags: List[str] = []
-            for keyword in getattr(Config, "MARKET_INTELLIGENCE_HIGH_RISK_KEYWORDS", set()):
+            for keyword in getattr(
+                Config, "MARKET_INTELLIGENCE_HIGH_RISK_KEYWORDS", set()
+            ):
                 if keyword.lower() in lowered:
                     tags.append(keyword)
             if tags:
@@ -116,7 +144,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 {
                     "title": title,
                     "receipt_no": receipt_no,
-                    "date": str(row.get("rcept_dt", "") or row.get("filing_date", "") or ""),
+                    "date": str(
+                        row.get("rcept_dt", "") or row.get("filing_date", "") or ""
+                    ),
                     "tags": tags,
                     "event_type": row_event_type,
                     "event_id": event_id,
@@ -133,24 +163,52 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             "severity": severity,
             "latest_event_id": latest_event_id,
         }
+
     def _derive_macro_regime(self, values: Dict[str, float]) -> Dict[str, Any]:
         vix = float(values.get("VIXCLS", 0.0) or 0.0)
         yield_10y = float(values.get("DGS10", 0.0) or 0.0)
         if vix >= 25.0 or yield_10y >= 4.5:
-            return {"regime": "risk_off", "score": -60.0, "summary": f"VIX={vix:.1f}, 10Y={yield_10y:.2f}"}
+            return {
+                "regime": "risk_off",
+                "score": -60.0,
+                "summary": f"VIX={vix:.1f}, 10Y={yield_10y:.2f}",
+            }
         if 0 < vix <= 18.0 and 0 < yield_10y <= 4.0:
-            return {"regime": "risk_on", "score": 20.0, "summary": f"VIX={vix:.1f}, 10Y={yield_10y:.2f}"}
-        return {"regime": "neutral", "score": 0.0, "summary": f"VIX={vix:.1f}, 10Y={yield_10y:.2f}"}
+            return {
+                "regime": "risk_on",
+                "score": 20.0,
+                "summary": f"VIX={vix:.1f}, 10Y={yield_10y:.2f}",
+            }
+        return {
+            "regime": "neutral",
+            "score": 0.0,
+            "summary": f"VIX={vix:.1f}, 10Y={yield_10y:.2f}",
+        }
+
     def _calculate_theme_score(
-        self, info: Dict[str, Any], news_titles: List[str], trend_ratio: float, ranking_overlap: float = 0.0
+        self,
+        info: Dict[str, Any],
+        news_titles: List[str],
+        trend_ratio: float,
+        ranking_overlap: float = 0.0,
     ) -> Dict[str, Any]:
-        weights = self._market_intelligence_config().get("scoring", {}).get("weights", {})
+        weights = (
+            self._market_intelligence_config().get("scoring", {}).get("weights", {})
+        )
         keyword_counts: Dict[str, int] = {}
         for title in news_titles:
             for token in re.findall(r"[A-Za-z0-9가-힣]{2,}", title):
                 keyword_counts[token] = keyword_counts.get(token, 0) + 1
-        top_keywords = [token for token, _count in sorted(keyword_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]]
-        keyword_score = min(100.0, float(sum(keyword_counts.get(token, 0) for token in top_keywords) * 10))
+        top_keywords = [
+            token
+            for token, _count in sorted(
+                keyword_counts.items(), key=lambda kv: (-kv[1], kv[0])
+            )[:5]
+        ]
+        keyword_score = min(
+            100.0,
+            float(sum(keyword_counts.get(token, 0) for token in top_keywords) * 10),
+        )
         trend_score = max(0.0, min(100.0, float(trend_ratio)))
         overlap_score = max(0.0, min(100.0, float(ranking_overlap)))
         total = (
@@ -159,6 +217,7 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             + overlap_score * float(weights.get("ranking_intersection", 20)) / 100.0
         )
         return {"score": min(100.0, total), "keywords": top_keywords}
+
     def _ranking_intersection_score(self, code: str) -> float:
         def _contains_code(table_name: str, code_col: int) -> bool:
             table = getattr(self, table_name, None)
@@ -180,6 +239,7 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         if in_condition or in_ranking:
             return 50.0
         return 0.0
+
     def _refresh_candidate_universe_state(self):
         cfg = self._market_intelligence_config().get("candidate_universe", {})
         if not bool(cfg.get("enabled", True)):
@@ -194,7 +254,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         promotion_theme = float(cfg.get("promotion_theme_score", 70))
         pool = copy.deepcopy(getattr(self, "_candidate_universe", {}))
 
-        def _upsert_from_table(table_name: str, code_col: int, name_col: int, source_name: str):
+        def _upsert_from_table(
+            table_name: str, code_col: int, name_col: int, source_name: str
+        ):
             table = getattr(self, table_name, None)
             if table is None:
                 return
@@ -212,7 +274,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 entry.update(
                     {
                         "code": code,
-                        "name": str(name_item.text()).strip() if name_item is not None else code,
+                        "name": str(name_item.text()).strip()
+                        if name_item is not None
+                        else code,
                         "source_hits": sorted(source_hits),
                         "last_seen_ts": now_ts,
                         "is_candidate": True,
@@ -236,7 +300,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 or float(state.get("theme_score", 0.0) or 0.0) >= promotion_theme
             )
             within_ttl = (now_ts - float(entry.get("last_seen_ts", now_ts))) <= ttl_sec
-            should_activate = (len(source_hits) >= 2 if dual_required else bool(source_hits)) or strong_signal
+            should_activate = (
+                len(source_hits) >= 2 if dual_required else bool(source_hits)
+            ) or strong_signal
             if should_activate and within_ttl:
                 active[code] = entry
             elif not within_ttl and not strong_signal:
@@ -245,14 +311,20 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             active.items(),
             key=lambda kv: (
                 -len(set(kv[1].get("source_hits", []) or [])),
-                -float(self._ensure_market_intel_state(kv[1]).get("theme_score", 0.0) or 0.0),
-                -float(self._ensure_market_intel_state(kv[1]).get("news_score", 0.0) or 0.0),
+                -float(
+                    self._ensure_market_intel_state(kv[1]).get("theme_score", 0.0)
+                    or 0.0
+                ),
+                -float(
+                    self._ensure_market_intel_state(kv[1]).get("news_score", 0.0) or 0.0
+                ),
                 kv[0],
             ),
         )[:max_candidates]
         self._candidate_universe = pool
         self._active_market_candidates = {code: info for code, info in ordered}
         self._candidate_last_refresh_ts = now_ts
+
     def _update_global_market_intel_state(self):
         entities = self._market_intel_entities()
         news_scores: List[float] = []
@@ -264,23 +336,36 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             news_scores.append(float(state.get("news_score", 0.0) or 0.0))
             macro_modes.append(str(state.get("macro_regime", "neutral") or "neutral"))
             for keyword in list(state.get("theme_keywords", []) or [])[:5]:
-                theme_heat_map[keyword] = max(theme_heat_map.get(keyword, 0.0), float(state.get("theme_score", 0.0) or 0.0))
+                theme_heat_map[keyword] = max(
+                    theme_heat_map.get(keyword, 0.0),
+                    float(state.get("theme_score", 0.0) or 0.0),
+                )
             sector = str(info.get("sector", "") or "").strip()
             if sector and float(state.get("news_score", 0.0) or 0.0) <= float(
-                self._market_intelligence_config().get("scoring", {}).get("news_block_threshold", -60)
+                self._market_intelligence_config()
+                .get("scoring", {})
+                .get("news_block_threshold", -60)
             ):
-                sector_negative_counts[sector] = sector_negative_counts.get(sector, 0) + 1
+                sector_negative_counts[sector] = (
+                    sector_negative_counts.get(sector, 0) + 1
+                )
         aggregate_news = sum(news_scores) / len(news_scores) if news_scores else 0.0
         budget_cfg = self._market_intelligence_config().get("portfolio_budget", {})
         budget_scale = 1.0
         market_risk_mode = "neutral"
         if any(mode == "risk_off" for mode in macro_modes):
             market_risk_mode = "risk_off"
-            budget_scale = min(budget_scale, float(budget_cfg.get("risk_off_scale", 0.7)))
+            budget_scale = min(
+                budget_scale, float(budget_cfg.get("risk_off_scale", 0.7))
+            )
         elif macro_modes and all(mode == "risk_on" for mode in macro_modes):
             market_risk_mode = "risk_on"
-        if aggregate_news <= float(budget_cfg.get("aggregate_negative_news_threshold", -80)):
-            budget_scale = min(budget_scale, float(budget_cfg.get("aggregate_negative_scale", 0.85)))
+        if aggregate_news <= float(
+            budget_cfg.get("aggregate_negative_news_threshold", -80)
+        ):
+            budget_scale = min(
+                budget_scale, float(budget_cfg.get("aggregate_negative_scale", 0.85))
+            )
         self._market_risk_mode = market_risk_mode
         self._portfolio_budget_scale = max(0.1, float(budget_scale))
         self._aggregate_news_risk = float(aggregate_news)
@@ -292,13 +377,21 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         }
         event_cache = getattr(self, "_market_scope_event_cache", None)
         if not isinstance(event_cache, dict):
-            event_cache = {"market_mode": "", "budget_scale": 1.0, "sector_blocks": {}, "theme_heat": {}}
+            event_cache = {
+                "market_mode": "",
+                "budget_scale": 1.0,
+                "sector_blocks": {},
+                "theme_heat": {},
+            }
             self._market_scope_event_cache = event_cache
         prev_market_mode = str(event_cache.get("market_mode", "") or "")
         prev_budget_scale = float(event_cache.get("budget_scale", 1.0) or 1.0)
         prev_sector_blocks = dict(event_cache.get("sector_blocks", {}) or {})
         prev_theme_heat = dict(event_cache.get("theme_heat", {}) or {})
-        if market_risk_mode != prev_market_mode or abs(prev_budget_scale - self._portfolio_budget_scale) >= 0.01:
+        if (
+            market_risk_mode != prev_market_mode
+            or abs(prev_budget_scale - self._portfolio_budget_scale) >= 0.01
+        ):
             market_event_id = self._build_market_intel_event_id(
                 "market",
                 market_risk_mode,
@@ -316,11 +409,15 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 blocking=False,
                 event_id=market_event_id,
                 payload={
-                    "macro_regime": market_risk_mode if market_risk_mode in {"risk_on", "risk_off"} else "neutral",
+                    "macro_regime": market_risk_mode
+                    if market_risk_mode in {"risk_on", "risk_off"}
+                    else "neutral",
                     "portfolio_budget_scale": self._portfolio_budget_scale,
                     "aggregate_news_risk": self._aggregate_news_risk,
                     "action_policy": "allow",
-                    "event_severity": "high" if market_risk_mode == "risk_off" else "low",
+                    "event_severity": "high"
+                    if market_risk_mode == "risk_off"
+                    else "low",
                 },
             )
         for sector, meta in self._sector_blocks.items():
@@ -328,7 +425,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             current_count = int(meta.get("count", 0) or 0)
             if current_count == prev_count:
                 continue
-            sector_event_id = self._build_market_intel_event_id("sector", sector, current_count)
+            sector_event_id = self._build_market_intel_event_id(
+                "sector", sector, current_count
+            )
             self._record_market_intel_event(
                 scope="sector",
                 symbol="",
@@ -348,7 +447,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 },
             )
         for sector in set(prev_sector_blocks) - set(self._sector_blocks):
-            sector_event_id = self._build_market_intel_event_id("sector", sector, "released")
+            sector_event_id = self._build_market_intel_event_id(
+                "sector", sector, "released"
+            )
             self._record_market_intel_event(
                 scope="sector",
                 symbol="",
@@ -366,13 +467,23 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                     "event_severity": "low",
                 },
             )
-        theme_threshold = float(self._market_intelligence_config().get("scoring", {}).get("theme_heat_threshold", 60))
-        hot_themes = {theme: score for theme, score in theme_heat_map.items() if float(score or 0.0) >= theme_threshold}
+        theme_threshold = float(
+            self._market_intelligence_config()
+            .get("scoring", {})
+            .get("theme_heat_threshold", 60)
+        )
+        hot_themes = {
+            theme: score
+            for theme, score in theme_heat_map.items()
+            if float(score or 0.0) >= theme_threshold
+        }
         for theme, score in hot_themes.items():
             previous_score = float(prev_theme_heat.get(theme, 0.0) or 0.0)
             if previous_score >= theme_threshold:
                 continue
-            theme_event_id = self._build_market_intel_event_id("theme", theme, int(round(score)))
+            theme_event_id = self._build_market_intel_event_id(
+                "theme", theme, int(round(score))
+            )
             self._record_market_intel_event(
                 scope="theme",
                 symbol="",
@@ -391,7 +502,9 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 },
             )
         for theme in set(prev_theme_heat) - set(hot_themes):
-            theme_event_id = self._build_market_intel_event_id("theme", theme, "released")
+            theme_event_id = self._build_market_intel_event_id(
+                "theme", theme, "released"
+            )
             self._record_market_intel_event(
                 scope="theme",
                 symbol="",
@@ -411,14 +524,26 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             )
         event_cache["market_mode"] = market_risk_mode
         event_cache["budget_scale"] = self._portfolio_budget_scale
-        event_cache["sector_blocks"] = {sector: int(meta.get("count", 0) or 0) for sector, meta in self._sector_blocks.items()}
+        event_cache["sector_blocks"] = {
+            sector: int(meta.get("count", 0) or 0)
+            for sector, meta in self._sector_blocks.items()
+        }
         event_cache["theme_heat"] = hot_themes
-    def _resolve_market_intel_policy(self, code: str, info: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _resolve_market_intel_policy(
+        self, code: str, info: Dict[str, Any]
+    ) -> Dict[str, Any]:
         state = self._ensure_market_intel_state(info)
         cfg = self._market_intelligence_config()
         scoring = cfg.get("scoring", {}) if isinstance(cfg.get("scoring"), dict) else {}
-        soft_cfg = cfg.get("soft_scale", {}) if isinstance(cfg.get("soft_scale"), dict) else {}
-        defense_cfg = cfg.get("position_defense", {}) if isinstance(cfg.get("position_defense"), dict) else {}
+        soft_cfg = (
+            cfg.get("soft_scale", {}) if isinstance(cfg.get("soft_scale"), dict) else {}
+        )
+        defense_cfg = (
+            cfg.get("position_defense", {})
+            if isinstance(cfg.get("position_defense"), dict)
+            else {}
+        )
         ai_cfg = cfg.get("ai", {}) if isinstance(cfg.get("ai"), dict) else {}
 
         policy = "allow"
@@ -431,24 +556,41 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         macro_regime = str(state.get("macro_regime", "neutral") or "neutral")
         dart_risk = str(state.get("dart_risk_level", "normal") or "normal")
         block_until = state.get("dart_block_until")
-        dart_blocking = isinstance(block_until, datetime.datetime) and datetime.datetime.now() < block_until
+        dart_blocking = (
+            isinstance(block_until, datetime.datetime)
+            and datetime.datetime.now() < block_until
+        )
 
-        if status in {"error", "stale", "refreshing", "idle", "disabled_by_missing_credentials"}:
+        if status in {
+            "error",
+            "stale",
+            "refreshing",
+            "idle",
+            "disabled_by_missing_credentials",
+        }:
             policy = "block_entry"
             reason = "source_unhealthy"
-        elif status == "partial" and not bool(cfg.get("source_policy", {}).get("allow_partial_for_entry", False)):
+        elif status == "partial" and not bool(
+            cfg.get("source_policy", {}).get("allow_partial_for_entry", False)
+        ):
             policy = "block_entry"
             reason = "partial_source"
 
         if dart_risk == "high" or dart_blocking:
-            policy = "force_exit" if bool(defense_cfg.get("allow_force_exit_on_high_risk_dart", True)) else "reduce_size"
+            policy = (
+                "force_exit"
+                if bool(defense_cfg.get("allow_force_exit_on_high_risk_dart", True))
+                else "reduce_size"
+            )
             exit_policy = policy if policy != "block_entry" else "reduce_size"
             reason = "high_risk_disclosure"
         elif news_score <= float(scoring.get("news_block_threshold", -60)):
             policy = "reduce_size"
             exit_policy = "reduce_size"
             reason = "negative_news"
-        elif macro_regime == "risk_off" and news_score <= float(scoring.get("macro_block_threshold", -40)):
+        elif macro_regime == "risk_off" and news_score <= float(
+            scoring.get("macro_block_threshold", -40)
+        ):
             policy = "tighten_exit"
             exit_policy = "tighten_exit"
             reason = "macro_news_combo"
@@ -460,25 +602,47 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
                 size_multiplier *= float(soft_cfg.get("theme_heat_multiplier", 1.10))
             if macro_regime == "risk_on":
                 size_multiplier *= float(soft_cfg.get("risk_on_multiplier", 1.05))
-            size_multiplier = min(float(soft_cfg.get("max_multiplier", 1.25)), max(1.0, size_multiplier))
+            size_multiplier = min(
+                float(soft_cfg.get("max_multiplier", 1.25)), max(1.0, size_multiplier)
+            )
         else:
             size_multiplier = 1.0
 
-        ai_summary = state.get("ai_summary", {}) if isinstance(state.get("ai_summary"), dict) else {}
+        ai_summary = (
+            state.get("ai_summary", {})
+            if isinstance(state.get("ai_summary"), dict)
+            else {}
+        )
         ai_action = str(ai_summary.get("action_hint", "") or "").strip()
         ai_conf = float(ai_summary.get("confidence", 0.0) or 0.0)
-        if bool(ai_cfg.get("apply_to_policy", True)) and ai_action and ai_conf >= float(ai_cfg.get("min_confidence_for_policy", 0.8)):
+        if (
+            bool(ai_cfg.get("apply_to_policy", True))
+            and ai_action
+            and ai_conf >= float(ai_cfg.get("min_confidence_for_policy", 0.8))
+        ):
             if ai_action == "force_exit" and policy != "force_exit":
                 ai_action = "tighten_exit"
-            if ai_action in {"allow", "watch_only", "block_entry", "reduce_size", "tighten_exit", "force_exit"}:
-                combined_rank = max(self._market_intel_policy_rank(policy), self._market_intel_policy_rank(ai_action))
+            if ai_action in {
+                "allow",
+                "watch_only",
+                "block_entry",
+                "reduce_size",
+                "tighten_exit",
+                "force_exit",
+            }:
+                combined_rank = max(
+                    self._market_intel_policy_rank(policy),
+                    self._market_intel_policy_rank(ai_action),
+                )
                 policy = self._market_intel_policy_from_rank(combined_rank)
                 if policy in {"reduce_size", "tighten_exit", "force_exit"}:
                     exit_policy = policy
                 if policy != "allow":
                     size_multiplier = 1.0
 
-        portfolio_budget_scale = float(getattr(self, "_portfolio_budget_scale", 1.0) or 1.0)
+        portfolio_budget_scale = float(
+            getattr(self, "_portfolio_budget_scale", 1.0) or 1.0
+        )
         severity = self._severity_from_policy(policy)
         return {
             "action_policy": policy,
@@ -489,6 +653,7 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             "reason": reason,
             "event_type": str(state.get("event_type", "") or ""),
         }
+
     def _build_briefing_summary(self, code: str, info: Dict[str, Any]) -> str:
         state = self._ensure_market_intel_state(info)
         name = str(info.get("name", code) or code)
@@ -498,6 +663,7 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             f"테마 점수는 {float(state.get('theme_score', 0.0) or 0.0):.0f}, 정책은 {state.get('action_policy', 'allow')}입니다.",
         ]
         return " ".join(lines)
+
     def _ai_usage_bucket(self) -> Dict[str, Any]:
         today = datetime.date.today().isoformat()
         usage = getattr(self, "_market_ai_usage", None)
@@ -505,12 +671,15 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             usage = {"day": today, "count": 0, "cost_krw": 0, "by_symbol": {}}
             self._market_ai_usage = usage
         return usage
+
     def _consume_ai_budget(self, code: str, estimated_cost_krw: int = 100) -> bool:
         usage = self._ai_usage_bucket()
         ai_cfg = self._market_intelligence_config().get("ai", {})
         if int(usage.get("count", 0)) >= int(ai_cfg.get("max_calls_per_day", 30)):
             return False
-        if int(usage.get("cost_krw", 0)) + int(estimated_cost_krw) > int(ai_cfg.get("daily_budget_krw", 1000)):
+        if int(usage.get("cost_krw", 0)) + int(estimated_cost_krw) > int(
+            ai_cfg.get("daily_budget_krw", 1000)
+        ):
             return False
         by_symbol = usage.setdefault("by_symbol", {})
         if int(by_symbol.get(code, 0)) >= int(ai_cfg.get("max_calls_per_symbol", 3)):
@@ -519,24 +688,40 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
         usage["cost_krw"] = int(usage.get("cost_krw", 0)) + int(estimated_cost_krw)
         by_symbol[code] = int(by_symbol.get(code, 0)) + 1
         return True
-    def _rules_based_ai_fallback(self, code: str, info: Dict[str, Any], reason: str = "", error: str = "") -> Dict[str, Any]:
+
+    def _rules_based_ai_fallback(
+        self, code: str, info: Dict[str, Any], reason: str = "", error: str = ""
+    ) -> Dict[str, Any]:
         state = self._ensure_market_intel_state(info)
         policy = self._resolve_market_intel_policy(code, info)
         news_score = float(state.get("news_score", 0.0) or 0.0)
-        stance = "bullish" if news_score >= 60 else "bearish" if news_score <= -60 else "neutral"
+        stance = (
+            "bullish"
+            if news_score >= 60
+            else "bearish"
+            if news_score <= -60
+            else "neutral"
+        )
         summary = self._build_briefing_summary(code, info)
         if error:
             summary = f"{summary} (AI fallback: {error})"
         return {
             "summary": summary,
             "stance": stance,
-            "risk_tags": [str(state.get("dart_risk_level", "normal"))] if str(state.get("dart_risk_level", "normal")) != "normal" else [],
+            "risk_tags": [str(state.get("dart_risk_level", "normal"))]
+            if str(state.get("dart_risk_level", "normal")) != "normal"
+            else [],
             "confidence": 0.35,
-            "action_hint": str(policy.get("action_policy", "watch_only") or "watch_only"),
+            "action_hint": str(
+                policy.get("action_policy", "watch_only") or "watch_only"
+            ),
             "reason": reason,
             "source": "rules",
         }
-    def _maybe_run_ai_summary(self, code: str, info: Dict[str, Any], reason: str = "") -> Dict[str, Any]:
+
+    def _maybe_run_ai_summary(
+        self, code: str, info: Dict[str, Any], reason: str = ""
+    ) -> Dict[str, Any]:
         state = self._ensure_market_intel_state(info)
         ai_cfg = self._market_intelligence_config().get("ai", {})
         if not bool(ai_cfg.get("enabled", False)):
@@ -544,10 +729,15 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             state["ai_summary"] = summary
             return summary
         if not self._consume_ai_budget(code):
-            summary = self._rules_based_ai_fallback(code, info, reason=reason, error="budget_exceeded")
+            summary = self._rules_based_ai_fallback(
+                code, info, reason=reason, error="budget_exceeded"
+            )
             state["ai_summary"] = summary
             return summary
-        provider = AIProvider(provider=str(ai_cfg.get("provider", "gemini")), api_key=self._market_api_credentials().get("ai_api_key", ""))
+        provider = AIProvider(
+            provider=str(ai_cfg.get("provider", "gemini")),
+            api_key=self._market_api_credentials().get("ai_api_key", ""),
+        )
         prompt = (
             f"종목: {info.get('name', code)} ({code})\n"
             f"뉴스 점수: {state.get('news_score', 0)}\n"
@@ -559,27 +749,48 @@ class MarketIntelScoringPolicyMixin(TraderMixinBase):
             f"사유: {reason}\n"
         )
         try:
-            summary = provider.summarize_event(prompt, str(ai_cfg.get("model", "gemini-2.5-flash-lite")))
+            summary = provider.summarize_event(
+                prompt, str(ai_cfg.get("model", "gemini-2.5-flash-lite"))
+            )
             if not isinstance(summary, dict):
                 raise RuntimeError("invalid_ai_payload")
             normalized = {
-                "summary": str(summary.get("summary", "") or self._build_briefing_summary(code, info)),
+                "summary": str(
+                    summary.get("summary", "")
+                    or self._build_briefing_summary(code, info)
+                ),
                 "stance": str(summary.get("stance", "neutral") or "neutral"),
                 "risk_tags": list(summary.get("risk_tags", []) or []),
                 "confidence": float(summary.get("confidence", 0.5) or 0.5),
-                "action_hint": str(summary.get("action_hint", "watch_only") or "watch_only"),
+                "action_hint": str(
+                    summary.get("action_hint", "watch_only") or "watch_only"
+                ),
                 "reason": reason,
                 "source": str(ai_cfg.get("provider", "gemini")),
             }
             state["ai_summary"] = normalized
             self._set_market_intel_source_status("ai", "fresh")
             state.setdefault("sources", {}).setdefault("ai", {})
-            state["sources"]["ai"].update({"status": "ok_with_data", "updated_at": datetime.datetime.now(), "error": ""})
+            state["sources"]["ai"].update(
+                {
+                    "status": "ok_with_data",
+                    "updated_at": datetime.datetime.now(),
+                    "error": "",
+                }
+            )
             return normalized
         except Exception as exc:
             self._set_market_intel_source_status("ai", "error", error=str(exc))
-            summary = self._rules_based_ai_fallback(code, info, reason=reason, error=str(exc))
+            summary = self._rules_based_ai_fallback(
+                code, info, reason=reason, error=str(exc)
+            )
             state["ai_summary"] = summary
             state.setdefault("sources", {}).setdefault("ai", {})
-            state["sources"]["ai"].update({"status": "error", "updated_at": datetime.datetime.now(), "error": str(exc)})
+            state["sources"]["ai"].update(
+                {
+                    "status": "error",
+                    "updated_at": datetime.datetime.now(),
+                    "error": str(exc),
+                }
+            )
             return summary

@@ -22,7 +22,9 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         ctrl_layout.addWidget(self.chart_code_input)
 
         self.chart_type_combo = NoScrollComboBox()
-        self.chart_type_combo.addItems(["일봉", "주봉", "1분봉", "5분봉", "15분봉", "30분봉", "60분봉"])
+        self.chart_type_combo.addItems(
+            ["일봉", "주봉", "1분봉", "5분봉", "15분봉", "30분봉", "60분봉"]
+        )
         ctrl_layout.addWidget(self.chart_type_combo)
 
         btn_load = QPushButton("차트 조회")
@@ -34,7 +36,9 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         # 차트 영역 (테이블로 대체 - pyqtgraph 없을 시)
         self.chart_table = QTableWidget()
         self.chart_table.setColumnCount(6)
-        self.chart_table.setHorizontalHeaderLabels(["날짜", "시가", "고가", "저가", "종가", "거래량"])
+        self.chart_table.setHorizontalHeaderLabels(
+            ["날짜", "시가", "고가", "저가", "종가", "거래량"]
+        )
         chart_header = self.chart_table.horizontalHeader()
         if chart_header is not None:
             chart_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -46,6 +50,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         layout.addWidget(self.chart_info)
 
         return widget
+
     def _create_orderbook_tab(self):
         """호가창 탭"""
         widget = QWidget()
@@ -111,6 +116,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
 
         layout.addStretch()
         return widget
+
     def _create_condition_tab(self):
         """조건검색 탭"""
         widget = QWidget()
@@ -140,7 +146,9 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         # 검색 결과
         self.condition_table = QTableWidget()
         self.condition_table.setColumnCount(5)
-        self.condition_table.setHorizontalHeaderLabels(["종목코드", "종목명", "현재가", "등락률", "거래량"])
+        self.condition_table.setHorizontalHeaderLabels(
+            ["종목코드", "종목명", "현재가", "등락률", "거래량"]
+        )
         condition_header = self.condition_table.horizontalHeader()
         if condition_header is not None:
             condition_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -150,6 +158,7 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         layout.addWidget(self.condition_info)
 
         return widget
+
     def _create_ranking_tab(self):
         """순위 정보 탭"""
         widget = QWidget()
@@ -174,7 +183,9 @@ class UIBuildMarketTabsMixin(TraderMixinBase):
         # 순위 테이블
         self.ranking_table = QTableWidget()
         self.ranking_table.setColumnCount(6)
-        self.ranking_table.setHorizontalHeaderLabels(["순위", "종목코드", "종목명", "현재가", "등락률", "거래량"])
+        self.ranking_table.setHorizontalHeaderLabels(
+            ["순위", "종목코드", "종목명", "현재가", "등락률", "거래량"]
+        )
         ranking_header = self.ranking_table.horizontalHeader()
         if ranking_header is not None:
             ranking_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)

@@ -61,7 +61,9 @@ class TestUpdatePlainTextPanel(unittest.TestCase):
         panel = _MockPanel("line 1\nline 2")
         panel.scroll_bar.setValue(150)  # User scrolled down!
 
-        updated = update_plain_text_panel(panel, "line 1\nline 2\nline 3", preserve_scroll=True)
+        updated = update_plain_text_panel(
+            panel, "line 1\nline 2\nline 3", preserve_scroll=True
+        )
 
         self.assertTrue(updated)
         self.assertEqual(panel.set_plain_text_call_count, 1)
@@ -156,7 +158,9 @@ class TestMarketIntelDetailPanelPreservation(unittest.TestCase):
         class MarketIntelHarness(MarketIntelViewsMixin):
             def __init__(self):
                 self.market_intel_table = MagicMock()
-                self.market_intel_table.selectedItems.return_value = [MagicMock(row=lambda: 0)]
+                self.market_intel_table.selectedItems.return_value = [
+                    MagicMock(row=lambda: 0)
+                ]
                 self._market_intel_row_to_code = {0: "005930"}
                 self.market_intel_detail_panel = _MockPanel()
                 self.universe = {

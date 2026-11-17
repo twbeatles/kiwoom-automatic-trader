@@ -21,7 +21,9 @@ def find_class(mod: ast.Module, class_name: str) -> Optional[ast.ClassDef]:
 
 
 def collect_methods(class_node: ast.ClassDef) -> Dict[str, ast.FunctionDef]:
-    return {node.name: node for node in class_node.body if isinstance(node, ast.FunctionDef)}
+    return {
+        node.name: node for node in class_node.body if isinstance(node, ast.FunctionDef)
+    }
 
 
 def collect_signal_names(class_node: ast.ClassDef) -> Set[str]:
@@ -52,7 +54,9 @@ def _resolve_import_module(source_path: Path, module: str | None, level: int) ->
 
     current_module = _module_name_for_path(source_path)
     current_parts = current_module.split(".")
-    package_parts = current_parts if source_path.name == "__init__.py" else current_parts[:-1]
+    package_parts = (
+        current_parts if source_path.name == "__init__.py" else current_parts[:-1]
+    )
     keep = max(0, len(package_parts) - (level - 1))
     parts = package_parts[:keep]
     if module:
@@ -95,7 +99,9 @@ def resolve_class(
     seen = seen or set()
     key = (path.resolve(), class_name)
     if key in seen:
-        raise RuntimeError(f"cyclic class import while resolving {class_name} from {path}")
+        raise RuntimeError(
+            f"cyclic class import while resolving {class_name} from {path}"
+        )
     seen.add(key)
 
     mod = parse(path)
@@ -117,7 +123,9 @@ def collect_inherited_methods(
     methods: Dict[str, ast.FunctionDef] = {}
     origins: Dict[str, Path] = {}
 
-    def visit(current_path: Path, current_name: str, seen: Set[Tuple[Path, str]]) -> ast.ClassDef:
+    def visit(
+        current_path: Path, current_name: str, seen: Set[Tuple[Path, str]]
+    ) -> ast.ClassDef:
         resolved_path, mod, class_node = resolve_class(current_path, current_name, seen)
 
         for name, node in collect_methods(class_node).items():
@@ -126,9 +134,7 @@ def collect_inherited_methods(
 
         imports = _import_map(resolved_path, mod)
         local_classes = {
-            node.name: node
-            for node in mod.body
-            if isinstance(node, ast.ClassDef)
+            node.name: node for node in mod.body if isinstance(node, ast.ClassDef)
         }
         for base in class_node.bases:
             if not isinstance(base, ast.Name):

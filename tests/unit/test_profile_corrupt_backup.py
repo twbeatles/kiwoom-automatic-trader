@@ -1,4 +1,5 @@
 """ISSUE-003: ProfileManager atomic save + corrupt backup."""
+
 import json
 import tempfile
 import unittest
@@ -32,7 +33,9 @@ class TestProfileCorruptBackup(unittest.TestCase):
             payload = json.loads(target.read_text(encoding="utf-8"))
             self.assertIn("day", payload["profiles"])
             # tmp 잔여 파일이 남지 않는다.
-            self.assertFalse((Path(tmp) / (ProfileManager.PROFILES_FILE + ".tmp")).exists())
+            self.assertFalse(
+                (Path(tmp) / (ProfileManager.PROFILES_FILE + ".tmp")).exists()
+            )
 
     def test_non_dict_json_treated_as_corrupt(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 
 from app.mixins.trading_session import TradingSessionMixin
 

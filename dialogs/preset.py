@@ -76,26 +76,34 @@ class PresetDialog(QDialog):
                     presets.update(json.load(f))
         except json.JSONDecodeError as exc:
             self.logger.warning(f"프리셋 파싱 실패: {exc}")
-            QMessageBox.warning(self, "프리셋 로드 실패", f"프리셋 파일 형식이 손상되었습니다.\n{exc}")
+            QMessageBox.warning(
+                self, "프리셋 로드 실패", f"프리셋 파일 형식이 손상되었습니다.\n{exc}"
+            )
         except OSError as exc:
             self.logger.warning(f"프리셋 로드 실패: {exc}")
-            QMessageBox.warning(self, "프리셋 로드 실패", f"프리셋 파일을 읽을 수 없습니다.\n{exc}")
+            QMessageBox.warning(
+                self, "프리셋 로드 실패", f"프리셋 파일을 읽을 수 없습니다.\n{exc}"
+            )
         return presets
 
     def _save_presets(self):
-        user = {k: v for k, v in self.presets.items() if k not in Config.DEFAULT_PRESETS}
+        user = {
+            k: v for k, v in self.presets.items() if k not in Config.DEFAULT_PRESETS
+        }
         try:
             os.makedirs(os.path.dirname(Config.PRESETS_FILE), exist_ok=True)
             with open(Config.PRESETS_FILE, "w", encoding="utf-8") as f:
                 json.dump(user, f, ensure_ascii=False, indent=2)
         except (OSError, TypeError) as exc:
             self.logger.error(f"프리셋 저장 실패: {exc}")
-            QMessageBox.warning(self, "프리셋 저장 실패", f"프리셋을 저장할 수 없습니다.\n{exc}")
+            QMessageBox.warning(
+                self, "프리셋 저장 실패", f"프리셋을 저장할 수 없습니다.\n{exc}"
+            )
 
     def _refresh_list(self):
         self.list_widget.clear()
         for key, preset in self.presets.items():
-            prefix = "[기본] "if key in Config.DEFAULT_PRESETS else "[사용자] "
+            prefix = "[기본] " if key in Config.DEFAULT_PRESETS else "[사용자] "
             item = QListWidgetItem(prefix + preset.get("name", key))
             item.setData(Qt.ItemDataRole.UserRole, key)
             self.list_widget.addItem(item)

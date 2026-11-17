@@ -66,13 +66,17 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
         elif "sync_failed" in terminal_states:
             aggregate_state = "sync_failed"
         else:
-            aggregate_state = str(pending.get("state", "submitted") or "submitted").lower()
+            aggregate_state = str(
+                pending.get("state", "submitted") or "submitted"
+            ).lower()
 
         pending["submitted_qty"] = total_submitted
         pending["filled_qty"] = total_filled
         pending["remaining_qty"] = total_remaining
         pending["state"] = aggregate_state
-        pending["expected_price"] = int(round(total_expected / total_submitted)) if total_submitted > 0 else 0
+        pending["expected_price"] = (
+            int(round(total_expected / total_submitted)) if total_submitted > 0 else 0
+        )
         if first_order_no:
             pending["order_no"] = first_order_no
         pending["updated_at"] = datetime.datetime.now()
@@ -85,6 +89,7 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
             pending_until=pending.get("until"),
         )
         return aggregate_state, total_remaining
+
     def _mark_pending_state(self, code: str, state: str):
         pending = self._pending_order_state.get(code)
         if not pending:
@@ -106,7 +111,10 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
             pending_reason=str(pending.get("reason", "")),
             pending_until=pending.get("until"),
         )
-    def _update_pending_from_order_event(self, code: str, order_no: str, order_qty: int):
+
+    def _update_pending_from_order_event(
+        self, code: str, order_no: str, order_qty: int
+    ):
         pending = self._pending_order_state.get(code)
         if not isinstance(pending, dict):
             return
@@ -149,13 +157,18 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
             pending_state=str(pending.get("state", "submitted")),
             pending_remaining=str(int(pending.get("remaining_qty", 0) or 0)),
         )
+
     def _apply_pending_fill(self, code: str, fill_qty: int) -> tuple[str, int, int]:
         pending = self._pending_order_state.get(code)
         if not isinstance(pending, dict):
             return "", 0, 0
         qty = max(0, int(fill_qty or 0))
         if qty <= 0:
-            return str(pending.get("state", "submitted")), int(pending.get("remaining_qty", 0) or 0), 0
+            return (
+                str(pending.get("state", "submitted")),
+                int(pending.get("remaining_qty", 0) or 0),
+                0,
+            )
 
         children = self._pending_children(pending)
         if children:
@@ -171,14 +184,22 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
                 applied = min(child_remaining, remaining_fill)
                 if applied <= 0:
                     continue
-                child["filled_qty"] = max(0, int(child.get("filled_qty", 0) or 0)) + applied
+                child["filled_qty"] = (
+                    max(0, int(child.get("filled_qty", 0) or 0)) + applied
+                )
                 child["remaining_qty"] = max(0, child_remaining - applied)
                 expected = max(0, int(child.get("expected_price", 0) or 0))
                 child_reserved = max(0, int(child.get("reserved_cash", 0) or 0))
-                consume_cash = min(child_reserved, expected * applied) if expected > 0 else 0
+                consume_cash = (
+                    min(child_reserved, expected * applied) if expected > 0 else 0
+                )
                 child["reserved_cash"] = max(0, child_reserved - consume_cash)
                 reserved_consumed += consume_cash
-                child["state"] = "filled" if int(child.get("remaining_qty", 0) or 0) <= 0 else "partial"
+                child["state"] = (
+                    "filled"
+                    if int(child.get("remaining_qty", 0) or 0) <= 0
+                    else "partial"
+                )
                 child["updated_at"] = datetime.datetime.now()
                 remaining_fill -= applied
                 if remaining_fill <= 0:
@@ -208,7 +229,10 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
             pending_remaining=str(remaining),
         )
         return str(pending.get("state", "")), remaining, 0
-    def _apply_pending_cancel(self, code: str, order_no: str, final_state: str) -> tuple[bool, str]:
+
+    def _apply_pending_cancel(
+        self, code: str, order_no: str, final_state: str
+    ) -> tuple[bool, str]:
         pending = self._pending_order_state.get(code)
         if not isinstance(pending, dict):
             return False, ""
@@ -235,26 +259,55 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
         target_child["reserved_cash"] = 0
         target_child["updated_at"] = datetime.datetime.now()
         aggregate_state, remaining_qty = self._refresh_pending_order_aggregate(code)
-        should_clear = remaining_qty <= 0 or aggregate_state not in self.ACTIVE_PENDING_STATES
-        clear_state = "filled" if aggregate_state == "filled" else str(final_state or aggregate_state)
+        should_clear = (
+            remaining_qty <= 0 or aggregate_state not in self.ACTIVE_PENDING_STATES
+        )
+        clear_state = (
+            "filled"
+            if aggregate_state == "filled"
+            else str(final_state or aggregate_state)
+        )
         return should_clear, clear_state
+
     @staticmethod
     def _classify_order_reject(message) -> str:
         """주문 거부 사유 분류(transient/final/unknown). 자동 재제출은 하지 않는다."""
         lowered = str(message or "").lower()
         transient_tokens = (
-            "timeout", "timed out", "network", "connection", "dns",
-            "일시", "혼잡", "트래픽", "재시도", "503", "502", "500", "429",
+            "timeout",
+            "timed out",
+            "network",
+            "connection",
+            "dns",
+            "일시",
+            "혼잡",
+            "트래픽",
+            "재시도",
+            "503",
+            "502",
+            "500",
+            "429",
         )
         if any(token in lowered for token in transient_tokens):
             return "transient"
         final_tokens = (
-            "잔고", "부족", "가능수량", "초과", "제한", "정지", "폐장", "휴장",
-            "단위", "주문가능", "권한", "불가",
+            "잔고",
+            "부족",
+            "가능수량",
+            "초과",
+            "제한",
+            "정지",
+            "폐장",
+            "휴장",
+            "단위",
+            "주문가능",
+            "권한",
+            "불가",
         )
         if any(token in lowered for token in final_tokens):
             return "final"
         return "unknown"
+
     def _note_order_reject(self, code: str, message) -> str:
         """거부 분류를 universe에 기록하고 분류값을 반환한다."""
         klass = self._classify_order_reject(message)
@@ -264,6 +317,7 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
             info["last_reject_class"] = klass
             info["last_reject_at"] = datetime.datetime.now()
         return klass
+
     def _record_order_failure(self, reason: str, code: str = ""):
         cfg = getattr(self, "config", None)
         if cfg is None or not bool(getattr(cfg, "use_order_health_guard", True)):
@@ -278,14 +332,26 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
 
         window_sec = max(
             1,
-            int(getattr(cfg, "order_health_window_sec", getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60))),
+            int(
+                getattr(
+                    cfg,
+                    "order_health_window_sec",
+                    getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60),
+                )
+            ),
         )
         while events and (now_ts - float(events[0])) > window_sec:
             events.popleft()
 
         fail_count_limit = max(
             1,
-            int(getattr(cfg, "order_health_fail_count", getattr(Config, "DEFAULT_ORDER_HEALTH_FAIL_COUNT", 5))),
+            int(
+                getattr(
+                    cfg,
+                    "order_health_fail_count",
+                    getattr(Config, "DEFAULT_ORDER_HEALTH_FAIL_COUNT", 5),
+                )
+            ),
         )
         if len(events) >= fail_count_limit:
             cooldown_sec = max(
@@ -306,6 +372,7 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
                     f"[주문건강] degraded 활성화 fail={len(events)}/{fail_count_limit}, "
                     f"cooldown={cooldown_sec}s ({reason}:{code})"
                 )
+
     def _update_order_health_mode(self, now_dt: datetime.datetime | None = None):
         now = now_dt or datetime.datetime.now()
         cfg = getattr(self, "config", None)
@@ -315,7 +382,13 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
         if isinstance(events, deque):
             window_sec = max(
                 1,
-                int(getattr(cfg, "order_health_window_sec", getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60))),
+                int(
+                    getattr(
+                        cfg,
+                        "order_health_window_sec",
+                        getattr(Config, "DEFAULT_ORDER_HEALTH_WINDOW_SEC", 60),
+                    )
+                ),
             )
             now_ts = now.timestamp()
             while events and (now_ts - float(events[0])) > window_sec:
@@ -329,7 +402,10 @@ class OrderSyncPendingStateMixin(TraderMixinBase):
             self._order_health_until = None
             if hasattr(self, "log"):
                 self.log("[주문건강] degraded -> normal 자동복구")
-    def _record_slippage_bps(self, expected_price: int, fill_price: int, code: str = ""):
+
+    def _record_slippage_bps(
+        self, expected_price: int, fill_price: int, code: str = ""
+    ):
         expected = float(expected_price or 0)
         fill = float(fill_price or 0)
         if expected <= 0 or fill <= 0:

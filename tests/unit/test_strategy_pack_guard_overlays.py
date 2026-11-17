@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 from collections import deque
 
@@ -39,9 +39,13 @@ class _Trader:
         self.deposit = 100_000_000
         self.total_realized_profit = 0
         self._global_risk_mode = "shock"
-        self._global_risk_until = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        self._global_risk_until = datetime.datetime.now() + datetime.timedelta(
+            minutes=5
+        )
         self._order_health_mode = "degraded"
-        self._order_health_until = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        self._order_health_until = datetime.datetime.now() + datetime.timedelta(
+            minutes=5
+        )
         self._recent_slippage_bps = deque([20.0, 18.0, 16.0], maxlen=20)
 
     def log(self, _msg):
@@ -80,7 +84,9 @@ class TestStrategyPackGuardOverlays(unittest.TestCase):
         cfg.feature_flags["use_modular_strategy_pack"] = True
         sm = StrategyManager(trader, cfg)
 
-        passed, conditions, metrics = sm.evaluate_buy_conditions("005930", now_ts=1000.0)
+        passed, conditions, metrics = sm.evaluate_buy_conditions(
+            "005930", now_ts=1000.0
+        )
 
         self.assertFalse(passed)
         self.assertFalse(conditions["risk:shock_guard"])

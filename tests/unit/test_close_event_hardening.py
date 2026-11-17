@@ -1,4 +1,5 @@
 """Phase-2: closeEvent hardening — 정리 중 예외가 나도 accept+quit 보장."""
+
 import unittest
 from typing import Any, cast
 from unittest.mock import MagicMock, patch

@@ -31,7 +31,9 @@ class _StrategyStub:
 
 class _Harness(OrderSyncMixin):
     def __init__(self):
-        self.universe = {"005930": {"name": "SAMSUNG", "status": "watch", "held": 0, "current": 1000}}
+        self.universe = {
+            "005930": {"name": "SAMSUNG", "status": "watch", "held": 0, "current": 1000}
+        }
         self._position_sync_pending = set()
         self._position_sync_batch = set()
         self._position_sync_scheduled = False
@@ -75,8 +77,15 @@ class TestDiagnosticsState(unittest.TestCase):
         trader._set_pending_order("005930", "buy", "BUY")
         self.assertEqual(trader.diag["005930"]["pending_side"], "buy")
 
-        with patch("app.features.order_sync.position_sync.Config.POSITION_SYNC_MAX_RETRIES", 1), patch(
-            "app.features.order_sync.position_sync.QTimer.singleShot", side_effect=lambda *_args, **_kwargs: None
+        with (
+            patch(
+                "app.features.order_sync.position_sync.Config.POSITION_SYNC_MAX_RETRIES",
+                1,
+            ),
+            patch(
+                "app.features.order_sync.position_sync.QTimer.singleShot",
+                side_effect=lambda *_args, **_kwargs: None,
+            ),
         ):
             trader._on_position_sync_error({"005930"}, Exception("boom1"))
             trader._position_sync_scheduled = False
@@ -84,9 +93,13 @@ class TestDiagnosticsState(unittest.TestCase):
 
         self.assertEqual(trader.universe["005930"]["status"], "sync_failed")
         self.assertEqual(trader.diag["005930"]["sync_status"], "sync_failed")
-        self.assertEqual(trader.virtual_deposit, 1000)  # reservation refunded on sync_failed
+        self.assertEqual(
+            trader.virtual_deposit, 1000
+        )  # reservation refunded on sync_failed
 
-        positions = [Position(code="005930", quantity=1, buy_price=1000, buy_amount=1000)]
+        positions = [
+            Position(code="005930", quantity=1, buy_price=1000, buy_amount=1000)
+        ]
         trader._on_position_sync_result({"005930"}, positions)
 
         self.assertEqual(trader.universe["005930"]["status"], "holding")

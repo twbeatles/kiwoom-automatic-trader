@@ -56,17 +56,23 @@ class StockSearchDialog(QDialog):
 
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(5)
-        self.result_table.setHorizontalHeaderLabels(["선택", "종목코드", "종목명", "현재가", "출처"])
+        self.result_table.setHorizontalHeaderLabels(
+            ["선택", "종목코드", "종목명", "현재가", "출처"]
+        )
         result_header = self.result_table.horizontalHeader()
         if result_header is not None:
             result_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.result_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.result_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.result_table.setAlternatingRowColors(True)
         result_vertical_header = self.result_table.verticalHeader()
         if result_vertical_header is not None:
             result_vertical_header.setVisible(False)
         layout.addWidget(self.result_table)
-        self.search_status = QLabel("6자리 코드는 API 확인, 종목명은 로컬 캐시에서 검색합니다.")
+        self.search_status = QLabel(
+            "6자리 코드는 API 확인, 종목명은 로컬 캐시에서 검색합니다."
+        )
         self.search_status.setWordWrap(True)
         self.search_status.setProperty("hint", True)
         layout.addWidget(self.search_status)
@@ -123,7 +129,9 @@ class StockSearchDialog(QDialog):
 
         self._last_results = deduped
         self._render_results(deduped)
-        self.search_status.setText("| ".join(status_parts) if status_parts else "검색 결과 없음")
+        self.search_status.setText(
+            "| ".join(status_parts) if status_parts else "검색 결과 없음"
+        )
 
     def _search_code_via_api(self, code: str):
         if not self.rest_client:
@@ -160,8 +168,14 @@ class StockSearchDialog(QDialog):
             self.result_table.setCellWidget(i, 0, chk)
             self.result_table.setItem(i, 1, QTableWidgetItem(code))
             self.result_table.setItem(i, 2, QTableWidgetItem(name))
-            self.result_table.setItem(i, 3, QTableWidgetItem(f"{current_price:,}"if current_price > 0 else "-"))
-            self.result_table.setItem(i, 4, QTableWidgetItem("API 확인"if source == "api"else "캐시"))
+            self.result_table.setItem(
+                i,
+                3,
+                QTableWidgetItem(f"{current_price:,}" if current_price > 0 else "-"),
+            )
+            self.result_table.setItem(
+                i, 4, QTableWidgetItem("API 확인" if source == "api" else "캐시")
+            )
 
     def _apply(self):
         self.selected_codes = []

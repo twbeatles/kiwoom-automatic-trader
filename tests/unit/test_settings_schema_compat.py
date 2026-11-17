@@ -1,4 +1,4 @@
-﻿import json
+import json
 import shutil
 import sys
 import tempfile
@@ -56,7 +56,12 @@ class _Harness(PersistenceSettingsMixin):
     def __init__(self):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
-        self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
+        self.schedule = {
+            "enabled": False,
+            "start": "09:00",
+            "end": "15:19",
+            "liquidate": True,
+        }
         self.applied_styles = []
         self.logged = []
 
@@ -105,8 +110,15 @@ class TestSettingsSchemaCompat(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.keyring.get_password", side_effect=RuntimeError("no keyring")
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch(
+                    "app.features.persistence.settings_io.keyring.get_password",
+                    side_effect=RuntimeError("no keyring"),
+                ),
             ):
                 trader._load_settings()
         finally:
@@ -131,8 +143,15 @@ class TestSettingsSchemaCompat(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.keyring.get_password", return_value=""
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch(
+                    "app.features.persistence.settings_io.keyring.get_password",
+                    return_value="",
+                ),
             ):
                 trader._load_settings()
         finally:

@@ -3,6 +3,7 @@
 A1 가드와 함께, 가격이 정상(>0)일 때는 잔액 충분 시 live 모드 주문이 정상
 전송되는 경로가 유지됨을 고정한다. 회귀로 인해 정상 주문 경로가 막히지 않도록 방어.
 """
+
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin

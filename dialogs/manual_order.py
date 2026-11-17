@@ -107,7 +107,9 @@ class ManualOrderDialog(QDialog):
             QMessageBox.warning(self, "경고", "종목코드는 6자리 숫자여야 합니다.")
             return
         if self.combo_price_type.currentIndex() == 1 and self.spin_price.value() <= 0:
-            QMessageBox.warning(self, "경고", "지정가 주문은 1원 이상의 가격이 필요합니다.")
+            QMessageBox.warning(
+                self, "경고", "지정가 주문은 1원 이상의 가격이 필요합니다."
+            )
             return
 
         confirm = QMessageBox.question(
@@ -123,6 +125,8 @@ class ManualOrderDialog(QDialog):
                 "type": self.combo_type.currentText(),
                 "qty": self.spin_qty.value(),
                 "price_type": self.combo_price_type.currentText(),
-                "price": self.spin_price.value() if self.combo_price_type.currentIndex() == 1 else 0,
+                "price": self.spin_price.value()
+                if self.combo_price_type.currentIndex() == 1
+                else 0,
             }
             self.accept()

@@ -30,7 +30,9 @@ def position_eval(info: Dict[str, Any]) -> Dict[str, float]:
     buy_price = _to_int(info.get("buy_price", 0))
     current = _to_int(info.get("current", 0))
     invest = _to_int(info.get("invest_amount", held * buy_price))
-    eval_amount = held * current if held and current else _to_int(info.get("eval_amount", 0))
+    eval_amount = (
+        held * current if held and current else _to_int(info.get("eval_amount", 0))
+    )
     profit = eval_amount - invest if held else 0
     profit_rate = (profit / invest * 100.0) if held and invest > 0 else 0.0
     return {
@@ -77,7 +79,9 @@ def compute_portfolio_summary(
         if str(info.get("status", "")) == "sync_failed":
             sync_failed_codes.append(code)
         for group, key in (("market", "market_type"), ("sector", "sector")):
-            label = str(info.get(key, "") or "").strip() or ("외부" if code in external else "미분류")
+            label = str(info.get(key, "") or "").strip() or (
+                "외부" if code in external else "미분류"
+            )
             bucket = exposures[group]
             bucket[label] = bucket.get(label, 0.0) + snap["eval_amount"]
 
@@ -86,10 +90,19 @@ def compute_portfolio_summary(
         for code, snap in per_code.items()
     }
 
-    scoped = [r for r in history if isinstance(r, dict) and (not today or str(r.get("timestamp", "")).startswith(today))]
-    realized = sum(_to_float(r.get("profit", 0)) for r in scoped if r.get("type") == "매도")
+    scoped = [
+        r
+        for r in history
+        if isinstance(r, dict)
+        and (not today or str(r.get("timestamp", "")).startswith(today))
+    ]
+    realized = sum(
+        _to_float(r.get("profit", 0)) for r in scoped if r.get("type") == "매도"
+    )
     read_only_codes = sorted(
-        code for code, raw in tracked.items() if isinstance(raw, dict) and bool(raw.get("read_only", False))
+        code
+        for code, raw in tracked.items()
+        if isinstance(raw, dict) and bool(raw.get("read_only", False))
     )
 
     top_weights = sorted(weights.items(), key=lambda kv: -kv[1])[:3]

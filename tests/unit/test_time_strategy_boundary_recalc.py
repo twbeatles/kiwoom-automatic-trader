@@ -44,14 +44,20 @@ class TestTimeStrategyBoundaryRecalc(unittest.TestCase):
     def test_recalculates_once_per_phase_boundary(self):
         trader = _Harness()
 
-        trader._maybe_recalculate_time_strategy_targets(datetime.datetime(2026, 2, 25, 9, 30, 0))
+        trader._maybe_recalculate_time_strategy_targets(
+            datetime.datetime(2026, 2, 25, 9, 30, 0)
+        )
         self.assertEqual(len(trader.strategy.calls), 2)
         self.assertEqual(trader._last_time_strategy_phase, "normal")
 
-        trader._maybe_recalculate_time_strategy_targets(datetime.datetime(2026, 2, 25, 9, 30, 1))
+        trader._maybe_recalculate_time_strategy_targets(
+            datetime.datetime(2026, 2, 25, 9, 30, 1)
+        )
         self.assertEqual(len(trader.strategy.calls), 2)
 
-        trader._maybe_recalculate_time_strategy_targets(datetime.datetime(2026, 2, 25, 14, 30, 0))
+        trader._maybe_recalculate_time_strategy_targets(
+            datetime.datetime(2026, 2, 25, 14, 30, 0)
+        )
         self.assertEqual(len(trader.strategy.calls), 4)
         self.assertEqual(trader._last_time_strategy_phase, "conservative")
 

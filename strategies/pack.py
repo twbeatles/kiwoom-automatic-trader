@@ -1,4 +1,4 @@
-﻿"""Modular strategy pack orchestrator.
+"""Modular strategy pack orchestrator.
 
 This engine is intentionally lightweight and delegates indicator math to
 `StrategyManager` helper methods where possible.
@@ -29,8 +29,13 @@ class StrategyPackEngine:
         entry_filters = list(pack.get("entry_filters", []))
         risk_overlays = list(pack.get("risk_overlays", []))
         capabilities = getattr(Config, "STRATEGY_CAPABILITIES", {})
-        capability = capabilities.get(primary, {}) if isinstance(capabilities, dict) else {}
-        requires_external = bool(isinstance(capability, dict) and capability.get("requires_external_data", False))
+        capability = (
+            capabilities.get(primary, {}) if isinstance(capabilities, dict) else {}
+        )
+        requires_external = bool(
+            isinstance(capability, dict)
+            and capability.get("requires_external_data", False)
+        )
         flags = getattr(cfg, "feature_flags", {}) if cfg is not None else {}
         if not isinstance(flags, dict):
             flags = {}
@@ -41,7 +46,9 @@ class StrategyPackEngine:
         if reference_now_ts < 1_000_000_000:
             reference_now_ts = datetime.datetime.now().timestamp()
         if isinstance(external_updated_at, datetime.datetime):
-            external_age_sec = max(0.0, reference_now_ts - external_updated_at.timestamp())
+            external_age_sec = max(
+                0.0, reference_now_ts - external_updated_at.timestamp()
+            )
         else:
             external_age_sec = -1.0
         stale_limit = float(getattr(Config, "EXTERNAL_FLOW_STALE_SEC", 30))
@@ -50,7 +57,9 @@ class StrategyPackEngine:
             and external_age_sec <= stale_limit
             and external_status not in {"error", "disabled"}
         )
-        market_intel = self.manager.get_market_intel_snapshot(context.code, now_ts=context.now_ts)
+        market_intel = self.manager.get_market_intel_snapshot(
+            context.code, now_ts=context.now_ts
+        )
 
         conditions: Dict[str, bool] = {}
         metrics: Dict[str, float] = {
@@ -66,7 +75,9 @@ class StrategyPackEngine:
             "regime": 0.0,
             "news_score": float(market_intel.get("news_score", 0.0) or 0.0),
             "theme_score": float(market_intel.get("theme_score", 0.0) or 0.0),
-            "headline_velocity": float(market_intel.get("headline_velocity", 0.0) or 0.0),
+            "headline_velocity": float(
+                market_intel.get("headline_velocity", 0.0) or 0.0
+            ),
             "macro_score": {
                 "risk_off": -1.0,
                 "neutral": 0.0,
@@ -87,7 +98,9 @@ class StrategyPackEngine:
                         now_ts=context.now_ts,
                     )
             elif not external_fresh:
-                request_refresh = getattr(self.manager.trader, "_request_external_refresh", None)
+                request_refresh = getattr(
+                    self.manager.trader, "_request_external_refresh", None
+                )
                 if callable(request_refresh):
                     request_refresh(context.code, reason="stale_guard", force=False)
                 if hasattr(self.manager, "log_dedup"):
@@ -102,9 +115,15 @@ class StrategyPackEngine:
             conditions["external_data_fresh"] = True
 
         if conditions["external_data_enabled"] and conditions["external_data_fresh"]:
-            primary_passed, primary_dir, primary_strength = self._evaluate_primary(primary, context)
+            primary_passed, primary_dir, primary_strength = self._evaluate_primary(
+                primary, context
+            )
         else:
-            primary_passed, primary_dir, primary_strength = False, SignalDirection.FLAT, 0.0
+            primary_passed, primary_dir, primary_strength = (
+                False,
+                SignalDirection.FLAT,
+                0.0,
+            )
         conditions[f"primary:{primary}"] = primary_passed
         signals.append(
             Signal(
@@ -159,7 +178,9 @@ class StrategyPackEngine:
             reason=reason,
         )
 
-    def _evaluate_primary(self, primary: str, context: StrategyContext) -> Tuple[bool, SignalDirection, float]:
+    def _evaluate_primary(
+        self, primary: str, context: StrategyContext
+    ) -> Tuple[bool, SignalDirection, float]:
         info = context.info
         prices = info.get("price_history", [])
         current = float(info.get("current", 0) or 0)
@@ -168,49 +189,90 @@ class StrategyPackEngine:
 
         if primary == "volatility_breakout":
             passed = target > 0 and current >= target
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 1.0 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                1.0 if passed else 0.0,
+            )
 
         if primary == "ma_channel_trend":
             if len(prices) < max(20, getattr(cfg, "ma_long", 20)):
                 return False, SignalDirection.FLAT, 0.0
-            ma_short = self.manager.calculate_ma(prices, getattr(cfg, "ma_short", 5)) or 0
-            ma_long = self.manager.calculate_ma(prices, getattr(cfg, "ma_long", 20)) or 0
+            ma_short = (
+                self.manager.calculate_ma(prices, getattr(cfg, "ma_short", 5)) or 0
+            )
+            ma_long = (
+                self.manager.calculate_ma(prices, getattr(cfg, "ma_long", 20)) or 0
+            )
             passed = current > ma_short > ma_long > 0
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.9 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.9 if passed else 0.0,
+            )
 
         if primary == "orb_donchian_breakout":
             # Use rolling channel breakout as a proxy for ORB/Donchian.
-            period = max(5, int(getattr(cfg, "strategy_params", {}).get("donchian_period", 20)))
+            period = max(
+                5, int(getattr(cfg, "strategy_params", {}).get("donchian_period", 20))
+            )
             if len(prices) < period + 1:
                 return False, SignalDirection.FLAT, 0.0
             channel_high = max(prices[-period - 1 : -1])
             passed = current > channel_high
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.85 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.85 if passed else 0.0,
+            )
 
         if primary == "rsi_bollinger_reversion":
-            rsi = self.manager.calculate_rsi(context.code, getattr(cfg, "rsi_period", 14))
-            bb_upper, bb_mid, bb_lower = self.manager.calculate_bollinger(prices, k=getattr(cfg, "bb_k", 2.0))
+            rsi = self.manager.calculate_rsi(
+                context.code, getattr(cfg, "rsi_period", 14)
+            )
+            bb_upper, bb_mid, bb_lower = self.manager.calculate_bollinger(
+                prices, k=getattr(cfg, "bb_k", 2.0)
+            )
             passed = bb_lower > 0 and current <= bb_mid and rsi <= 40
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.8 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.8 if passed else 0.0,
+            )
 
         if primary == "dmi_trend_strength":
             passed = self.manager.check_dmi_condition(context.code)
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.8 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.8 if passed else 0.0,
+            )
 
         if primary == "investor_program_flow":
             # Optional external pipeline can enrich these fields.
             investor_net = float(info.get("investor_net", 0) or 0)
             program_net = float(info.get("program_net", 0) or 0)
             passed = investor_net > 0 and program_net > 0
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.7 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.7 if passed else 0.0,
+            )
 
         if primary == "time_series_momentum":
-            lookback = max(20, int(getattr(cfg, "strategy_params", {}).get("momentum_lookback", 60)))
+            lookback = max(
+                20,
+                int(getattr(cfg, "strategy_params", {}).get("momentum_lookback", 60)),
+            )
             if len(prices) < lookback:
                 return False, SignalDirection.FLAT, 0.0
             ret = (prices[-1] / max(1e-8, prices[-lookback])) - 1.0
             passed = ret > 0
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, min(1.0, max(0.0, ret * 5))
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                min(1.0, max(0.0, ret * 5)),
+            )
 
         if primary == "cross_sectional_momentum":
             rs = float(info.get("relative_strength", 0) or 0)
@@ -244,23 +306,43 @@ class StrategyPackEngine:
         if primary == "quality_value_lowvol":
             score = float(info.get("qvl_score", 0) or 0)
             passed = score >= 0.4
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, min(1.0, max(0.0, score))
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                min(1.0, max(0.0, score)),
+            )
 
         if primary == "volatility_targeting_overlay":
             realized_vol = float(info.get("realized_vol", 0) or 0)
-            target_vol = float(getattr(cfg, "strategy_params", {}).get("target_vol", 0.25))
+            target_vol = float(
+                getattr(cfg, "strategy_params", {}).get("target_vol", 0.25)
+            )
             passed = realized_vol > 0 and realized_vol <= target_vol
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.6 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.6 if passed else 0.0,
+            )
 
         if primary == "risk_parity_portfolio":
             inv_vol_weight = float(info.get("risk_parity_weight", 0) or 0)
             passed = inv_vol_weight > 0
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, min(1.0, inv_vol_weight)
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                min(1.0, inv_vol_weight),
+            )
 
         if primary == "execution_algo_twap_vwap_pov":
             participation = float(info.get("participation_rate", 0) or 0)
-            passed = participation <= float(getattr(cfg, "strategy_params", {}).get("max_participation", 0.2))
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.5 if passed else 0.0
+            passed = participation <= float(
+                getattr(cfg, "strategy_params", {}).get("max_participation", 0.2)
+            )
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.5 if passed else 0.0,
+            )
 
         if primary == "market_making_spread":
             ask = float(info.get("ask_price", 0) or 0)
@@ -271,21 +353,31 @@ class StrategyPackEngine:
             low = float(getattr(cfg, "strategy_params", {}).get("mm_spread_low", 0.05))
             high = float(getattr(cfg, "strategy_params", {}).get("mm_spread_high", 0.5))
             passed = low <= spread_pct <= high
-            return passed, SignalDirection.LONG if passed else SignalDirection.FLAT, 0.4 if passed else 0.0
+            return (
+                passed,
+                SignalDirection.LONG if passed else SignalDirection.FLAT,
+                0.4 if passed else 0.0,
+            )
 
         # Unknown strategy id -> fail closed.
         return False, SignalDirection.FLAT, 0.0
 
-    def _evaluate_filter(self, name: str, context: StrategyContext) -> Tuple[bool, Optional[float]]:
+    def _evaluate_filter(
+        self, name: str, context: StrategyContext
+    ) -> Tuple[bool, Optional[float]]:
         code = context.code
         info = context.info
 
         if name == "rsi":
-            rsi = self.manager.calculate_rsi(code, getattr(context.config, "rsi_period", 14))
+            rsi = self.manager.calculate_rsi(
+                code, getattr(context.config, "rsi_period", 14)
+            )
             return self.manager.check_rsi_condition(code), rsi
 
         if name == "volume":
-            avg_volume = float(info.get("avg_volume_20", 0) or info.get("avg_volume_5", 0) or 0)
+            avg_volume = float(
+                info.get("avg_volume_20", 0) or info.get("avg_volume_5", 0) or 0
+            )
             cur_volume = float(info.get("current_volume", 0) or 0)
             mult = (cur_volume / avg_volume) if avg_volume > 0 else 0.0
             return self.manager.check_volume_condition(code), mult
@@ -308,7 +400,11 @@ class StrategyPackEngine:
         if name == "spread":
             ask = float(info.get("ask_price", 0) or 0)
             bid = float(info.get("bid_price", 0) or 0)
-            spread = ((ask - bid) / ((ask + bid) / 2.0) * 100.0) if ask > 0 and bid > 0 else 0.0
+            spread = (
+                ((ask - bid) / ((ask + bid) / 2.0) * 100.0)
+                if ask > 0 and bid > 0
+                else 0.0
+            )
             return self.manager.check_spread_condition(code), spread
 
         if name == "mtf":
@@ -319,10 +415,14 @@ class StrategyPackEngine:
             return self.manager.check_gap_condition(code), gap_ratio
 
         if name == "theme_heat_filter":
-            return self.manager.check_market_theme_heat_filter(code, now_ts=context.now_ts)
+            return self.manager.check_market_theme_heat_filter(
+                code, now_ts=context.now_ts
+            )
 
         if name == "intel_fresh_guard":
-            return self.manager.check_market_intel_fresh_guard(code, now_ts=context.now_ts)
+            return self.manager.check_market_intel_fresh_guard(
+                code, now_ts=context.now_ts
+            )
 
         # Unknown filter is considered pass-through for forward compatibility.
         return True, None
@@ -335,7 +435,9 @@ class StrategyPackEngine:
 
         if name == "max_holdings":
             max_holdings = int(getattr(cfg, "max_holdings", 5))
-            current_count = int(getattr(self.manager.trader, "_holding_or_pending_count", 0))
+            current_count = int(
+                getattr(self.manager.trader, "_holding_or_pending_count", 0)
+            )
             return current_count < max_holdings
 
         if name == "market_limit":
@@ -350,14 +452,22 @@ class StrategyPackEngine:
             initial = float(
                 context.portfolio_state.get(
                     "daily_initial_deposit",
-                    getattr(trader, "daily_initial_deposit", getattr(trader, "initial_deposit", 0)),
+                    getattr(
+                        trader,
+                        "daily_initial_deposit",
+                        getattr(trader, "initial_deposit", 0),
+                    ),
                 )
                 or 0
             )
             realized = float(
                 context.portfolio_state.get(
                     "daily_realized_profit",
-                    getattr(trader, "daily_realized_profit", getattr(trader, "total_realized_profit", 0)),
+                    getattr(
+                        trader,
+                        "daily_realized_profit",
+                        getattr(trader, "total_realized_profit", 0),
+                    ),
                 )
                 or 0
             )
@@ -388,19 +498,27 @@ class StrategyPackEngine:
             return True
 
         if name == "news_risk_guard":
-            passed, _score = self.manager.check_market_news_risk_guard(code, now_ts=context.now_ts)
+            passed, _score = self.manager.check_market_news_risk_guard(
+                code, now_ts=context.now_ts
+            )
             return passed
 
         if name == "disclosure_event_guard":
-            passed, _level = self.manager.check_market_disclosure_event_guard(code, now_ts=context.now_ts)
+            passed, _level = self.manager.check_market_disclosure_event_guard(
+                code, now_ts=context.now_ts
+            )
             return passed
 
         if name == "macro_regime_guard":
-            passed, _regime = self.manager.check_market_macro_regime_guard(code, now_ts=context.now_ts)
+            passed, _regime = self.manager.check_market_macro_regime_guard(
+                code, now_ts=context.now_ts
+            )
             return passed
 
         if name == "intel_fresh_guard":
-            passed, _age = self.manager.check_market_intel_fresh_guard(code, now_ts=context.now_ts)
+            passed, _age = self.manager.check_market_intel_fresh_guard(
+                code, now_ts=context.now_ts
+            )
             return passed
 
         if name == "liquidity_stress_guard":
@@ -411,13 +529,33 @@ class StrategyPackEngine:
             spread_pct = 0.0
             if ask > 0 and bid > 0 and (ask + bid) > 0:
                 spread_pct = (ask - bid) / ((ask + bid) / 2.0) * 100.0
-            stress_spread = float(getattr(cfg, "stress_spread_pct", getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0)))
+            stress_spread = float(
+                getattr(
+                    cfg,
+                    "stress_spread_pct",
+                    getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0),
+                )
+            )
             avg_value = float(info.get("avg_value_20", 0) or 0)
-            min_value = float(getattr(cfg, "min_avg_value", getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000)))
+            min_value = float(
+                getattr(
+                    cfg,
+                    "min_avg_value",
+                    getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000),
+                )
+            )
             if min_value < 10_000_000:
                 min_value *= 100_000_000
-            ratio = float(getattr(cfg, "stress_min_value_ratio", getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35)))
-            stressed = spread_pct > stress_spread or (avg_value > 0 and avg_value < min_value * ratio)
+            ratio = float(
+                getattr(
+                    cfg,
+                    "stress_min_value_ratio",
+                    getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35),
+                )
+            )
+            stressed = spread_pct > stress_spread or (
+                avg_value > 0 and avg_value < min_value * ratio
+            )
             return not stressed
 
         if name == "slippage_guard":
@@ -426,12 +564,24 @@ class StrategyPackEngine:
             series = getattr(trader, "_recent_slippage_bps", None)
             if not series:
                 return True
-            window = int(getattr(cfg, "slippage_window_trades", getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20)))
+            window = int(
+                getattr(
+                    cfg,
+                    "slippage_window_trades",
+                    getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20),
+                )
+            )
             values = list(series)[-max(1, window) :]
             if not values:
                 return True
             avg_slip = sum(abs(float(v)) for v in values) / len(values)
-            return avg_slip <= float(getattr(cfg, "max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+            return avg_slip <= float(
+                getattr(
+                    cfg,
+                    "max_slippage_bps",
+                    getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0),
+                )
+            )
 
         if name == "order_health_guard":
             if not bool(getattr(cfg, "use_order_health_guard", True)):

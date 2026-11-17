@@ -63,7 +63,14 @@ class TestNotifierReset(unittest.TestCase):
         trader._set_connection_status = MagicMock()
         trader.log = MagicMock()
 
-        trader._on_connect_api_success({"auth": object(), "rest_client": object(), "ws_client": object(), "accounts": []})
+        trader._on_connect_api_success(
+            {
+                "auth": object(),
+                "rest_client": object(),
+                "ws_client": object(),
+                "accounts": [],
+            }
+        )
 
         old_telegram.stop.assert_called_once()
         new_telegram.send.assert_called_once()

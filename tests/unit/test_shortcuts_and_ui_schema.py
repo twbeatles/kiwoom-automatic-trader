@@ -64,6 +64,7 @@ class _Harness(SystemShellMixin):
     def _zoom_ui_out(self):
         return None
 
+
 class TestShortcutsAndUISchema(unittest.TestCase):
     def _read_feature_text(self, path: str) -> str:
         root = Path(path)
@@ -74,14 +75,27 @@ class TestShortcutsAndUISchema(unittest.TestCase):
         self.assertEqual(Config.SHORTCUTS.get("open_presets"), "Ctrl+Shift+P")
 
         records = []
-        with patch("app.mixins.system_shell.QKeySequence", side_effect=lambda key: key), patch(
-            "app.mixins.system_shell.QShortcut",
-            side_effect=lambda key, parent: _DummyShortcut(key, parent, records),
+        with (
+            patch("app.mixins.system_shell.QKeySequence", side_effect=lambda key: key),
+            patch(
+                "app.mixins.system_shell.QShortcut",
+                side_effect=lambda key, parent: _DummyShortcut(key, parent, records),
+            ),
         ):
             _Harness()._setup_shortcuts()
 
-        self.assertTrue(any(key == "Ctrl+P" and fn.__name__ == "_open_profile_manager" for key, fn in records))
-        self.assertTrue(any(key == "Ctrl+Shift+P" and fn.__name__ == "_open_presets" for key, fn in records))
+        self.assertTrue(
+            any(
+                key == "Ctrl+P" and fn.__name__ == "_open_profile_manager"
+                for key, fn in records
+            )
+        )
+        self.assertTrue(
+            any(
+                key == "Ctrl+Shift+P" and fn.__name__ == "_open_presets"
+                for key, fn in records
+            )
+        )
 
     def test_auto_start_widget_single_source_of_truth(self):
         text = self._read_feature_text("app/features/ui_build")
@@ -120,7 +134,10 @@ class TestShortcutsAndUISchema(unittest.TestCase):
         ):
             self.assertTrue(label in ui_text or label in market_text)
 
-        self.assertIn("시장 인텔리전스는 뉴스, 공시, 검색량, 매크로 데이터를 읽어 자동매매를 보조합니다.", market_text)
+        self.assertIn(
+            "시장 인텔리전스는 뉴스, 공시, 검색량, 매크로 데이터를 읽어 자동매매를 보조합니다.",
+            market_text,
+        )
         self.assertNotIn("_create_market_intelligence_api_group", market_text)
 
 

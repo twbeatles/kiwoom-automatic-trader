@@ -17,7 +17,9 @@ class TestAPIConnectAccounts(unittest.TestCase):
     @patch("app.mixins.api_account.KiwoomWebSocketClient")
     @patch("app.mixins.api_account.KiwoomRESTClient")
     @patch("app.mixins.api_account.KiwoomAuth")
-    def test_connect_worker_fails_when_account_list_empty(self, auth_cls, rest_cls, ws_cls):
+    def test_connect_worker_fails_when_account_list_empty(
+        self, auth_cls, rest_cls, ws_cls
+    ):
         auth = MagicMock()
         auth.test_connection.return_value = {"success": True}
         auth_cls.return_value = auth
@@ -33,7 +35,9 @@ class TestAPIConnectAccounts(unittest.TestCase):
     @patch("app.mixins.api_account.KiwoomWebSocketClient")
     @patch("app.mixins.api_account.KiwoomRESTClient")
     @patch("app.mixins.api_account.KiwoomAuth")
-    def test_connect_worker_returns_accounts_on_success(self, auth_cls, rest_cls, ws_cls):
+    def test_connect_worker_returns_accounts_on_success(
+        self, auth_cls, rest_cls, ws_cls
+    ):
         auth = MagicMock()
         auth.test_connection.return_value = {"success": True}
         auth_cls.return_value = auth
@@ -70,7 +74,9 @@ class TestAPIConnectAccounts(unittest.TestCase):
         trader.log = lambda msg: trader.logs.append(str(msg))
 
         trader._on_connect_api_failure(
-            RuntimeError("입력 값 오류입니다[8030:투자구분(실전/모의)이 달라서 Appkey를 사용할수가 없습니다]")
+            RuntimeError(
+                "입력 값 오류입니다[8030:투자구분(실전/모의)이 달라서 Appkey를 사용할수가 없습니다]"
+            )
         )
 
         self.assertTrue(warning.called)

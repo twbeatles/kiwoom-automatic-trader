@@ -106,7 +106,10 @@ class ProfileManagerDialog(QDialog):
         if not item:
             return
         name = item.data(Qt.ItemDataRole.UserRole)
-        if QMessageBox.question(self, "확인", f"'{name}' 프로필을 삭제하시겠습니까?") == QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.question(self, "확인", f"'{name}' 프로필을 삭제하시겠습니까?")
+            == QMessageBox.StandardButton.Yes
+        ):
             self.pm.delete_profile(name)
             self._refresh_list()
             self.detail_label.setText("프로필을 선택하세요")

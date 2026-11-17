@@ -3,6 +3,7 @@
 연속 성공-빈 포지션 동기화 + 미체결 조회 결과를 조합해 고착 pending을
 해제/격리하는지 검증한다. Worker는 동기 실행 FakeThreadpool로 대체한다.
 """
+
 import unittest
 
 from api.models import OpenOrder

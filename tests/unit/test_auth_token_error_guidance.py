@@ -1,4 +1,5 @@
 """Issue #1: 토큰 8030(실전/모의 불일치) 안내가 사용자에게 전달되는지 검증."""
+
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -14,7 +15,9 @@ def _json_response(payload, status_code=200):
     return response
 
 
-_8030_MSG = "입력 값 오류입니다[8030:투자구분(실전/모의)이 달라서 Appkey를 사용할수가 없습니다]"
+_8030_MSG = (
+    "입력 값 오류입니다[8030:투자구분(실전/모의)이 달라서 Appkey를 사용할수가 없습니다]"
+)
 
 
 class TestAuthTokenErrorGuidance(unittest.TestCase):

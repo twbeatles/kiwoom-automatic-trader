@@ -19,7 +19,9 @@ class TestWebSocketMainThreadDispatch(unittest.TestCase):
         def callback():
             seen.append(QThread.currentThread() == app.thread())
 
-        thread = threading.Thread(target=lambda: client._invoke_on_main_thread(callback))
+        thread = threading.Thread(
+            target=lambda: client._invoke_on_main_thread(callback)
+        )
         thread.start()
         deadline = time.time() + 2.0
         while not seen and time.time() < deadline:

@@ -4,11 +4,17 @@ from app.main_window import KiwoomProTrader
 
 
 class _Harness:
-    _on_diagnostic_release_sync_failed_selected = KiwoomProTrader._on_diagnostic_release_sync_failed_selected
+    _on_diagnostic_release_sync_failed_selected = (
+        KiwoomProTrader._on_diagnostic_release_sync_failed_selected
+    )
 
     def __init__(self):
         self.universe = {
-            "005930": {"name": "SAMSUNG", "status": "sync_failed", "sync_failed_reason": "sync timeout"}
+            "005930": {
+                "name": "SAMSUNG",
+                "status": "sync_failed",
+                "sync_failed_reason": "sync timeout",
+            }
         }
         self._sync_failed_codes = {"005930"}
         self.sync_calls = []

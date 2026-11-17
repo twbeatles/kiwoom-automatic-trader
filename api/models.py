@@ -11,26 +11,29 @@ from typing import List
 
 class OrderType(Enum):
     """주문 유형"""
-    BUY = "1"           # 신규 매수
-    SELL = "2"          # 신규 매도
-    BUY_CANCEL = "3"    # 매수 취소
-    SELL_CANCEL = "4"   # 매도 취소
-    BUY_MODIFY = "5"    # 매수 정정
-    SELL_MODIFY = "6"   # 매도 정정
+
+    BUY = "1"  # 신규 매수
+    SELL = "2"  # 신규 매도
+    BUY_CANCEL = "3"  # 매수 취소
+    SELL_CANCEL = "4"  # 매도 취소
+    BUY_MODIFY = "5"  # 매수 정정
+    SELL_MODIFY = "6"  # 매도 정정
 
 
 class PriceType(Enum):
     """호가 유형"""
-    LIMIT = "00"        # 지정가
-    MARKET = "03"       # 시장가
+
+    LIMIT = "00"  # 지정가
+    MARKET = "03"  # 시장가
     CONDITIONAL = "05"  # 조건부지정가
-    BEST = "06"         # 최유리지정가
-    PRIORITY = "07"     # 최우선지정가
-    AFTER_MARKET = "61" # 장후시간외종가
+    BEST = "06"  # 최유리지정가
+    PRIORITY = "07"  # 최우선지정가
+    AFTER_MARKET = "61"  # 장후시간외종가
 
 
 class MarketType(Enum):
     """시장 구분"""
+
     KOSPI = "1"
     KOSDAQ = "2"
 
@@ -38,67 +41,72 @@ class MarketType(Enum):
 @dataclass
 class StockQuote:
     """주식 시세 정보"""
-    code: str                    # 종목코드
-    name: str = ""               # 종목명
-    current_price: int = 0       # 현재가
-    change: int = 0              # 전일대비
-    change_rate: float = 0.0     # 등락률 (%)
-    open_price: int = 0          # 시가
-    high_price: int = 0          # 고가
-    low_price: int = 0           # 저가
-    volume: int = 0              # 거래량
-    volume_amount: int = 0       # 거래대금
-    prev_close: int = 0          # 전일종가
-    ask_price: int = 0           # 매도호가 (최우선)
-    bid_price: int = 0           # 매수호가 (최우선)
-    timestamp: str = ""          # 체결시각
-    market_type: str = "unknown" # 시장구분 (KOSPI/KOSDAQ)
-    sector: str = ""             # 업종
+
+    code: str  # 종목코드
+    name: str = ""  # 종목명
+    current_price: int = 0  # 현재가
+    change: int = 0  # 전일대비
+    change_rate: float = 0.0  # 등락률 (%)
+    open_price: int = 0  # 시가
+    high_price: int = 0  # 고가
+    low_price: int = 0  # 저가
+    volume: int = 0  # 거래량
+    volume_amount: int = 0  # 거래대금
+    prev_close: int = 0  # 전일종가
+    ask_price: int = 0  # 매도호가 (최우선)
+    bid_price: int = 0  # 매수호가 (최우선)
+    timestamp: str = ""  # 체결시각
+    market_type: str = "unknown"  # 시장구분 (KOSPI/KOSDAQ)
+    sector: str = ""  # 업종
 
 
 @dataclass
 class OrderBook:
     """호가 정보"""
+
     code: str
-    ask_prices: List[int] = field(default_factory=list)   # 매도호가 (1~10)
+    ask_prices: List[int] = field(default_factory=list)  # 매도호가 (1~10)
     ask_volumes: List[int] = field(default_factory=list)  # 매도호가수량
-    bid_prices: List[int] = field(default_factory=list)   # 매수호가 (1~10)
+    bid_prices: List[int] = field(default_factory=list)  # 매수호가 (1~10)
     bid_volumes: List[int] = field(default_factory=list)  # 매수호가수량
-    total_ask_volume: int = 0    # 총 매도잔량
-    total_bid_volume: int = 0    # 총 매수잔량
+    total_ask_volume: int = 0  # 총 매도잔량
+    total_bid_volume: int = 0  # 총 매수잔량
     timestamp: str = ""
 
 
 @dataclass
 class AccountInfo:
     """계좌 정보"""
-    account_no: str              # 계좌번호
-    deposit: int = 0             # 예수금
-    available_amount: int = 0    # 주문가능금액
-    total_buy_amount: int = 0    # 총매입금액
-    total_eval_amount: int = 0   # 총평가금액
-    total_profit: int = 0        # 총평가손익
+
+    account_no: str  # 계좌번호
+    deposit: int = 0  # 예수금
+    available_amount: int = 0  # 주문가능금액
+    total_buy_amount: int = 0  # 총매입금액
+    total_eval_amount: int = 0  # 총평가금액
+    total_profit: int = 0  # 총평가손익
     total_profit_rate: float = 0.0  # 총수익률 (%)
 
 
 @dataclass
 class Position:
     """보유 종목"""
-    code: str                    # 종목코드
-    name: str = ""               # 종목명
-    quantity: int = 0            # 보유수량
-    available_qty: int = 0       # 매도가능수량
-    buy_price: int = 0           # 매입단가
-    current_price: int = 0       # 현재가
-    buy_amount: int = 0          # 매입금액
-    eval_amount: int = 0         # 평가금액
-    profit: int = 0              # 평가손익
-    profit_rate: float = 0.0     # 수익률 (%)
+
+    code: str  # 종목코드
+    name: str = ""  # 종목명
+    quantity: int = 0  # 보유수량
+    available_qty: int = 0  # 매도가능수량
+    buy_price: int = 0  # 매입단가
+    current_price: int = 0  # 현재가
+    buy_amount: int = 0  # 매입금액
+    eval_amount: int = 0  # 평가금액
+    profit: int = 0  # 평가손익
+    profit_rate: float = 0.0  # 수익률 (%)
 
 
 @dataclass
 class OpenOrder:
     """Open/unfilled order snapshot."""
+
     order_no: str
     code: str
     side: str = ""
@@ -112,37 +120,40 @@ class OpenOrder:
 @dataclass
 class OrderResult:
     """주문 결과"""
+
     success: bool
-    order_no: str = ""           # 주문번호
-    code: str = ""               # 종목코드
-    order_type: str = ""         # 주문유형
-    quantity: int = 0            # 주문수량
-    price: int = 0               # 주문가격
-    message: str = ""            # 결과 메시지
-    error_code: int = 0          # 오류 코드
+    order_no: str = ""  # 주문번호
+    code: str = ""  # 종목코드
+    order_type: str = ""  # 주문유형
+    quantity: int = 0  # 주문수량
+    price: int = 0  # 주문가격
+    message: str = ""  # 결과 메시지
+    error_code: int = 0  # 오류 코드
 
 
 @dataclass
 class ExecutionData:
     """체결 데이터 (실시간)"""
-    code: str                    # 종목코드
-    name: str = ""               # 종목명
-    exec_time: str = ""          # 체결시각
-    exec_price: int = 0          # 체결가
-    exec_volume: int = 0         # 체결수량
-    exec_change: int = 0         # 전일대비
-    total_volume: int = 0        # 누적거래량
-    ask_price: int = 0           # 매도호가
-    bid_price: int = 0           # 매수호가
-    trading_status: str = ""     # 거래상태 (NORMAL/VI/HALT 등)
-    market_event: str = ""       # 시장 이벤트 플래그
-    index_code: str = ""         # 연계 인덱스 코드
-    index_value: float = 0.0     # 연계 인덱스 값
+
+    code: str  # 종목코드
+    name: str = ""  # 종목명
+    exec_time: str = ""  # 체결시각
+    exec_price: int = 0  # 체결가
+    exec_volume: int = 0  # 체결수량
+    exec_change: int = 0  # 전일대비
+    total_volume: int = 0  # 누적거래량
+    ask_price: int = 0  # 매도호가
+    bid_price: int = 0  # 매수호가
+    trading_status: str = ""  # 거래상태 (NORMAL/VI/HALT 등)
+    market_event: str = ""  # 시장 이벤트 플래그
+    index_code: str = ""  # 연계 인덱스 코드
+    index_value: float = 0.0  # 연계 인덱스 값
 
 
 @dataclass
 class IndexTick:
     """지수/시장 상태 틱"""
+
     code: str
     value: float = 0.0
     change: float = 0.0
@@ -152,88 +163,93 @@ class IndexTick:
     market_event: str = ""
 
 
-@dataclass  
+@dataclass
 class DailyOHLC:
     """일봉 데이터"""
-    date: str                    # 일자 (YYYYMMDD)
-    open_price: int = 0          # 시가
-    high_price: int = 0          # 고가
-    low_price: int = 0           # 저가
-    close_price: int = 0         # 종가
-    volume: int = 0              # 거래량
-    volume_amount: int = 0       # 거래대금
+
+    date: str  # 일자 (YYYYMMDD)
+    open_price: int = 0  # 시가
+    high_price: int = 0  # 고가
+    low_price: int = 0  # 저가
+    close_price: int = 0  # 종가
+    volume: int = 0  # 거래량
+    volume_amount: int = 0  # 거래대금
 
 
 @dataclass
 class DepositDetail:
     """예수금 상세 정보 (kt00001)"""
-    account_no: str              # 계좌번호
-    deposit: int = 0             # 예수금
-    d1_deposit: int = 0          # D+1 추정예수금
-    d2_deposit: int = 0          # D+2 추정예수금
-    withdrawable_amount: int = 0 # 출금가능금액
+
+    account_no: str  # 계좌번호
+    deposit: int = 0  # 예수금
+    d1_deposit: int = 0  # D+1 추정예수금
+    d2_deposit: int = 0  # D+2 추정예수금
+    withdrawable_amount: int = 0  # 출금가능금액
     order_available_amount: int = 0  # 주문가능금액
-    receivable_amount: int = 0   # 미수금
-    collateral_amount: int = 0   # 대용금
-    stock_eval_amount: int = 0   # 유가평가금액
-    total_assets: int = 0        # 총자산
+    receivable_amount: int = 0  # 미수금
+    collateral_amount: int = 0  # 대용금
+    stock_eval_amount: int = 0  # 유가평가금액
+    total_assets: int = 0  # 총자산
 
 
 @dataclass
 class ExecutedOrder:
     """당일 체결 주문 정보 (ka10076)"""
-    exec_no: str                 # 체결번호
-    order_no: str                # 주문번호
-    code: str                    # 종목코드
-    name: str = ""               # 종목명
-    side: str = ""               # 매수/매도 구분 ('buy'/'sell')
-    order_type: str = ""         # 주문유형 (지정가/시장가)
-    quantity: int = 0            # 주문수량
-    exec_quantity: int = 0       # 체결수량
-    exec_price: int = 0          # 체결단가
-    exec_amount: int = 0         # 체결금액
-    exec_time: str = ""          # 체결시각 (HHMMSS)
-    fee: int = 0                 # 수수료
-    tax: int = 0                 # 제세금
+
+    exec_no: str  # 체결번호
+    order_no: str  # 주문번호
+    code: str  # 종목코드
+    name: str = ""  # 종목명
+    side: str = ""  # 매수/매도 구분 ('buy'/'sell')
+    order_type: str = ""  # 주문유형 (지정가/시장가)
+    quantity: int = 0  # 주문수량
+    exec_quantity: int = 0  # 체결수량
+    exec_price: int = 0  # 체결단가
+    exec_amount: int = 0  # 체결금액
+    exec_time: str = ""  # 체결시각 (HHMMSS)
+    fee: int = 0  # 수수료
+    tax: int = 0  # 제세금
 
 
 @dataclass
 class TickCandle:
     """틱 차트 데이터 (ka10079)"""
-    time: str                    # 체결시각 (HHMMSS)
-    price: int = 0               # 체결가
-    volume: int = 0              # 체결량
-    change: int = 0              # 전일대비
-    change_rate: float = 0.0     # 등락률
-    side: str = ""               # 체결구분 (+1: 매수체결, -1: 매도체결)
-    cum_volume: int = 0          # 누적거래량
+
+    time: str  # 체결시각 (HHMMSS)
+    price: int = 0  # 체결가
+    volume: int = 0  # 체결량
+    change: int = 0  # 전일대비
+    change_rate: float = 0.0  # 등락률
+    side: str = ""  # 체결구분 (+1: 매수체결, -1: 매도체결)
+    cum_volume: int = 0  # 누적거래량
 
 
 @dataclass
 class SectorQuote:
     """업종/시장 지수 시세 (ka20001)"""
-    code: str                    # 업종/지수코드
-    name: str = ""               # 업종/지수명
-    current_price: float = 0.0   # 현재지수
-    change: float = 0.0          # 전일대비
-    change_rate: float = 0.0     # 등락률 (%)
-    open_price: float = 0.0      # 시가
-    high_price: float = 0.0      # 고가
-    low_price: float = 0.0       # 저가
-    volume: int = 0              # 거래량 (천주/주)
-    volume_amount: int = 0       # 거래대금 (백만원)
+
+    code: str  # 업종/지수코드
+    name: str = ""  # 업종/지수명
+    current_price: float = 0.0  # 현재지수
+    change: float = 0.0  # 전일대비
+    change_rate: float = 0.0  # 등락률 (%)
+    open_price: float = 0.0  # 시가
+    high_price: float = 0.0  # 고가
+    low_price: float = 0.0  # 저가
+    volume: int = 0  # 거래량 (천주/주)
+    volume_amount: int = 0  # 거래대금 (백만원)
 
 
 @dataclass
 class VIEvent:
     """변동성완화장치(VI) 발동/해제 이벤트 (ka10054 / WebSocket 1h)"""
-    code: str                    # 종목코드
-    name: str = ""               # 종목명
-    vi_type: str = ""            # VI 구분 ('동적', '정적', '동적+정적')
-    vi_status: str = ""          # 발동상태 ('발동', '해제')
-    trigger_time: str = ""       # 발동시각 (HHMMSS)
-    release_time: str = ""       # 해제시각 (HHMMSS)
-    trigger_price: int = 0       # 발동가격
-    base_price: int = 0          # 기준가격
-    deviance_rate: float = 0.0   # 괴리율 (%)
 
+    code: str  # 종목코드
+    name: str = ""  # 종목명
+    vi_type: str = ""  # VI 구분 ('동적', '정적', '동적+정적')
+    vi_status: str = ""  # 발동상태 ('발동', '해제')
+    trigger_time: str = ""  # 발동시각 (HHMMSS)
+    release_time: str = ""  # 해제시각 (HHMMSS)
+    trigger_price: int = 0  # 발동가격
+    base_price: int = 0  # 기준가격
+    deviance_rate: float = 0.0  # 괴리율 (%)

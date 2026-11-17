@@ -8,10 +8,18 @@ from .risk_state import TradingSessionRiskStateMixin
 from .table import TradingSessionTableMixin
 
 
-class TradingSessionMixin(TradingSessionPositionsMixin, TradingSessionCleanupMixin, TradingSessionRiskStateMixin, TradingSessionExternalFlowMixin, TradingSessionLifecycleMixin, TradingSessionTableMixin):
+class TradingSessionMixin(
+    TradingSessionPositionsMixin,
+    TradingSessionCleanupMixin,
+    TradingSessionRiskStateMixin,
+    TradingSessionExternalFlowMixin,
+    TradingSessionLifecycleMixin,
+    TradingSessionTableMixin,
+):
     """Composed TradingSessionMixin split by feature responsibility."""
 
     pass
+
 
 __all__ = [
     "TradingSessionMixin",

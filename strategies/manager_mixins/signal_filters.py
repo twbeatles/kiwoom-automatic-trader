@@ -56,7 +56,9 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
             for i in range(d_period):
                 idx = len(stoch_k_values) - d_period + i - k_period + 1
                 if idx >= 0:
-                    k_smooth.append(sum(stoch_k_values[idx : idx + k_period]) / k_period)
+                    k_smooth.append(
+                        sum(stoch_k_values[idx : idx + k_period]) / k_period
+                    )
             d_value = sum(k_smooth) / len(k_smooth) if k_smooth else k_value
         else:
             d_value = k_value
@@ -93,7 +95,10 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
                 return True
             upper_limit = self.config.stoch_upper
         else:
-            if not hasattr(self.trader, "chk_use_stoch_rsi") or not self.trader.chk_use_stoch_rsi.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_stoch_rsi")
+                or not self.trader.chk_use_stoch_rsi.isChecked()
+            ):
                 return True
             upper = getattr(self.trader, "spin_stoch_upper", None)
             upper_limit = upper.value() if upper else 80
@@ -102,7 +107,9 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
 
         if k >= upper_limit:
             info = self.trader.universe.get(code, {})
-            self.log(f"[{info.get('name', code)}] StochRSI K={k:.1f} >= {upper_limit} (과매수) 진입 보류")
+            self.log(
+                f"[{info.get('name', code)}] StochRSI K={k:.1f} >= {upper_limit} (과매수) 진입 보류"
+            )
             return False
 
         return True
@@ -112,7 +119,10 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
             if not self.config.use_mtf:
                 return True
         else:
-            if not hasattr(self.trader, "chk_use_mtf") or not self.trader.chk_use_mtf.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_mtf")
+                or not self.trader.chk_use_mtf.isChecked()
+            ):
                 return True
 
         info = self.trader.universe.get(code, {})
@@ -122,7 +132,9 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
         minute_trend = self._get_trend(minute_prices, 10)
 
         if daily_trend != "up" or minute_trend != "up":
-            self.log(f"[{info.get('name', code)}] MTF 불일치: 일봉={daily_trend}, 분봉={minute_trend}")
+            self.log(
+                f"[{info.get('name', code)}] MTF 불일치: 일봉={daily_trend}, 분봉={minute_trend}"
+            )
             return False
 
         return True
@@ -141,12 +153,17 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
             return "down"
         return "neutral"
 
-    def calculate_partial_take_profit(self, code, current_profit_rate: float) -> Optional[Dict]:
+    def calculate_partial_take_profit(
+        self, code, current_profit_rate: float
+    ) -> Optional[Dict]:
         if self.config:
             if not self.config.use_partial_profit:
                 return None
         else:
-            if not hasattr(self.trader, "chk_use_partial_profit") or not self.trader.chk_use_partial_profit.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_partial_profit")
+                or not self.trader.chk_use_partial_profit.isChecked()
+            ):
                 return None
 
         info = self.trader.universe.get(code, {})
@@ -175,12 +192,20 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
         current = info.get("current", 0)
         target = info.get("target", 0)
 
-        scores["target_break"] = Config.ENTRY_WEIGHTS.get("target_break", 20) if target > 0 and current >= target else 0
+        scores["target_break"] = (
+            Config.ENTRY_WEIGHTS.get("target_break", 20)
+            if target > 0 and current >= target
+            else 0
+        )
 
         if len(prices) >= 20:
             ma20 = sum(prices[-20:]) / 20
             ma5 = sum(prices[-5:]) / 5 if len(prices) >= 5 else current
-            scores["ma_filter"] = Config.ENTRY_WEIGHTS.get("ma_filter", 15) if current > ma20 and ma5 > ma20 else 0
+            scores["ma_filter"] = (
+                Config.ENTRY_WEIGHTS.get("ma_filter", 15)
+                if current > ma20 and ma5 > ma20
+                else 0
+            )
         else:
             scores["ma_filter"] = Config.ENTRY_WEIGHTS.get("ma_filter", 15) // 2
 
@@ -193,14 +218,18 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
             scores["rsi_optimal"] = 0
 
         macd, signal, _hist = self.calculate_macd(prices)
-        scores["macd_golden"] = Config.ENTRY_WEIGHTS.get("macd_golden", 20) if macd > signal else 0
+        scores["macd_golden"] = (
+            Config.ENTRY_WEIGHTS.get("macd_golden", 20) if macd > signal else 0
+        )
 
         current_volume = info.get("current_volume", 0)
         avg_volume = info.get("avg_volume_5", 0)
         if avg_volume > 0 and current_volume >= avg_volume * 1.2:
             scores["volume_confirm"] = Config.ENTRY_WEIGHTS.get("volume_confirm", 15)
         elif avg_volume > 0 and current_volume >= avg_volume:
-            scores["volume_confirm"] = Config.ENTRY_WEIGHTS.get("volume_confirm", 15) // 2
+            scores["volume_confirm"] = (
+                Config.ENTRY_WEIGHTS.get("volume_confirm", 15) // 2
+            )
         else:
             scores["volume_confirm"] = 0
 
@@ -224,17 +253,26 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
                 return True, 100
             threshold = int(self.config.entry_score_threshold)
         else:
-            use_entry = hasattr(self.trader, "chk_use_entry_score") and self.trader.chk_use_entry_score.isChecked()
+            use_entry = (
+                hasattr(self.trader, "chk_use_entry_score")
+                and self.trader.chk_use_entry_score.isChecked()
+            )
             if not use_entry:
                 return True, 100
             threshold_spin = getattr(self.trader, "spin_entry_score_threshold", None)
-            threshold = int(threshold_spin.value()) if threshold_spin else Config.ENTRY_SCORE_THRESHOLD
+            threshold = (
+                int(threshold_spin.value())
+                if threshold_spin
+                else Config.ENTRY_SCORE_THRESHOLD
+            )
 
         total, details = self.calculate_entry_score(code)
 
         if total < threshold:
             info = self.trader.universe.get(code, {})
-            self.log(f"[{info.get('name', code)}] 진입점수 {total}/{threshold} 미달: {details}")
+            self.log(
+                f"[{info.get('name', code)}] 진입점수 {total}/{threshold} 미달: {details}"
+            )
             return False, total
 
         return True, total
@@ -261,14 +299,19 @@ class StrategyManagerSignalFilterMixin(StrategyManagerMixinBase):
             if not self.config.use_gap:
                 return True
         else:
-            if not hasattr(self.trader, "chk_use_gap") or not self.trader.chk_use_gap.isChecked():
+            if (
+                not hasattr(self.trader, "chk_use_gap")
+                or not self.trader.chk_use_gap.isChecked()
+            ):
                 return True
 
         gap_type, gap_ratio = self.analyze_gap(code)
 
         if gap_type == "gap_up":
             info = self.trader.universe.get(code, {})
-            self.log(f"[{info.get('name', code)}] ⚡ 갭상승 {gap_ratio:.1f}% 감지 - 보수적 진입")
+            self.log(
+                f"[{info.get('name', code)}] ⚡ 갭상승 {gap_ratio:.1f}% 감지 - 보수적 진입"
+            )
             if gap_ratio > 5.0:
                 return False
 

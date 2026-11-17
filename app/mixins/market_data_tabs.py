@@ -187,7 +187,9 @@ class MarketDataTabsMixin(TraderMixinBase):
             btn.setEnabled(False)
             btn.setText("검색 중...")
 
-        worker = Worker(self.rest_client.search_by_condition, cond_data["index"], cond_data["name"])
+        worker = Worker(
+            self.rest_client.search_by_condition, cond_data["index"], cond_data["name"]
+        )
 
         def on_complete(results):
             if btn:
@@ -209,7 +211,9 @@ class MarketDataTabsMixin(TraderMixinBase):
                         text_str = str(text)
                         item = self.condition_table.item(i, j)
                         if item is None:
-                            self.condition_table.setItem(i, j, QTableWidgetItem(text_str))
+                            self.condition_table.setItem(
+                                i, j, QTableWidgetItem(text_str)
+                            )
                         elif item.text() != text_str:
                             item.setText(text_str)
             finally:
@@ -217,7 +221,9 @@ class MarketDataTabsMixin(TraderMixinBase):
 
             self.condition_info.setText(f"{len(results)}개 종목 검색됨")
             self.log(f"조건검색 완료: {len(results)}개")
-            refresh_candidates = getattr(self, "_refresh_candidate_universe_state", None)
+            refresh_candidates = getattr(
+                self, "_refresh_candidate_universe_state", None
+            )
             if callable(refresh_candidates):
                 refresh_candidates()
 
@@ -294,7 +300,9 @@ class MarketDataTabsMixin(TraderMixinBase):
                 self.ranking_table.setUpdatesEnabled(True)
 
             self.log(f"{ranking_type} 조회 완료")
-            refresh_candidates = getattr(self, "_refresh_candidate_universe_state", None)
+            refresh_candidates = getattr(
+                self, "_refresh_candidate_universe_state", None
+            )
             if callable(refresh_candidates):
                 refresh_candidates()
 

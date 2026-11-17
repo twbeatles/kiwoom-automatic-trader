@@ -8,10 +8,18 @@ from .settings_tabs import UIBuildSettingsTabsMixin
 from .workspaces import WORKSPACE_LABELS, UIBuildWorkspacesMixin
 
 
-class UIBuildMixin(UIBuildWorkspacesMixin, UIBuildBacktestMixin, UIBuildLayoutMixin, UIBuildSettingsTabsMixin, UIBuildMarketTabsMixin, UIBuildDataTabsMixin):
+class UIBuildMixin(
+    UIBuildWorkspacesMixin,
+    UIBuildBacktestMixin,
+    UIBuildLayoutMixin,
+    UIBuildSettingsTabsMixin,
+    UIBuildMarketTabsMixin,
+    UIBuildDataTabsMixin,
+):
     """Composed UIBuildMixin split by feature responsibility."""
 
     pass
+
 
 __all__ = [
     "UIBuildMixin",

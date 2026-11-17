@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 from typing import Any
 from unittest.mock import MagicMock
@@ -12,7 +12,9 @@ class _Harness(TradingSessionMixin):
     ws_client: Any
 
     def __init__(self):
-        self.config = TradingConfig(use_vi_guard=True, vi_proxy_1m_pct=9.0, vi_proxy_spread_pct=9.0)
+        self.config = TradingConfig(
+            use_vi_guard=True, vi_proxy_1m_pct=9.0, vi_proxy_spread_pct=9.0
+        )
         self._recent_ticks_by_code = {}
         self.logs = []
 
@@ -52,7 +54,11 @@ class TestVIStateMachine(unittest.TestCase):
     def test_on_vi_event_sets_vi_and_release_to_cooldown(self):
         trader = _Harness()
         trader.universe = {
-            "005930": {"current": 10000, "market_state": "normal", "market_state_until": None}
+            "005930": {
+                "current": 10000,
+                "market_state": "normal",
+                "market_state_until": None,
+            }
         }
 
         trader._on_vi_event({"stk_cd": "005930", "vi_st": "발동"})

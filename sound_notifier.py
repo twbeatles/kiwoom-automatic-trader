@@ -10,6 +10,7 @@ from typing import Any, Optional
 winsound: Any | None = None
 try:
     import winsound
+
     HAS_WINSOUND = True
 except ImportError:
     HAS_WINSOUND = False
@@ -17,21 +18,21 @@ except ImportError:
 
 class SoundNotifier:
     """비동기 사운드 알림 클래스"""
-    
+
     # 기본 시스템 사운드 (Windows)
-    SOUND_BUY = "SystemAsterisk"      # 매수
+    SOUND_BUY = "SystemAsterisk"  # 매수
     SOUND_SELL = "SystemExclamation"  # 매도
-    SOUND_ERROR = "SystemHand"         # 에러
-    SOUND_WARNING = "SystemQuestion"   # 경고
+    SOUND_ERROR = "SystemHand"  # 에러
+    SOUND_WARNING = "SystemQuestion"  # 경고
     SOUND_SUCCESS = "SystemNotification"  # 성공
-    
+
     # 커스텀 사운드 빈도 (Hz)
     FREQ_BUY = 800
     FREQ_SELL = 600
     FREQ_ERROR = 400
     FREQ_PROFIT = 1000
     FREQ_LOSS = 300
-    
+
     def __init__(self, enabled: bool = True, use_custom: bool = False):
         """
         Args:
@@ -43,15 +44,15 @@ class SoundNotifier:
         self._queue: queue.Queue = queue.Queue()
         self._thread: Optional[threading.Thread] = None
         self._stop = False
-        
+
         if self.enabled:
             self._start_worker()
-    
+
     def _start_worker(self):
         """백그라운드 사운드 재생 스레드 시작"""
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
-    
+
     def _worker(self):
         """사운드 재생 워커"""
         while not self._stop:
@@ -64,7 +65,7 @@ class SoundNotifier:
                 continue
             except Exception:
                 pass  # 사운드 재생 실패 무시
-    
+
     def _play_sound(self, sound_type: str):
         """실제 사운드 재생"""
         if not self.enabled or not HAS_WINSOUND:
@@ -72,85 +73,85 @@ class SoundNotifier:
         module = winsound
         if module is None:
             return
-        
+
         try:
             if self.use_custom:
                 # 커스텀 비프음
                 freq_map = {
-                    'buy': self.FREQ_BUY,
-                    'sell': self.FREQ_SELL,
-                    'error': self.FREQ_ERROR,
-                    'warning': self.FREQ_ERROR,
-                    'profit': self.FREQ_PROFIT,
-                    'loss': self.FREQ_LOSS,
-                    'success': self.FREQ_PROFIT,
+                    "buy": self.FREQ_BUY,
+                    "sell": self.FREQ_SELL,
+                    "error": self.FREQ_ERROR,
+                    "warning": self.FREQ_ERROR,
+                    "profit": self.FREQ_PROFIT,
+                    "loss": self.FREQ_LOSS,
+                    "success": self.FREQ_PROFIT,
                 }
                 freq = freq_map.get(sound_type, 600)
-                duration = 150 if sound_type in ['buy', 'sell'] else 300
+                duration = 150 if sound_type in ["buy", "sell"] else 300
                 module.Beep(freq, duration)
             else:
                 # 시스템 사운드
                 sound_map = {
-                    'buy': self.SOUND_BUY,
-                    'sell': self.SOUND_SELL,
-                    'error': self.SOUND_ERROR,
-                    'warning': self.SOUND_WARNING,
-                    'profit': self.SOUND_SUCCESS,
-                    'loss': self.SOUND_ERROR,
-                    'success': self.SOUND_SUCCESS,
+                    "buy": self.SOUND_BUY,
+                    "sell": self.SOUND_SELL,
+                    "error": self.SOUND_ERROR,
+                    "warning": self.SOUND_WARNING,
+                    "profit": self.SOUND_SUCCESS,
+                    "loss": self.SOUND_ERROR,
+                    "success": self.SOUND_SUCCESS,
                 }
                 sound = sound_map.get(sound_type, self.SOUND_SUCCESS)
                 module.PlaySound(sound, module.SND_ALIAS | module.SND_ASYNC)
         except Exception:
             pass
-    
+
     def play(self, sound_type: str):
         """비동기 사운드 재생 (큐에 추가)
-        
+
         Args:
             sound_type: 'buy', 'sell', 'error', 'warning', 'profit', 'loss', 'success'
         """
         if self.enabled:
             self._queue.put(sound_type)
-    
+
     def play_buy(self):
         """매수 사운드"""
-        self.play('buy')
-    
+        self.play("buy")
+
     def play_sell(self):
         """매도 사운드"""
-        self.play('sell')
-    
+        self.play("sell")
+
     def play_profit(self):
         """수익 사운드"""
-        self.play('profit')
-    
+        self.play("profit")
+
     def play_loss(self):
         """손실 사운드"""
-        self.play('loss')
-    
+        self.play("loss")
+
     def play_error(self):
         """에러 사운드"""
-        self.play('error')
-    
+        self.play("error")
+
     def play_warning(self):
         """경고 사운드"""
-        self.play('warning')
-    
+        self.play("warning")
+
     def play_success(self):
         """성공 사운드"""
-        self.play('success')
-    
+        self.play("success")
+
     def set_enabled(self, enabled: bool):
         """사운드 활성화/비활성화"""
         self.enabled = enabled and HAS_WINSOUND
         if self.enabled and not self._thread:
             self._start_worker()
-    
+
     def set_custom_mode(self, use_custom: bool):
         """커스텀 사운드 모드 설정"""
         self.use_custom = use_custom
-    
+
     def stop(self):
         """워커 종료"""
         self._stop = True

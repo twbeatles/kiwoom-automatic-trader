@@ -30,14 +30,19 @@ try:
         except ImportError:
             import websockets as websockets_client
     from websockets.exceptions import ConnectionClosed
-    ws_connect = cast(Optional[Callable[..., Any]], getattr(websockets_client, "connect", None))
+
+    ws_connect = cast(
+        Optional[Callable[..., Any]], getattr(websockets_client, "connect", None)
+    )
     WEBSOCKETS_AVAILABLE = ws_connect is not None
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
     ConnectionClosed = Exception
 
 
-def _connect_kwargs(headers: Dict[str, str], connect_fn: Optional[Callable[..., Any]] = None) -> Dict[str, Any]:
+def _connect_kwargs(
+    headers: Dict[str, str], connect_fn: Optional[Callable[..., Any]] = None
+) -> Dict[str, Any]:
     """헤더 dict를 현재 websockets 버전용 connect() kwarg로 감싼다."""
     target = connect_fn if connect_fn is not None else ws_connect
     return {_headers_kw_for(target): headers}
@@ -76,6 +81,7 @@ def _ws_int(value: Any, default: int = 0) -> int:
 @dataclass
 class SubscriptionInfo:
     """구독 정보"""
+
     code: str
     data_type: str  # "execution", "hoga", "orderbook"
     callback: Callable
@@ -109,42 +115,46 @@ def _main_thread_dispatcher() -> Optional[_MainThreadDispatcher]:
 
 class KiwoomWebSocketClient:
     """실시간 데이터 수신을 위한 WebSocket 클라이언트"""
-    
+
     # WebSocket 엔드포인트
     WS_URL = LIVE_WS_URL
-    
+
     # 실시간 데이터 타입 (키움 공식 WebSocket type)
     REAL_TYPE = {
-        "EXECUTION": "0B",      # 주식체결
-        "HOGA": "0D",           # 주식호가잔량
-        "ORDER_EXEC": "00",     # 주문체결
-        "INDEX": "0J",          # 업종지수
-        "VI": "1h",             # VI발동/해제
+        "EXECUTION": "0B",  # 주식체결
+        "HOGA": "0D",  # 주식호가잔량
+        "ORDER_EXEC": "00",  # 주문체결
+        "INDEX": "0J",  # 업종지수
+        "VI": "1h",  # VI발동/해제
         "MARKET_STATUS": "0s",  # 장시작시간 (장 상태)
     }
-    
+
     def __init__(self, auth: KiwoomAuth, ws_url: Optional[str] = None):
         """
         Args:
             auth: KiwoomAuth 인스턴스
         """
         if not WEBSOCKETS_AVAILABLE:
-            raise ImportError("websockets 라이브러리가 필요합니다. pip install websockets")
-        
+            raise ImportError(
+                "websockets 라이브러리가 필요합니다. pip install websockets"
+            )
+
         self.auth = auth
-        self.logger = logging.getLogger('KiwoomWebSocketClient')
+        self.logger = logging.getLogger("KiwoomWebSocketClient")
         self.ws_url = str(ws_url or getattr(auth, "ws_url", self.WS_URL) or self.WS_URL)
-        self.session_namespace = str(getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live")
-        
+        self.session_namespace = str(
+            getattr(auth, "session_namespace", "kiwoom_live") or "kiwoom_live"
+        )
+
         # 연결 상태
         self._ws: Optional[Any] = None
         self._connected = False
         self._reconnecting = False
-        
+
         # 구독 관리
         self._subscriptions: Dict[str, SubscriptionInfo] = {}
         self._subscribed_codes: Set[str] = set()
-        
+
         # 콜백
         self._on_execution: Optional[Callable[[ExecutionData], None]] = None
         self._on_hoga: Optional[Callable[[str, dict], None]] = None
@@ -158,50 +168,50 @@ class KiwoomWebSocketClient:
         self._on_disconnect: Optional[Callable[[], None]] = None
         self._on_error: Optional[Callable[[Exception], None]] = None
         self._qt_dispatcher: Optional[_MainThreadDispatcher] = None
-        
+
         # 이벤트 루프 및 스레드
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
-    
+
     # =========================================================================
     # 연결 관리
     # =========================================================================
-    
+
     def connect(self):
         """WebSocket 연결 시작 (별도 스레드에서 실행)"""
         if self._thread and self._thread.is_alive():
             self.logger.warning("이미 연결되어 있습니다.")
             return
-        
+
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run_event_loop, daemon=True)
         self._thread.start()
         self.logger.info("WebSocket 연결 스레드 시작")
-    
+
     def disconnect(self):
         """WebSocket 연결 종료"""
         self._stop_event.set()
-        
+
         if self._loop and self._ws:
             asyncio.run_coroutine_threadsafe(self._close_connection(), self._loop)
-        
+
         if self._thread:
             self._thread.join(timeout=5)
             self._thread = None
-        
+
         self._connected = False
         self.logger.info("WebSocket 연결 종료됨")
-    
+
     def is_connected(self) -> bool:
         """연결 상태 확인"""
         return self._connected
-    
+
     def _run_event_loop(self):
         """이벤트 루프 실행 (별도 스레드)"""
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
-        
+
         try:
             self._loop.run_until_complete(self._connect_and_listen())
         except Exception as e:
@@ -209,7 +219,7 @@ class KiwoomWebSocketClient:
         finally:
             self._loop.close()
             self._loop = None
-    
+
     async def _connect_and_listen(self):
         """연결 및 메시지 수신 루프"""
         retry_count = 0
@@ -225,58 +235,64 @@ class KiwoomWebSocketClient:
                     idx = min(token_fail_count, len(token_backoff_schedule) - 1)
                     wait = token_backoff_schedule[idx]
                     token_fail_count += 1
-                    self.logger.error(f"토큰을 가져올 수 없습니다. {wait}초 후 재시도({idx + 1}).")
+                    self.logger.error(
+                        f"토큰을 가져올 수 없습니다. {wait}초 후 재시도({idx + 1})."
+                    )
                     await asyncio.sleep(wait)
                     continue
                 token_fail_count = 0
-                
+
                 # WebSocket 연결
                 headers = {"Authorization": f"bearer {token}"}
                 connect_fn = ws_connect
                 if connect_fn is None:
                     raise RuntimeError("websocket connect function unavailable")
-                
+
                 async with connect_fn(
                     self.ws_url,
                     **_connect_kwargs(headers, connect_fn),
                     ping_interval=30,
-                    ping_timeout=10
+                    ping_timeout=10,
                 ) as ws:
                     self._ws = ws
                     self._connected = True
                     self._reconnecting = False
                     retry_count = 0
-                    
+
                     self.logger.info("WebSocket 연결 성공")
                     await ws.send(json.dumps({"trnm": "LOGIN", "token": token}))
-                    
+
                     if self._on_connect:
                         self._on_connect()
-                    
+
                     # 기존 구독 복원
                     await self._restore_subscriptions()
-                    
+
                     # 메시지 수신 루프
                     async for raw_message in ws:
                         if self._stop_event.is_set():
                             break
-                        message = raw_message.decode("utf-8", errors="ignore") if isinstance(raw_message, bytes) else str(raw_message)
+                        message = (
+                            raw_message.decode("utf-8", errors="ignore")
+                            if isinstance(raw_message, bytes)
+                            else str(raw_message)
+                        )
                         await self._handle_message(message)
-                
+
             except ConnectionClosed as e:
                 self.logger.warning(f"WebSocket 연결 끊김: {e}")
                 self._connected = False
-                
+
                 if self._on_disconnect:
                     self._on_disconnect()
-                
+
             except Exception as e:
                 self.logger.error(f"WebSocket 오류: {e}")
                 self._connected = False
-                
+
                 if self._on_error:
                     self._on_error(e)
-            
+
             # 재연결 대기
             if not self._stop_event.is_set():
                 retry_count += 1
@@ -288,71 +304,69 @@ class KiwoomWebSocketClient:
                     await asyncio.sleep(60)
                     retry_count = 0
                     continue
-                
-                wait_time = min(2 ** retry_count, 60)
-                self.logger.info(f"{wait_time}초 후 재연결 시도 ({retry_count}/{max_retries})")
+
+                wait_time = min(2**retry_count, 60)
+                self.logger.info(
+                    f"{wait_time}초 후 재연결 시도 ({retry_count}/{max_retries})"
+                )
                 await asyncio.sleep(wait_time)
-    
+
     async def _close_connection(self):
         """연결 종료"""
         if self._ws:
             await self._ws.close()
             self._ws = None
-    
+
     # =========================================================================
     # 구독 관리
     # =========================================================================
-    
-    def subscribe_execution(self, codes: List[str], callback: Callable[[ExecutionData], None]):
+
+    def subscribe_execution(
+        self, codes: List[str], callback: Callable[[ExecutionData], None]
+    ):
         """
         실시간 체결 데이터 구독
-        
+
         Args:
             codes: 종목코드 리스트
             callback: 데이터 수신 시 호출될 콜백 함수
         """
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_execution = callback
-        
+
         for code in codes:
             key = f"exec_{code}"
             self._subscriptions[key] = SubscriptionInfo(
-                code=code,
-                data_type="execution",
-                callback=callback
+                code=code, data_type="execution", callback=callback
             )
             self._subscribed_codes.add(code)
-        
+
         if self._connected and self._loop:
             asyncio.run_coroutine_threadsafe(
-                self._send_subscribe(codes, self.REAL_TYPE["EXECUTION"]),
-                self._loop
+                self._send_subscribe(codes, self.REAL_TYPE["EXECUTION"]), self._loop
             )
-    
+
     def subscribe_hoga(self, codes: List[str], callback: Callable[[str, dict], None]):
         """
         실시간 호가 데이터 구독
-        
+
         Args:
             codes: 종목코드 리스트
             callback: 데이터 수신 시 호출될 콜백 함수 (code, data)
         """
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_hoga = callback
-        
+
         for code in codes:
             key = f"hoga_{code}"
             self._subscriptions[key] = SubscriptionInfo(
-                code=code,
-                data_type="hoga",
-                callback=callback
+                code=code, data_type="hoga", callback=callback
             )
             self._subscribed_codes.add(code)
-        
+
         if self._connected and self._loop:
             asyncio.run_coroutine_threadsafe(
-                self._send_subscribe(codes, self.REAL_TYPE["HOGA"]),
-                self._loop
+                self._send_subscribe(codes, self.REAL_TYPE["HOGA"]), self._loop
             )
 
     def subscribe_index(self, codes: List[str], callback: Callable[[IndexTick], None]):
@@ -374,15 +388,17 @@ class KiwoomWebSocketClient:
                 self._send_subscribe(codes, self.REAL_TYPE["INDEX"]),
                 self._loop,
             )
-    
-    def subscribe_orderbook(self, codes: List[str], callback: Callable[[str, dict], None]):
+
+    def subscribe_orderbook(
+        self, codes: List[str], callback: Callable[[str, dict], None]
+    ):
         """실시간 호가 데이터 구독 (subscribe_hoga 별칭)"""
         self.subscribe_hoga(codes, callback)
 
     def subscribe_vi_events(self, codes: List[str], callback: Callable[[dict], None]):
         """
         실시간 변동성완화장치(VI) 이벤트 구독
-        
+
         Args:
             codes: 종목코드 리스트
             callback: VI 이벤트 수신 시 호출될 콜백 함수
@@ -404,7 +420,7 @@ class KiwoomWebSocketClient:
                 self._send_subscribe(codes, self.REAL_TYPE["VI"]),
                 self._loop,
             )
-    
+
     def subscribe_market_status(
         self,
         callback: Optional[Callable[[dict], None]] = None,
@@ -420,7 +436,11 @@ class KiwoomWebSocketClient:
         if callback is not None:
             self._on_market_status = callback
 
-        items = [str(code) for code in (codes if codes is not None else ["000"]) if str(code).strip()]
+        items = [
+            str(code)
+            for code in (codes if codes is not None else ["000"])
+            if str(code).strip()
+        ]
         for code in items:
             key = f"market_status_{code}"
             self._subscriptions[key] = SubscriptionInfo(
@@ -432,8 +452,7 @@ class KiwoomWebSocketClient:
 
         if self._connected and self._loop:
             asyncio.run_coroutine_threadsafe(
-                self._send_subscribe(items, self.REAL_TYPE["MARKET_STATUS"]),
-                self._loop
+                self._send_subscribe(items, self.REAL_TYPE["MARKET_STATUS"]), self._loop
             )
 
     def get_market_status_snapshot(self) -> Dict[str, Any]:
@@ -444,7 +463,9 @@ class KiwoomWebSocketClient:
         """조건검색식 목록 조회 (WebSocket ka10171 / CNSRLST)."""
         result = self.request_once({"trnm": "CNSRLST"})
         if not isinstance(result, dict):
-            self.logger.warning("조건검색 목록 조회 실패: WebSocket CNSRLST 응답이 없습니다.")
+            self.logger.warning(
+                "조건검색 목록 조회 실패: WebSocket CNSRLST 응답이 없습니다."
+            )
             return []
 
         conditions: List[Dict[str, Any]] = []
@@ -453,56 +474,73 @@ class KiwoomWebSocketClient:
             records = []
         for item in records:
             if isinstance(item, dict):
-                conditions.append({
-                    "index": _safe_int(_pick(item, "seq", "index", "cond_idx")),
-                    "name": str(_pick(item, "name", "cond_nm", default="") or ""),
-                })
+                conditions.append(
+                    {
+                        "index": _safe_int(_pick(item, "seq", "index", "cond_idx")),
+                        "name": str(_pick(item, "name", "cond_nm", default="") or ""),
+                    }
+                )
             elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                conditions.append({
-                    "index": _safe_int(item[0]),
-                    "name": str(item[1] or ""),
-                })
+                conditions.append(
+                    {
+                        "index": _safe_int(item[0]),
+                        "name": str(item[1] or ""),
+                    }
+                )
         return conditions
 
-    def search_by_condition(self, condition_index: int, condition_name: str = "") -> List[Dict[str, Any]]:
+    def search_by_condition(
+        self, condition_index: int, condition_name: str = ""
+    ) -> List[Dict[str, Any]]:
         """조건검색 실행 (WebSocket ka10172 / CNSRREQ)."""
         del condition_name  # 공식 CNSRREQ는 seq만 사용
-        result = self.request_once({
-            "trnm": "CNSRREQ",
-            "seq": str(condition_index),
-            "search_type": "0",
-            "stex_tp": "K",
-        })
+        result = self.request_once(
+            {
+                "trnm": "CNSRREQ",
+                "seq": str(condition_index),
+                "search_type": "0",
+                "stex_tp": "K",
+            }
+        )
         if not isinstance(result, dict):
-            self.logger.warning("조건검색 실행 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            self.logger.warning(
+                "조건검색 실행 실패: WebSocket CNSRREQ 응답이 없습니다."
+            )
             return []
 
         return self._parse_condition_stock_rows(result)
 
     def request_condition_realtime(self, condition_index: int) -> List[Dict[str, Any]]:
         """조건검색 실시간 요청 (ka10173: WebSocket CNSRREQ search_type=1)."""
-        result = self.request_once({
-            "trnm": "CNSRREQ",
-            "seq": str(condition_index),
-            "search_type": "1",
-            "stex_tp": "K",
-        })
+        result = self.request_once(
+            {
+                "trnm": "CNSRREQ",
+                "seq": str(condition_index),
+                "search_type": "1",
+                "stex_tp": "K",
+            }
+        )
         if not isinstance(result, dict):
-            self.logger.warning("조건검색 실시간 요청 실패: WebSocket CNSRREQ 응답이 없습니다.")
+            self.logger.warning(
+                "조건검색 실시간 요청 실패: WebSocket CNSRREQ 응답이 없습니다."
+            )
             return []
         return self._parse_condition_stock_rows(result)
 
     def stop_condition_realtime(self, condition_index: int) -> bool:
         """조건검색 실시간 해제 (ka10174: WebSocket CNSRCLR)."""
-        result = self.request_once({
-            "trnm": "CNSRCLR",
-            "seq": str(condition_index),
-        })
+        result = self.request_once(
+            {
+                "trnm": "CNSRCLR",
+                "seq": str(condition_index),
+            }
+        )
         return isinstance(result, dict)
 
     @staticmethod
     def _parse_condition_stock_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
         """CNSRREQ 응답(record list/dict 혼용) → 종목 행 파싱."""
+
         def stock_code(value: Any) -> str:
             text = str(value or "").strip()
             return text[1:] if len(text) >= 7 and text[0] in {"A", "a"} else text
@@ -513,21 +551,33 @@ class KiwoomWebSocketClient:
             records = []
         for item in records:
             if isinstance(item, dict):
-                stocks.append({
-                    "code": stock_code(_pick(item, "9001", "stk_cd", "code")),
-                    "name": str(_pick(item, "302", "stk_nm", "name", default="") or ""),
-                    "current_price": _safe_int(_pick(item, "10", "cur_prc"), absolute=True),
-                    "change_rate": _safe_float(_pick(item, "12", "flu_rt", "chg_rt")),
-                    "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
-                })
+                stocks.append(
+                    {
+                        "code": stock_code(_pick(item, "9001", "stk_cd", "code")),
+                        "name": str(
+                            _pick(item, "302", "stk_nm", "name", default="") or ""
+                        ),
+                        "current_price": _safe_int(
+                            _pick(item, "10", "cur_prc"), absolute=True
+                        ),
+                        "change_rate": _safe_float(
+                            _pick(item, "12", "flu_rt", "chg_rt")
+                        ),
+                        "volume": _safe_int(_pick(item, "13", "trde_qty", "vol")),
+                    }
+                )
             elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                stocks.append({
-                    "code": stock_code(item[0]),
-                    "name": str(item[1] or ""),
-                    "current_price": _safe_int(item[2] if len(item) > 2 else 0, absolute=True),
-                    "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
-                    "volume": _safe_int(item[6] if len(item) > 6 else 0),
-                })
+                stocks.append(
+                    {
+                        "code": stock_code(item[0]),
+                        "name": str(item[1] or ""),
+                        "current_price": _safe_int(
+                            item[2] if len(item) > 2 else 0, absolute=True
+                        ),
+                        "change_rate": _safe_float(item[5] if len(item) > 5 else 0),
+                        "volume": _safe_int(item[6] if len(item) > 6 else 0),
+                    }
+                )
         return [row for row in stocks if row.get("code")]
 
     def subscribe_condition_realtime(
@@ -551,10 +601,7 @@ class KiwoomWebSocketClient:
             "stex_tp": "K",
         }
         if self._connected and self._loop:
-            asyncio.run_coroutine_threadsafe(
-                self._send_json(payload),
-                self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._send_json(payload), self._loop)
             return None
         return self.request_once(payload)
 
@@ -564,10 +611,7 @@ class KiwoomWebSocketClient:
         self._condition_realtime.pop(seq, None)
         payload = {"trnm": "CNSRCLR", "seq": seq}
         if self._connected and self._loop:
-            asyncio.run_coroutine_threadsafe(
-                self._send_json(payload),
-                self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._send_json(payload), self._loop)
             return True
         result = self.request_once(payload)
         return isinstance(result, dict)
@@ -575,19 +619,16 @@ class KiwoomWebSocketClient:
     def subscribe_order_execution(self, callback: Callable[[dict], None]):
         """
         주문 체결 알림 구독
-        
+
         Args:
             callback: 체결 데이터 수신 시 호출될 콜백 함수
         """
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_order_exec = callback
-        
+
         if self._connected and self._loop:
-            asyncio.run_coroutine_threadsafe(
-                self._send_subscribe_order(),
-                self._loop
-            )
-    
+            asyncio.run_coroutine_threadsafe(self._send_subscribe_order(), self._loop)
+
     def unsubscribe(self, codes: List[str]):
         """구독 해제"""
         exec_codes: List[str] = []
@@ -608,88 +649,91 @@ class KiwoomWebSocketClient:
                 vi_codes.append(code)
             if self._subscriptions.pop(f"market_status_{code}", None):
                 market_status_codes.append(code)
-        
+
         if self._connected and self._loop:
             if exec_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(exec_codes, self.REAL_TYPE["EXECUTION"]),
-                    self._loop
+                    self._loop,
                 )
             if hoga_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(hoga_codes, self.REAL_TYPE["HOGA"]),
-                    self._loop
+                    self._loop,
                 )
             if index_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(index_codes, self.REAL_TYPE["INDEX"]),
-                    self._loop
+                    self._loop,
                 )
             if vi_codes:
                 asyncio.run_coroutine_threadsafe(
-                    self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]),
-                    self._loop
+                    self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]), self._loop
                 )
             if market_status_codes:
                 asyncio.run_coroutine_threadsafe(
-                    self._send_unsubscribe(market_status_codes, self.REAL_TYPE["MARKET_STATUS"]),
-                    self._loop
+                    self._send_unsubscribe(
+                        market_status_codes, self.REAL_TYPE["MARKET_STATUS"]
+                    ),
+                    self._loop,
                 )
 
     def unsubscribe_all(self):
         """모든 구독 해제"""
         exec_codes = [
-            sub.code for sub in self._subscriptions.values()
+            sub.code
+            for sub in self._subscriptions.values()
             if sub.data_type == "execution"
         ]
         hoga_codes = [
-            sub.code for sub in self._subscriptions.values()
-            if sub.data_type == "hoga"
+            sub.code for sub in self._subscriptions.values() if sub.data_type == "hoga"
         ]
         index_codes = [
-            sub.code for sub in self._subscriptions.values()
-            if sub.data_type == "index"
+            sub.code for sub in self._subscriptions.values() if sub.data_type == "index"
         ]
         vi_codes = [
-            sub.code for sub in self._subscriptions.values()
-            if sub.data_type == "vi"
+            sub.code for sub in self._subscriptions.values() if sub.data_type == "vi"
         ]
         market_status_codes = [
-            sub.code for sub in self._subscriptions.values()
+            sub.code
+            for sub in self._subscriptions.values()
             if sub.data_type == "market_status"
         ]
 
         self._subscribed_codes.clear()
         self._subscriptions.clear()
-        
+
         if self._connected and self._loop:
             if exec_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(exec_codes, self.REAL_TYPE["EXECUTION"]),
-                    self._loop
+                    self._loop,
                 )
             if hoga_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(hoga_codes, self.REAL_TYPE["HOGA"]),
-                    self._loop
+                    self._loop,
                 )
             if index_codes:
                 asyncio.run_coroutine_threadsafe(
                     self._send_unsubscribe(index_codes, self.REAL_TYPE["INDEX"]),
-                    self._loop
+                    self._loop,
                 )
             if vi_codes:
                 asyncio.run_coroutine_threadsafe(
-                    self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]),
-                    self._loop
+                    self._send_unsubscribe(vi_codes, self.REAL_TYPE["VI"]), self._loop
                 )
             if market_status_codes:
                 asyncio.run_coroutine_threadsafe(
-                    self._send_unsubscribe(market_status_codes, self.REAL_TYPE["MARKET_STATUS"]),
-                    self._loop
+                    self._send_unsubscribe(
+                        market_status_codes, self.REAL_TYPE["MARKET_STATUS"]
+                    ),
+                    self._loop,
                 )
 
-    def _build_reg_payload(self, codes: List[str], real_type: str, register: bool = True) -> Dict[str, Any]:
+    def _build_reg_payload(
+        self, codes: List[str], real_type: str, register: bool = True
+    ) -> Dict[str, Any]:
         items = [str(code) for code in codes if str(code).strip()]
         return {
             "trnm": "REG" if register else "REMOVE",
@@ -705,12 +749,14 @@ class KiwoomWebSocketClient:
         message = self._build_reg_payload(codes, real_type, register=True)
         await self._ws.send(json.dumps(message))
         self.logger.info(f"실시간 구독 요청: type={real_type} codes={codes}")
-    
+
     async def _send_subscribe_order(self):
         """주문 체결 구독 요청"""
         if not self._ws:
             return
-        message = self._build_reg_payload([], self.REAL_TYPE["ORDER_EXEC"], register=True)
+        message = self._build_reg_payload(
+            [], self.REAL_TYPE["ORDER_EXEC"], register=True
+        )
         await self._ws.send(json.dumps(message))
         self.logger.info("주문 체결 실시간 구독 요청")
 
@@ -720,7 +766,7 @@ class KiwoomWebSocketClient:
             return
         await self._ws.send(json.dumps(payload))
         self.logger.info(f"WebSocket 제어 전문 전송: trnm={payload.get('trnm')}")
-    
+
     async def _send_unsubscribe(self, codes: List[str], real_type: str):
         """구독 해제 요청 전송"""
         if not self._ws:
@@ -728,27 +774,26 @@ class KiwoomWebSocketClient:
         message = self._build_reg_payload(codes, real_type, register=False)
         await self._ws.send(json.dumps(message))
         self.logger.info(f"실시간 구독 해제: type={real_type} codes={codes}")
-    
+
     async def _restore_subscriptions(self):
         """재연결 시 기존 구독 복원"""
         exec_codes = [
-            sub.code for sub in self._subscriptions.values()
+            sub.code
+            for sub in self._subscriptions.values()
             if sub.data_type == "execution"
         ]
         hoga_codes = [
-            sub.code for sub in self._subscriptions.values()
-            if sub.data_type == "hoga"
+            sub.code for sub in self._subscriptions.values() if sub.data_type == "hoga"
         ]
         index_codes = [
-            sub.code for sub in self._subscriptions.values()
-            if sub.data_type == "index"
+            sub.code for sub in self._subscriptions.values() if sub.data_type == "index"
         ]
         vi_codes = [
-            sub.code for sub in self._subscriptions.values()
-            if sub.data_type == "vi"
+            sub.code for sub in self._subscriptions.values() if sub.data_type == "vi"
         ]
         market_status_codes = [
-            sub.code for sub in self._subscriptions.values()
+            sub.code
+            for sub in self._subscriptions.values()
             if sub.data_type == "market_status"
         ]
 
@@ -761,22 +806,26 @@ class KiwoomWebSocketClient:
         if vi_codes:
             await self._send_subscribe(vi_codes, self.REAL_TYPE["VI"])
         if market_status_codes:
-            await self._send_subscribe(market_status_codes, self.REAL_TYPE["MARKET_STATUS"])
+            await self._send_subscribe(
+                market_status_codes, self.REAL_TYPE["MARKET_STATUS"]
+            )
 
         if self._on_order_exec:
             await self._send_subscribe_order()
         for seq in list(self._condition_realtime):
-            await self._send_json({
-                "trnm": "CNSRREQ",
-                "seq": seq,
-                "search_type": "1",
-                "stex_tp": "K",
-            })
-    
+            await self._send_json(
+                {
+                    "trnm": "CNSRREQ",
+                    "seq": seq,
+                    "search_type": "1",
+                    "stex_tp": "K",
+                }
+            )
+
     # =========================================================================
     # 메시지 처리
     # =========================================================================
-    
+
     async def _handle_message(self, message: str):
         """수신된 메시지 처리"""
         try:
@@ -805,11 +854,15 @@ class KiwoomWebSocketClient:
                         )
                 return
 
-            header = data.get("header", {}) if isinstance(data.get("header"), dict) else {}
+            header = (
+                data.get("header", {}) if isinstance(data.get("header"), dict) else {}
+            )
             body = data.get("body", {}) if isinstance(data.get("body"), dict) else data
             real_type = str(header.get("real_type") or data.get("type") or "")
-            await self._dispatch_real_type(real_type, body if isinstance(body, dict) else {})
-                
+            await self._dispatch_real_type(
+                real_type, body if isinstance(body, dict) else {}
+            )
+
         except json.JSONDecodeError:
             self.logger.warning(f"JSON 파싱 실패: {message[:100]}")
         except Exception as e:
@@ -834,8 +887,12 @@ class KiwoomWebSocketClient:
     def _normalize_real_record(self, record: dict) -> dict:
         raw_values = record.get("values")
         values = raw_values if isinstance(raw_values, dict) else {}
-        code = str(record.get("item") or record.get("stk_cd") or values.get("9001") or "")
-        name = str(record.get("name") or record.get("stk_nm") or values.get("302") or "")
+        code = str(
+            record.get("item") or record.get("stk_cd") or values.get("9001") or ""
+        )
+        name = str(
+            record.get("name") or record.get("stk_nm") or values.get("302") or ""
+        )
         body: Dict[str, Any] = {
             "stk_cd": code,
             "stk_nm": name,
@@ -856,7 +913,7 @@ class KiwoomWebSocketClient:
         body.update(record)
         body.update(values)
         return body
-    
+
     def _invoke_on_main_thread(self, callback: Callable, *args):
         """Run realtime callbacks on the Qt application thread when available."""
         try:
@@ -864,13 +921,17 @@ class KiwoomWebSocketClient:
             if app is not None and QThread.currentThread() == app.thread():
                 callback(*args)
                 return
-            dispatcher = getattr(self, "_qt_dispatcher", None) or _main_thread_dispatcher()
+            dispatcher = (
+                getattr(self, "_qt_dispatcher", None) or _main_thread_dispatcher()
+            )
             if dispatcher is not None:
                 self._qt_dispatcher = dispatcher
                 dispatcher.invoke.emit(callback, tuple(args))
                 return
         except Exception:
-            self.logger.exception("main-thread dispatch failed; falling back to direct callback")
+            self.logger.exception(
+                "main-thread dispatch failed; falling back to direct callback"
+            )
         callback(*args)
 
     async def _handle_execution(self, body: dict):
@@ -891,7 +952,7 @@ class KiwoomWebSocketClient:
             index_value = float(body.get("idx_val", body.get("index_value", 0)) or 0)
         except (TypeError, ValueError):
             index_value = 0.0
-        
+
         exec_data = ExecutionData(
             code=str(body.get("stk_cd", "") or ""),
             name=str(body.get("stk_nm", "") or ""),
@@ -907,23 +968,23 @@ class KiwoomWebSocketClient:
             index_code=index_code,
             index_value=index_value,
         )
-        
+
         # 콜백을 메인 스레드에서 실행
         self._invoke_on_main_thread(self._on_execution, exec_data)
-    
+
     async def _handle_hoga(self, body: dict):
         """호가 데이터 처리"""
         if not self._on_hoga:
             return
-        
+
         code = body.get("stk_cd", "")
         self._invoke_on_main_thread(self._on_hoga, code, body)
-    
+
     async def _handle_order_exec(self, body: dict):
         """주문 체결 데이터 처리"""
         if not self._on_order_exec:
             return
-        
+
         self._invoke_on_main_thread(self._on_order_exec, body)
 
     async def _handle_index(self, body: dict):
@@ -933,7 +994,9 @@ class KiwoomWebSocketClient:
 
         try:
             try:
-                value = float(body.get("idx_val", body.get("cur_prc", body.get("value", 0))) or 0)
+                value = float(
+                    body.get("idx_val", body.get("cur_prc", body.get("value", 0))) or 0
+                )
             except (TypeError, ValueError):
                 value = 0.0
             try:
@@ -951,7 +1014,9 @@ class KiwoomWebSocketClient:
                 change=change,
                 change_rate=change_rate,
                 timestamp=str(body.get("tm", body.get("timestamp", ""))),
-                trading_status=str(body.get("trd_st", body.get("trading_status", "")) or ""),
+                trading_status=str(
+                    body.get("trd_st", body.get("trading_status", "")) or ""
+                ),
                 market_event=str(body.get("market_event", body.get("event", "")) or ""),
             )
             self._invoke_on_main_thread(self._on_index, tick)
@@ -975,10 +1040,7 @@ class KiwoomWebSocketClient:
             ),
             "market_event": str(body.get("market_event") or body.get("event") or ""),
             "timestamp": str(
-                body.get("tm")
-                or body.get("exec_tm")
-                or body.get("timestamp")
-                or ""
+                body.get("tm") or body.get("exec_tm") or body.get("timestamp") or ""
             ),
             "source": "websocket_0s",
             "raw": dict(body),
@@ -1002,21 +1064,21 @@ class KiwoomWebSocketClient:
             if callback is None:
                 continue
             self._invoke_on_main_thread(callback, record)
-    
+
     # =========================================================================
     # 이벤트 콜백 설정
     # =========================================================================
-    
+
     def set_on_connect(self, callback: Callable[[], None]):
         """연결 성공 콜백 설정"""
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_connect = callback
-    
+
     def set_on_disconnect(self, callback: Callable[[], None]):
         """연결 끊김 콜백 설정"""
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_disconnect = callback
-    
+
     def set_on_error(self, callback: Callable[[Exception], None]):
         """오류 발생 콜백 설정"""
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
@@ -1037,7 +1099,9 @@ class KiwoomWebSocketClient:
         self._qt_dispatcher = _main_thread_dispatcher() or self._qt_dispatcher
         self._on_market_status = callback
 
-    def request_once(self, body: Dict[str, Any], timeout: float = 15.0) -> Optional[Dict[str, Any]]:
+    def request_once(
+        self, body: Dict[str, Any], timeout: float = 15.0
+    ) -> Optional[Dict[str, Any]]:
         """조건검색 등 1회성 WebSocket 요청 (CNSRLST/CNSRREQ)."""
         if not isinstance(body, dict) or not body.get("trnm"):
             return None
@@ -1048,16 +1112,22 @@ class KiwoomWebSocketClient:
             finally:
                 loop.close()
         except Exception as exc:
-            self.logger.warning(f"WebSocket request_once 실패 ({body.get('trnm')}): {exc}")
+            self.logger.warning(
+                f"WebSocket request_once 실패 ({body.get('trnm')}): {exc}"
+            )
             return None
 
-    async def _request_once_async(self, body: Dict[str, Any], timeout: float) -> Optional[Dict[str, Any]]:
+    async def _request_once_async(
+        self, body: Dict[str, Any], timeout: float
+    ) -> Optional[Dict[str, Any]]:
         token = self.auth.get_token()
         if not token:
             self.logger.warning("WebSocket request_once: 토큰이 없습니다.")
             return None
         if ws_connect is None:
-            self.logger.warning("WebSocket request_once: websockets 연결 함수가 없습니다.")
+            self.logger.warning(
+                "WebSocket request_once: websockets 연결 함수가 없습니다."
+            )
             return None
 
         expected = str(body.get("trnm") or "")
@@ -1106,4 +1176,3 @@ class KiwoomWebSocketClient:
                     return data
         self.logger.warning(f"WebSocket request_once 응답 대기 시간 초과: {expected}")
         return None
-

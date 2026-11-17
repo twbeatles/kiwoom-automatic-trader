@@ -114,7 +114,10 @@ class TestMarketIntelligencePolicyRuntime(unittest.TestCase):
         tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
         try:
             audit_path = Path(tmpdir) / "decision_audit.jsonl"
-            with patch("app.features.market_intelligence.audit.Config.MARKET_INTELLIGENCE_DECISION_AUDIT_FILE", str(audit_path)):
+            with patch(
+                "app.features.market_intelligence.audit.Config.MARKET_INTELLIGENCE_DECISION_AUDIT_FILE",
+                str(audit_path),
+            ):
                 trader._record_decision_audit_event(
                     code="005930",
                     info=info,
@@ -142,7 +145,11 @@ class TestMarketIntelligencePolicyRuntime(unittest.TestCase):
                 "scope": "market",
                 "source": "macro",
                 "event_type": "market_risk_mode",
-                "payload": {"macro_regime": "risk_off", "portfolio_budget_scale": 0.8, "aggregate_news_risk": -42.0},
+                "payload": {
+                    "macro_regime": "risk_off",
+                    "portfolio_budget_scale": 0.8,
+                    "aggregate_news_risk": -42.0,
+                },
             },
             {
                 "ts": "2026-03-25T09:01:00",
@@ -178,12 +185,28 @@ class TestMarketIntelligencePolicyRuntime(unittest.TestCase):
     def test_replay_filters_apply_scope_and_allowed(self):
         trader = _Harness()
         event_records = [
-            {"scope": "market", "symbol": "KR_MARKET", "source": "macro", "event_type": "market_risk_mode", "summary": "시장"},
-            {"scope": "symbol", "symbol": "005930", "source": "news", "event_type": "headline_velocity", "summary": "삼성전자"},
+            {
+                "scope": "market",
+                "symbol": "KR_MARKET",
+                "source": "macro",
+                "event_type": "market_risk_mode",
+                "summary": "시장",
+            },
+            {
+                "scope": "symbol",
+                "symbol": "005930",
+                "source": "news",
+                "event_type": "headline_velocity",
+                "summary": "삼성전자",
+            },
         ]
         audit_records = [
             {"symbol": "005930", "allowed": True, "reason": "buy_signal"},
-            {"symbol": "005930", "allowed": False, "reason": "market_intel_reduce_size"},
+            {
+                "symbol": "005930",
+                "allowed": False,
+                "reason": "market_intel_reduce_size",
+            },
         ]
 
         filtered_events = trader._filter_market_replay_event_records(

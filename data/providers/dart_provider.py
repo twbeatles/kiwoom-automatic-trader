@@ -91,15 +91,21 @@ class DartProvider:
                 payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
                 if isinstance(payload, dict):
                     self._mark("ok_with_data")
-                    return {str(k): str(v) for k, v in payload.items() if str(k) and str(v)}
+                    return {
+                        str(k): str(v) for k, v in payload.items() if str(k) and str(v)
+                    }
             except (OSError, json.JSONDecodeError):
                 pass
         try:
-            response = requests.get(self.CORP_CODE_URL, params={"crtfc_key": self.api_key}, timeout=20)
+            response = requests.get(
+                self.CORP_CODE_URL, params={"crtfc_key": self.api_key}, timeout=20
+            )
             response.raise_for_status()
             mapping = self._parse_corp_code_zip(response.content)
             if mapping:
-                self.cache_path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
+                self.cache_path.write_text(
+                    json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
             self._mark("ok_with_data" if mapping else "ok_empty")
             return mapping
         except Exception as exc:

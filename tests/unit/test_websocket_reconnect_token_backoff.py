@@ -4,6 +4,7 @@
 sleep 시간이 일정 한계를 넘지 않는지 검증한다. 실제 대기는 피하기 위해
 asyncio.sleep 을 patch 한다.
 """
+
 import asyncio
 import unittest
 from unittest.mock import MagicMock, patch
@@ -47,7 +48,11 @@ class TestWebsocketReconnectTokenBackoff(unittest.TestCase):
         self.assertGreaterEqual(len(sleeps), 1)
         expected_schedule = [5, 10, 20, 60]
         for idx, actual in enumerate(sleeps[: len(expected_schedule)]):
-            self.assertEqual(actual, expected_schedule[idx], f"backoff mismatch at idx {idx}: {sleeps}")
+            self.assertEqual(
+                actual,
+                expected_schedule[idx],
+                f"backoff mismatch at idx {idx}: {sleeps}",
+            )
         # 백오프는 60초를 넘지 않는다.
         self.assertTrue(all(s <= 60 for s in sleeps), f"backoff exceeds cap: {sleeps}")
 
@@ -68,8 +73,9 @@ class TestWebsocketReconnectTokenBackoff(unittest.TestCase):
             if len(sleeps) >= 2:
                 client._stop_event.set()
 
-        with patch("api.websocket_client.ws_connect", new=fake_ws_connect), patch(
-            "api.websocket_client.asyncio.sleep", new=fake_sleep
+        with (
+            patch("api.websocket_client.ws_connect", new=fake_ws_connect),
+            patch("api.websocket_client.asyncio.sleep", new=fake_sleep),
         ):
             try:
                 asyncio.run(asyncio.wait_for(client._connect_and_listen(), timeout=5))

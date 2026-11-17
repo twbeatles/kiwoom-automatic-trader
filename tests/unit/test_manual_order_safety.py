@@ -28,7 +28,15 @@ class _DummyREST:
         return None
 
     def get_positions(self, _account):
-        return [Position(code="005930", quantity=1, available_qty=1, buy_price=1000, buy_amount=1000)]
+        return [
+            Position(
+                code="005930",
+                quantity=1,
+                available_qty=1,
+                buy_price=1000,
+                buy_amount=1000,
+            )
+        ]
 
 
 class _DummyThreadPool:
@@ -56,7 +64,15 @@ class _Harness(DialogsProfilesMixin, OrderSyncMixin, ExecutionEngineMixin):
         self.rest_client = _DummyREST()
         self.threadpool = _DummyThreadPool()
         self.chk_mock = _DummyCheck(False)
-        self.universe = {"005930": {"name": "삼성전자", "current": 1000, "held": 1, "available_qty": 1, "status": "holding"}}
+        self.universe = {
+            "005930": {
+                "name": "삼성전자",
+                "current": 1000,
+                "held": 1,
+                "available_qty": 1,
+                "status": "holding",
+            }
+        }
         self._pending_order_state = {}
         self._manual_pending_state = {}
         self._reserved_cash_by_code = {}
@@ -101,12 +117,24 @@ class TestManualOrderSafety(unittest.TestCase):
 
         self.assertFalse(
             trader._validate_manual_order_request(
-                {"code": "ABC123", "type": "매수", "qty": 1, "price_type": "시장가", "price": 0}
+                {
+                    "code": "ABC123",
+                    "type": "매수",
+                    "qty": 1,
+                    "price_type": "시장가",
+                    "price": 0,
+                }
             )
         )
         self.assertFalse(
             trader._validate_manual_order_request(
-                {"code": "005930", "type": "매수", "qty": 1, "price_type": "지정가", "price": 0}
+                {
+                    "code": "005930",
+                    "type": "매수",
+                    "qty": 1,
+                    "price_type": "지정가",
+                    "price": 0,
+                }
             )
         )
         self.assertGreaterEqual(warning.call_count, 2)
@@ -115,9 +143,18 @@ class TestManualOrderSafety(unittest.TestCase):
         trader = _Harness()
         trader.universe["005930"]["held"] = 2
         trader.universe["005930"]["available_qty"] = 2
-        sell_order = {"code": "005930", "type": "매도", "qty": 1, "price_type": "시장가", "price": 0}
+        sell_order = {
+            "code": "005930",
+            "type": "매도",
+            "qty": 1,
+            "price_type": "시장가",
+            "price": 0,
+        }
 
-        with patch("app.mixins.dialogs_profiles.ManualOrderDialog", side_effect=lambda *_args: _DialogStub(sell_order)):
+        with patch(
+            "app.mixins.dialogs_profiles.ManualOrderDialog",
+            side_effect=lambda *_args: _DialogStub(sell_order),
+        ):
             trader._open_manual_order()
             trader._open_manual_order()
 
@@ -128,7 +165,13 @@ class TestManualOrderSafety(unittest.TestCase):
         trader = _Harness()
 
         valid = trader._validate_manual_order_request(
-            {"code": "123456", "type": "매수", "qty": 1, "price_type": "지정가", "price": 1000}
+            {
+                "code": "123456",
+                "type": "매수",
+                "qty": 1,
+                "price_type": "지정가",
+                "price": 1000,
+            }
         )
 
         self.assertFalse(valid)
@@ -141,7 +184,13 @@ class TestManualOrderSafety(unittest.TestCase):
         trader.universe["005930"]["available_qty"] = 2
 
         valid = trader._validate_manual_order_request(
-            {"code": "005930", "type": "매도", "qty": 3, "price_type": "시장가", "price": 0}
+            {
+                "code": "005930",
+                "type": "매도",
+                "qty": 3,
+                "price_type": "시장가",
+                "price": 0,
+            }
         )
 
         self.assertFalse(valid)
@@ -166,7 +215,13 @@ class TestManualOrderSafety(unittest.TestCase):
         trader = _Harness()
 
         valid = trader._validate_manual_order_request(
-            {"code": "123456", "type": "매수", "qty": 1, "price_type": "시장가", "price": 0}
+            {
+                "code": "123456",
+                "type": "매수",
+                "qty": 1,
+                "price_type": "시장가",
+                "price": 0,
+            }
         )
 
         self.assertFalse(valid)
@@ -177,7 +232,13 @@ class TestManualOrderSafety(unittest.TestCase):
         trader = _Harness()
 
         valid = trader._validate_manual_order_request(
-            {"code": "005930", "type": "매도", "qty": 2, "price_type": "시장가", "price": 0}
+            {
+                "code": "005930",
+                "type": "매도",
+                "qty": 2,
+                "price_type": "시장가",
+                "price": 0,
+            }
         )
 
         self.assertFalse(valid)

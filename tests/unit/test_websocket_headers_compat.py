@@ -5,6 +5,7 @@ websockets 14에서 ``connect()``의 ``extra_headers``가
 일으킨다(16.1.1에서 재현 확인). 연결 헬퍼가 버전에 맞는 인자명을
 고르는지, 1회성 요청 경로가 신버전 스타일 fake 연결과 동작하는지 검증한다.
 """
+
 import asyncio
 import json
 import unittest
@@ -40,9 +41,7 @@ class TestConnectHeadersKwarg(unittest.TestCase):
         )
 
     def test_none_connect_defaults_to_additional_headers(self):
-        self.assertEqual(
-            websocket_client._headers_kw_for(None), "additional_headers"
-        )
+        self.assertEqual(websocket_client._headers_kw_for(None), "additional_headers")
 
     def test_real_connect_resolves_to_supported_kwarg(self):
         if websocket_client.ws_connect is None:

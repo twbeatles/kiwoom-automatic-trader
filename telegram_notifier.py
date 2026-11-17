@@ -10,6 +10,7 @@ from typing import Optional
 
 class TelegramNotifier:
     """비동기 텔레그램 알림 클래스"""
+
     def __init__(self, bot_token: str, chat_id: str):
         self.bot_token = bot_token
         self.chat_id = chat_id
@@ -28,6 +29,7 @@ class TelegramNotifier:
     def _worker(self):
         """메시지 전송 워커"""
         import requests
+
         while not self._stop:
             try:
                 text = self._queue.get(timeout=1)
@@ -37,13 +39,15 @@ class TelegramNotifier:
                 # parse_mode 를 사용하지 않는다: 종목명/손익 문자열에 '_', '*', '`' 등이
                 # 포함되면 Markdown 파싱이 실패해 메시지가 누락될 수 있기 때문이다.
                 # 모든 메시지는 순수 텍스트로 전송한다.
-                requests.post(url, data={'chat_id': self.chat_id, 'text': text}, timeout=5)
+                requests.post(
+                    url, data={"chat_id": self.chat_id, "text": text}, timeout=5
+                )
             except queue.Empty:
                 continue
             except requests.RequestException as e:
-                logging.getLogger('Telegram').warning(f"전송 실패: {e}")
+                logging.getLogger("Telegram").warning(f"전송 실패: {e}")
             except Exception as e:
-                logging.getLogger('Telegram').error(f"오류: {e}")
+                logging.getLogger("Telegram").error(f"오류: {e}")
 
     def send(self, text: str):
         """비동기 메시지 전송 (큐에 추가)"""

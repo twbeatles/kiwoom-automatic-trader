@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 
 from app.mixins.persistence_settings import PersistenceSettingsMixin
 
@@ -27,7 +27,9 @@ class TestSettingsSchemaV4(unittest.TestCase):
         self.assertIsInstance(settings["market_intelligence"], dict)
         self.assertEqual(settings["execution_mode"], "signal_only")
         self.assertFalse(settings["allow_plaintext_secret_fallback"])
-        self.assertFalse(settings["market_intelligence"]["source_policy"]["strict_entry_guard"])
+        self.assertFalse(
+            settings["market_intelligence"]["source_policy"]["strict_entry_guard"]
+        )
 
 
 if __name__ == "__main__":

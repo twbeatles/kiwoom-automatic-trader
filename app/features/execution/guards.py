@@ -17,6 +17,7 @@ class ExecutionGuardsMixin(TraderMixinBase):
         if mid <= 0:
             return 0.0
         return (ask - bid) / mid * 100.0
+
     def _average_recent_slippage_bps(self, window_size: int) -> float:
         series = getattr(self, "_recent_slippage_bps", None)
         if series is None:
@@ -29,23 +30,41 @@ class ExecutionGuardsMixin(TraderMixinBase):
         if not subset:
             return 0.0
         return sum(abs(float(v)) for v in subset) / len(subset)
+
     def _is_liquidity_stress(self, info: dict) -> bool:
         cfg = getattr(self, "config", None)
         if cfg is None or not bool(getattr(cfg, "use_liquidity_stress_guard", True)):
             return False
         spread_pct = self._spread_pct(info)
-        stress_spread = float(getattr(cfg, "stress_spread_pct", getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0)))
+        stress_spread = float(
+            getattr(
+                cfg,
+                "stress_spread_pct",
+                getattr(Config, "DEFAULT_STRESS_SPREAD_PCT", 1.0),
+            )
+        )
         if spread_pct > stress_spread:
             return True
 
         avg_value = float(info.get("avg_value_20", 0) or 0)
-        min_value = float(getattr(cfg, "min_avg_value", getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000)))
+        min_value = float(
+            getattr(
+                cfg,
+                "min_avg_value",
+                getattr(Config, "DEFAULT_MIN_AVG_VALUE", 1_000_000_000),
+            )
+        )
         if min_value < 10_000_000:  # legacy UI scale: 억 단위
             min_value *= 100_000_000
         ratio = float(
-            getattr(cfg, "stress_min_value_ratio", getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35))
+            getattr(
+                cfg,
+                "stress_min_value_ratio",
+                getattr(Config, "DEFAULT_STRESS_MIN_VALUE_RATIO", 0.35),
+            )
         )
         return avg_value > 0 and avg_value < (min_value * ratio)
+
     def _resolve_regime_profile(self, code: str) -> tuple[str, float, int]:
         manager = getattr(self, "strategy", None)
         default = ("normal", 1.0, 0)
@@ -64,7 +83,10 @@ class ExecutionGuardsMixin(TraderMixinBase):
         if regime_text == "elevated":
             return regime_text, float(scale), 1
         return regime_text, float(scale), 0
-    def _market_intelligence_entry_guard(self, code: str, info: dict, now: datetime.datetime) -> tuple[bool, str]:
+
+    def _market_intelligence_entry_guard(
+        self, code: str, info: dict, now: datetime.datetime
+    ) -> tuple[bool, str]:
         cfg = getattr(self, "config", None)
         flags = getattr(cfg, "feature_flags", {}) if cfg is not None else {}
         if not isinstance(flags, dict):
@@ -72,10 +94,16 @@ class ExecutionGuardsMixin(TraderMixinBase):
         intel_cfg = getattr(cfg, "market_intelligence", {}) if cfg is not None else {}
         if not isinstance(intel_cfg, dict):
             intel_cfg = getattr(Config, "DEFAULT_MARKET_INTELLIGENCE_CONFIG", {})
-        enabled = bool(flags.get("enable_external_data", True) and intel_cfg.get("enabled", True))
+        enabled = bool(
+            flags.get("enable_external_data", True) and intel_cfg.get("enabled", True)
+        )
         if not enabled:
             return True, ""
-        policy = intel_cfg.get("source_policy", {}) if isinstance(intel_cfg.get("source_policy"), dict) else {}
+        policy = (
+            intel_cfg.get("source_policy", {})
+            if isinstance(intel_cfg.get("source_policy"), dict)
+            else {}
+        )
         strict_entry_guard = bool(policy.get("strict_entry_guard", False))
 
         def allow_relaxed(reason: str) -> tuple[bool, str]:
@@ -90,16 +118,24 @@ class ExecutionGuardsMixin(TraderMixinBase):
                 )
             return True, ""
 
-        state = info.get("market_intel", {}) if isinstance(info.get("market_intel"), dict) else {}
+        state = (
+            info.get("market_intel", {})
+            if isinstance(info.get("market_intel"), dict)
+            else {}
+        )
         if not state:
-            request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
+            request_refresh = getattr(
+                self, "_request_market_intelligence_refresh_batch", None
+            )
             if not callable(request_refresh):
                 return True, ""
             if callable(request_refresh):
                 request_refresh([code], reason="entry_guard_missing", force=False)
             return allow_relaxed("market_intel_fresh_guard")
 
-        status = str(state.get("status", state.get("intel_status", "idle")) or "idle").lower()
+        status = str(
+            state.get("status", state.get("intel_status", "idle")) or "idle"
+        ).lower()
         if status == "disabled":
             return True, ""
 
@@ -113,12 +149,24 @@ class ExecutionGuardsMixin(TraderMixinBase):
         allow_partial = bool(policy.get("allow_partial_for_entry", False))
         if status == "partial" and not allow_partial:
             return allow_relaxed("market_intel_source_guard")
-        if status in {"error", "stale", "refreshing", "idle", "disabled_by_missing_credentials"}:
+        if status in {
+            "error",
+            "stale",
+            "refreshing",
+            "idle",
+            "disabled_by_missing_credentials",
+        }:
             if status in {"idle", "stale"}:
-                request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
+                request_refresh = getattr(
+                    self, "_request_market_intelligence_refresh_batch", None
+                )
                 if callable(request_refresh):
                     request_refresh([code], reason=f"entry_guard_{status}", force=False)
-            reason = "market_intel_fresh_guard" if status in {"idle", "stale", "refreshing"} else "market_intel_source_guard"
+            reason = (
+                "market_intel_fresh_guard"
+                if status in {"idle", "stale", "refreshing"}
+                else "market_intel_source_guard"
+            )
             return allow_relaxed(reason)
 
         updated_at = state.get("intel_updated_at", state.get("updated_at"))
@@ -128,14 +176,22 @@ class ExecutionGuardsMixin(TraderMixinBase):
             except ValueError:
                 updated_at = None
         stale_sec = float(getattr(Config, "MARKET_INTEL_STALE_SEC", 180))
-        if not isinstance(updated_at, datetime.datetime) or (now.timestamp() - updated_at.timestamp()) > stale_sec:
-            request_refresh = getattr(self, "_request_market_intelligence_refresh_batch", None)
+        if (
+            not isinstance(updated_at, datetime.datetime)
+            or (now.timestamp() - updated_at.timestamp()) > stale_sec
+        ):
+            request_refresh = getattr(
+                self, "_request_market_intelligence_refresh_batch", None
+            )
             if callable(request_refresh):
                 request_refresh([code], reason="entry_guard_stale_ts", force=False)
             return allow_relaxed("market_intel_fresh_guard")
 
         return True, ""
-    def _can_enter_trade(self, code: str, info: dict, now: datetime.datetime) -> tuple[bool, str]:
+
+    def _can_enter_trade(
+        self, code: str, info: dict, now: datetime.datetime
+    ) -> tuple[bool, str]:
         cfg = getattr(self, "config", None)
         if cfg is None:
             return True, ""
@@ -151,7 +207,9 @@ class ExecutionGuardsMixin(TraderMixinBase):
         if str(info.get("status", "")) == "sync_failed" or code in sync_failed_codes:
             return False, "sync_failed"
 
-        market_intel_ok, market_intel_reason = self._market_intelligence_entry_guard(code, info, now)
+        market_intel_ok, market_intel_reason = self._market_intelligence_entry_guard(
+            code, info, now
+        )
         if not market_intel_ok:
             return False, market_intel_reason
 
@@ -176,9 +234,19 @@ class ExecutionGuardsMixin(TraderMixinBase):
             return False, "liquidity_stress_guard"
 
         if bool(getattr(cfg, "use_slippage_guard", True)):
-            max_slippage = float(getattr(cfg, "max_slippage_bps", getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0)))
+            max_slippage = float(
+                getattr(
+                    cfg,
+                    "max_slippage_bps",
+                    getattr(Config, "DEFAULT_MAX_SLIPPAGE_BPS", 15.0),
+                )
+            )
             window_size = int(
-                getattr(cfg, "slippage_window_trades", getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20))
+                getattr(
+                    cfg,
+                    "slippage_window_trades",
+                    getattr(Config, "DEFAULT_SLIPPAGE_WINDOW_TRADES", 20),
+                )
             )
             avg_slip = self._average_recent_slippage_bps(window_size)
             if avg_slip > max_slippage:
@@ -186,7 +254,11 @@ class ExecutionGuardsMixin(TraderMixinBase):
 
         if bool(getattr(cfg, "use_spread", True)):
             spread_pct = self._spread_pct(info)
-            max_spread = float(getattr(cfg, "max_spread", getattr(Config, "DEFAULT_MAX_SPREAD_PCT", 1.5)))
+            max_spread = float(
+                getattr(
+                    cfg, "max_spread", getattr(Config, "DEFAULT_MAX_SPREAD_PCT", 1.5)
+                )
+            )
             if spread_pct > max_spread:
                 return False, "wide_spread"
 

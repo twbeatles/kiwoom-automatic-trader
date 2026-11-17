@@ -13,7 +13,12 @@ class _REST:
 
     def cancel_order(self, account, order_no, code, quantity):
         self.calls.append((account, order_no, code, quantity))
-        return OrderResult(success=self.success, order_no=order_no, code=code, message="ok" if self.success else "fail")
+        return OrderResult(
+            success=self.success,
+            order_no=order_no,
+            code=code,
+            message="ok" if self.success else "fail",
+        )
 
 
 class _Harness(TradingSessionMixin, OrderSyncMixin, ExecutionEngineMixin):
@@ -42,7 +47,9 @@ class TestStopTradingCancelPolicy(unittest.TestCase):
     def test_cancel_success_clears_pending_and_releases_reserved_cash(self):
         rest = _REST(success=True)
         trader = _Harness(rest)
-        trader._set_pending_order("005930", "buy", "BUY", expected_price=1000, submitted_qty=3, order_no="O1")
+        trader._set_pending_order(
+            "005930", "buy", "BUY", expected_price=1000, submitted_qty=3, order_no="O1"
+        )
         trader._reserved_cash_by_code["005930"] = 3000
 
         trader._cancel_pending_orders_before_stop()
@@ -55,7 +62,9 @@ class TestStopTradingCancelPolicy(unittest.TestCase):
     def test_cancel_failure_keeps_pending_and_reserved_cash(self):
         rest = _REST(success=False)
         trader = _Harness(rest)
-        trader._set_pending_order("005930", "buy", "BUY", expected_price=1000, submitted_qty=3, order_no="O1")
+        trader._set_pending_order(
+            "005930", "buy", "BUY", expected_price=1000, submitted_qty=3, order_no="O1"
+        )
         trader._reserved_cash_by_code["005930"] = 3000
 
         trader._cancel_pending_orders_before_stop()

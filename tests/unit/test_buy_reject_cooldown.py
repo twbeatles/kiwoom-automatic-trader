@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 
 from app.mixins.execution_engine import ExecutionEngineMixin
@@ -98,7 +98,9 @@ class TestBuyRejectCooldown(unittest.TestCase):
         self.assertEqual(trader._reserved_cash_by_code.get("005930"), 10000)
         self.assertEqual(trader.virtual_deposit, 40000)
 
-        trader._on_buy_result(_DummyResult(False, "rejected"), "005930", "삼성전자", 1, 10000)
+        trader._on_buy_result(
+            _DummyResult(False, "rejected"), "005930", "삼성전자", 1, 10000
+        )
 
         info = trader.universe["005930"]
         self.assertEqual(info["status"], "cooldown")
@@ -109,4 +111,3 @@ class TestBuyRejectCooldown(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

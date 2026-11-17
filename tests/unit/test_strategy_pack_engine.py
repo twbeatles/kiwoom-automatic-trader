@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import unittest
 
 from config import TradingConfig
@@ -66,7 +66,9 @@ class TestStrategyPackEngine(unittest.TestCase):
         cfg.feature_flags["use_modular_strategy_pack"] = True
         sm = StrategyManager(trader, cfg)
 
-        passed, conditions, metrics = sm.evaluate_buy_conditions("005930", now_ts=1000.0)
+        passed, conditions, metrics = sm.evaluate_buy_conditions(
+            "005930", now_ts=1000.0
+        )
 
         self.assertTrue(passed)
         self.assertIn("primary:volatility_breakout", conditions)

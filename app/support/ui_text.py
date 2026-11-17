@@ -13,16 +13,25 @@ STRATEGY_CHOICES: Sequence[ChoiceItem] = (
     ("단면 모멘텀 (cross_sectional_momentum)", "cross_sectional_momentum"),
     ("이동평균 채널 추세 (ma_channel_trend)", "ma_channel_trend"),
     ("시가범위/돈치안 돌파 (orb_donchian_breakout)", "orb_donchian_breakout"),
-    ("쌍거래 공적분 (pairs_trading_cointegration, 백테스트 전용)", "pairs_trading_cointegration"),
+    (
+        "쌍거래 공적분 (pairs_trading_cointegration, 백테스트 전용)",
+        "pairs_trading_cointegration",
+    ),
     ("통계 차익 잔차 (stat_arb_residual, 백테스트 전용)", "stat_arb_residual"),
     ("RSI/볼린저 역추세 (rsi_bollinger_reversion)", "rsi_bollinger_reversion"),
     ("DMI 추세 강도 (dmi_trend_strength)", "dmi_trend_strength"),
     ("FF5 팩터 롱숏 (ff5_factor_ls, 백테스트 전용)", "ff5_factor_ls"),
     ("퀄리티/가치/저변동성 (quality_value_lowvol)", "quality_value_lowvol"),
     ("투자자/프로그램 수급 (investor_program_flow)", "investor_program_flow"),
-    ("변동성 타깃 오버레이 (volatility_targeting_overlay)", "volatility_targeting_overlay"),
+    (
+        "변동성 타깃 오버레이 (volatility_targeting_overlay)",
+        "volatility_targeting_overlay",
+    ),
     ("리스크 패리티 포트폴리오 (risk_parity_portfolio)", "risk_parity_portfolio"),
-    ("집행 알고리즘 TWAP/VWAP/POV (execution_algo_twap_vwap_pov)", "execution_algo_twap_vwap_pov"),
+    (
+        "집행 알고리즘 TWAP/VWAP/POV (execution_algo_twap_vwap_pov)",
+        "execution_algo_twap_vwap_pov",
+    ),
     ("스프레드 마켓메이킹 (market_making_spread)", "market_making_spread"),
 )
 
@@ -198,7 +207,9 @@ GUARD_REASON_LABELS = {
 }
 
 
-def populate_combo(combo: Any, items: Iterable[ChoiceItem], current_value: Any | None = None):
+def populate_combo(
+    combo: Any, items: Iterable[ChoiceItem], current_value: Any | None = None
+):
     combo.clear()
     for label, value in items:
         combo.addItem(str(label), str(value))
@@ -294,7 +305,9 @@ def display_guard_reason(value: Any) -> str:
 
 
 def display_replay_scope(value: Any) -> str:
-    return _display_from_map(value, {item_value: label for label, item_value in REPLAY_SCOPE_CHOICES})
+    return _display_from_map(
+        value, {item_value: label for label, item_value in REPLAY_SCOPE_CHOICES}
+    )
 
 
 def display_yes_no(flag: Any, true_text: str = "예", false_text: str = "아니오") -> str:

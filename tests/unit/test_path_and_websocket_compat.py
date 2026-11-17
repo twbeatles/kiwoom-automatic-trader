@@ -21,8 +21,12 @@ class TestPathAndWebsocketCompat(unittest.TestCase):
 
     def test_auth_cache_defaults_to_base_dir(self):
         auth = KiwoomAuth()
-        self.assertEqual(Path(auth.cache_dir).resolve(), Path(Config.BASE_DIR).resolve())
-        self.assertEqual(auth.cache_path.parent.resolve(), Path(Config.BASE_DIR).resolve())
+        self.assertEqual(
+            Path(auth.cache_dir).resolve(), Path(Config.BASE_DIR).resolve()
+        )
+        self.assertEqual(
+            auth.cache_path.parent.resolve(), Path(Config.BASE_DIR).resolve()
+        )
 
     def test_websocket_module_import_has_no_legacy_deprecation(self):
         with warnings.catch_warnings(record=True) as caught:
@@ -31,7 +35,10 @@ class TestPathAndWebsocketCompat(unittest.TestCase):
             importlib.reload(module)
 
         legacy_warnings = [
-            w for w in caught if "websockets.legacy" in str(w.message).lower() or "websocketclientprotocol" in str(w.message)
+            w
+            for w in caught
+            if "websockets.legacy" in str(w.message).lower()
+            or "websocketclientprotocol" in str(w.message)
         ]
         self.assertEqual(legacy_warnings, [])
 

@@ -43,7 +43,10 @@ class BacktestPolicyMixin(BacktestMetricsMixin):
     def _market_intel_allocation_scale(self, intelligence: Dict[str, Any]) -> float:
         scale = 1.0
         if str(intelligence.get("action_policy", "allow") or "allow") == "reduce_size":
-            scale *= float(intelligence.get("reduce_ratio", self.config.reduce_size_ratio) or self.config.reduce_size_ratio)
+            scale *= float(
+                intelligence.get("reduce_ratio", self.config.reduce_size_ratio)
+                or self.config.reduce_size_ratio
+            )
         if str(intelligence.get("macro_regime", "neutral") or "neutral") == "risk_off":
             scale *= 0.7
         size_multiplier = float(intelligence.get("size_multiplier", 1.0) or 1.0)
@@ -97,16 +100,35 @@ class BacktestPolicyMixin(BacktestMetricsMixin):
         )
         if exit_policy == "force_exit":
             return "sell", 1.0
-        if exit_policy == "reduce_size" and symbol_state.last_intel_event_id != event_id:
+        if (
+            exit_policy == "reduce_size"
+            and symbol_state.last_intel_event_id != event_id
+        ):
             symbol_state.last_intel_event_id = event_id
-            ratio = float(intelligence.get("reduce_ratio", self.config.reduce_size_ratio) or self.config.reduce_size_ratio)
+            ratio = float(
+                intelligence.get("reduce_ratio", self.config.reduce_size_ratio)
+                or self.config.reduce_size_ratio
+            )
             return "sell_partial", ratio
         if exit_policy == "tighten_exit":
-            symbol_state.peak_price = max(symbol_state.peak_price, float(bar.high or bar.close or 0.0), float(bar.close or 0.0))
-            tighten_scale = float(
-                intelligence.get("tighten_exit_scale", intelligence.get("tighten_ts_stop_scale", 0.5)) or 0.5
+            symbol_state.peak_price = max(
+                symbol_state.peak_price,
+                float(bar.high or bar.close or 0.0),
+                float(bar.close or 0.0),
             )
-            trail_pct = max(0.25, float(self.config.tighten_exit_base_trail_pct) * max(0.1, min(1.0, tighten_scale)))
-            if symbol_state.peak_price > 0 and float(bar.close or 0.0) <= symbol_state.peak_price * (1.0 - trail_pct / 100.0):
+            tighten_scale = float(
+                intelligence.get(
+                    "tighten_exit_scale", intelligence.get("tighten_ts_stop_scale", 0.5)
+                )
+                or 0.5
+            )
+            trail_pct = max(
+                0.25,
+                float(self.config.tighten_exit_base_trail_pct)
+                * max(0.1, min(1.0, tighten_scale)),
+            )
+            if symbol_state.peak_price > 0 and float(
+                bar.close or 0.0
+            ) <= symbol_state.peak_price * (1.0 - trail_pct / 100.0):
                 return "sell", 1.0
         return action, None

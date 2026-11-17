@@ -60,8 +60,20 @@ class _SnapshotHarness(TradingSessionMixin):
         self.current_account = "12345678"
         self.strategy = _DummyStrategy()
         self.universe = {
-            "005930": {"name": "삼성전자", "status": "watch", "held": 0, "buy_price": 0, "invest_amount": 0},
-            "000660": {"name": "SK하이닉스", "status": "watch", "held": 0, "buy_price": 0, "invest_amount": 0},
+            "005930": {
+                "name": "삼성전자",
+                "status": "watch",
+                "held": 0,
+                "buy_price": 0,
+                "invest_amount": 0,
+            },
+            "000660": {
+                "name": "SK하이닉스",
+                "status": "watch",
+                "held": 0,
+                "buy_price": 0,
+                "invest_amount": 0,
+            },
         }
         self._dirty_codes = set()
         self._sync_failed_codes = set()
@@ -100,12 +112,18 @@ class _StartHarness(TradingSessionMixin):
         return True
 
     @overload
-    def _init_universe(self, codes, background: Literal[False] = False) -> list[str]: ...
+    def _init_universe(
+        self, codes, background: Literal[False] = False
+    ) -> list[str]: ...
 
     @overload
-    def _init_universe(self, codes, background: Literal[True]) -> BackgroundUniversePayload: ...
+    def _init_universe(
+        self, codes, background: Literal[True]
+    ) -> BackgroundUniversePayload: ...
 
-    def _init_universe(self, codes, background: bool = False) -> list[str] | BackgroundUniversePayload:
+    def _init_universe(
+        self, codes, background: bool = False
+    ) -> list[str] | BackgroundUniversePayload:
         initialized_codes = ["005930"]
         if background:
             return initialized_codes, {}, []
@@ -117,7 +135,9 @@ class _StartHarness(TradingSessionMixin):
 
 class TestStartPositionSync(unittest.TestCase):
     def test_sync_positions_snapshot_applies_existing_holding(self):
-        positions = [Position(code="005930", quantity=3, buy_price=70000, buy_amount=210000)]
+        positions = [
+            Position(code="005930", quantity=3, buy_price=70000, buy_amount=210000)
+        ]
         trader = _SnapshotHarness(positions)
 
         ok, reason = trader._sync_positions_snapshot(["005930", "000660"])

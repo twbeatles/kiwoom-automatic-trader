@@ -1,4 +1,4 @@
-﻿"""Macro data provider (FRED free API)."""
+"""Macro data provider (FRED free API)."""
 
 import os
 from typing import Dict, List
@@ -21,7 +21,9 @@ class MacroProvider:
     def available(self) -> bool:
         return bool(self.api_key)
 
-    def get_series(self, series_id: str, start_date: str = "", end_date: str = "") -> List[Dict[str, str]]:
+    def get_series(
+        self, series_id: str, start_date: str = "", end_date: str = ""
+    ) -> List[Dict[str, str]]:
         if not self.available() or not series_id:
             self._mark("disabled" if not self.available() else "ok_empty")
             return []

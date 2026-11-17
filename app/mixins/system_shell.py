@@ -38,11 +38,14 @@ class SystemShellMixin(TraderMixinBase):
         existing_paths = {
             Path(getattr(handler, "baseFilename"))  # noqa: B009 -- logging.Handler base lacks baseFilename; guarded by isinstance+sentinel below, direct access trips pyright
             for handler in self.logger.handlers
-            if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None)
+            if isinstance(handler, logging.FileHandler)
+            and getattr(handler, "baseFilename", None)
         }
         if log_file not in existing_paths:
             file_handler = logging.FileHandler(log_file, encoding="utf-8")
-            file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+            file_handler.setFormatter(
+                logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+            )
             self.logger.addHandler(file_handler)
 
     def _set_auto_start(self, enabled):
@@ -51,7 +54,9 @@ class SystemShellMixin(TraderMixinBase):
         app_name = "KiwoomProTrader"
         try:
             exe_path = f'"{os.path.abspath(sys.argv[0])}"'
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE
+            )
             if enabled:
                 winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, exe_path)
                 self.logger.info("자동 실행 등록 완료")
@@ -97,7 +102,9 @@ class SystemShellMixin(TraderMixinBase):
         tools_menu.addAction("종목 검색", self._open_stock_search)
         tools_menu.addAction("예약 매매", self._open_schedule)
         tools_menu.addSeparator()
-        tools_menu.addAction("계좌 새로고침", lambda: self._on_account_changed(self.current_account))
+        tools_menu.addAction(
+            "계좌 새로고침", lambda: self._on_account_changed(self.current_account)
+        )
         tools_menu.addAction("민감정보/토큰 삭제", self._clear_stored_secrets)
 
         view_menu = menubar.addMenu("보기")
@@ -122,13 +129,17 @@ class SystemShellMixin(TraderMixinBase):
         )
         assert self._density_action is not None
         self._density_action.setCheckable(True)
-        self._density_action.setToolTip("메뉴/버튼 간격을 넓혀 고배율에서 고르기 쉽게 합니다.")
+        self._density_action.setToolTip(
+            "메뉴/버튼 간격을 넓혀 고배율에서 고르기 쉽게 합니다."
+        )
         self._refresh_ui_scale_menu()
         view_menu.addSeparator()
         workspace_menu = view_menu.addMenu("워크스페이스 이동")
         assert workspace_menu is not None
         for _ws_index, _ws_label in enumerate(WORKSPACE_LABELS):
-            workspace_menu.addAction(_ws_label, lambda _checked=False, _i=_ws_index: self._goto_workspace(_i))
+            workspace_menu.addAction(
+                _ws_label, lambda _checked=False, _i=_ws_index: self._goto_workspace(_i)
+            )
         view_menu.addAction("주문 티켓 표시/숨기기", self._toggle_order_ticket)
 
         help_menu = menubar.addMenu("도움말")
@@ -164,9 +175,11 @@ class SystemShellMixin(TraderMixinBase):
 
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(
-            lambda reason: self.showNormal()
-            if reason == QSystemTrayIcon.ActivationReason.DoubleClick
-            else None
+            lambda reason: (
+                self.showNormal()
+                if reason == QSystemTrayIcon.ActivationReason.DoubleClick
+                else None
+            )
         )
         self.tray_icon.show()
 
@@ -235,22 +248,38 @@ class SystemShellMixin(TraderMixinBase):
             sweep_stale(now)
 
         self._refresh_account_info_async()
-        recalc_time_targets = getattr(self, "_maybe_recalculate_time_strategy_targets", None)
+        recalc_time_targets = getattr(
+            self, "_maybe_recalculate_time_strategy_targets", None
+        )
         if callable(recalc_time_targets):
             recalc_time_targets(now)
 
         if not self.time_liquidate_executed:
-            if now.hour == Config.MARKET_CLOSE_HOUR and now.minute >= Config.MARKET_CLOSE_MINUTE:
+            if (
+                now.hour == Config.MARKET_CLOSE_HOUR
+                and now.minute >= Config.MARKET_CLOSE_MINUTE
+            ):
                 self.time_liquidate_executed = True
                 self._time_liquidate()
 
         cfg = getattr(self, "config", None)
-        loss_basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+        loss_basis = str(
+            getattr(
+                cfg,
+                "daily_loss_basis",
+                getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+            )
+        )
         if loss_basis == "total_equity":
-            basis_amount = int(getattr(self, "total_equity", 0) or 0) or int(getattr(self, "deposit", 0) or 0)
+            basis_amount = int(getattr(self, "total_equity", 0) or 0) or int(
+                getattr(self, "deposit", 0) or 0
+            )
         else:
             basis_amount = int(getattr(self, "deposit", 0) or 0)
-        if int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0 and basis_amount > 0:
+        if (
+            int(getattr(self, "daily_initial_deposit", 0) or 0) <= 0
+            and basis_amount > 0
+        ):
             self.daily_initial_deposit = basis_amount
 
         self._check_daily_loss_limit()
@@ -273,10 +302,20 @@ class SystemShellMixin(TraderMixinBase):
             return
         loss_rate = (self.daily_realized_profit / self.daily_initial_deposit) * 100
         max_loss_spin = getattr(self, "spin_max_loss", None)
-        max_loss = float(getattr(cfg, "max_daily_loss", max_loss_spin.value() if max_loss_spin else 0))
+        max_loss = float(
+            getattr(
+                cfg, "max_daily_loss", max_loss_spin.value() if max_loss_spin else 0
+            )
+        )
         if loss_rate <= -max_loss:
             self.daily_loss_triggered = True
-            loss_basis = str(getattr(cfg, "daily_loss_basis", getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity")))
+            loss_basis = str(
+                getattr(
+                    cfg,
+                    "daily_loss_basis",
+                    getattr(Config, "DEFAULT_DAILY_LOSS_BASIS", "total_equity"),
+                )
+            )
             self.log(
                 f"일일 손실 한도 도달 ({loss_rate:.2f}%, 손익 {self.daily_realized_profit:+,}원, 기준={loss_basis}) - 매매 중지"
             )
@@ -288,10 +327,19 @@ class SystemShellMixin(TraderMixinBase):
             (Config.SHORTCUTS.get("connect", "Ctrl+L"), self.connect_api),
             (Config.SHORTCUTS.get("start_trading", "Ctrl+S"), self.start_trading),
             (Config.SHORTCUTS.get("stop_trading", "Ctrl+Q"), self.stop_trading),
-            (Config.SHORTCUTS.get("emergency_stop", "Ctrl+Shift+X"), self._emergency_liquidate),
-            (Config.SHORTCUTS.get("refresh", "F5"), lambda: self._on_account_changed(self.current_account)),
+            (
+                Config.SHORTCUTS.get("emergency_stop", "Ctrl+Shift+X"),
+                self._emergency_liquidate,
+            ),
+            (
+                Config.SHORTCUTS.get("refresh", "F5"),
+                lambda: self._on_account_changed(self.current_account),
+            ),
             (Config.SHORTCUTS.get("export_csv", "Ctrl+E"), self._export_csv),
-            (Config.SHORTCUTS.get("open_profile_manager", "Ctrl+P"), self._open_profile_manager),
+            (
+                Config.SHORTCUTS.get("open_profile_manager", "Ctrl+P"),
+                self._open_profile_manager,
+            ),
             (Config.SHORTCUTS.get("open_presets", "Ctrl+Shift+P"), self._open_presets),
             (Config.SHORTCUTS.get("toggle_theme", "Ctrl+T"), self._toggle_theme),
             (Config.SHORTCUTS.get("show_help", "F1"), lambda: HelpDialog(self).exec()),
@@ -390,7 +438,9 @@ class SystemShellMixin(TraderMixinBase):
 
     def _toggle_theme(self):
         """다크/라이트 수동 전환 (자동 추적 해제)."""
-        new_theme = "light" if getattr(self, "current_theme", "dark") == "dark" else "dark"
+        new_theme = (
+            "light" if getattr(self, "current_theme", "dark") == "dark" else "dark"
+        )
         apply_theme(self, new_theme)
         self.ui_theme_mode = self.current_theme
         if self.current_theme == "light":
@@ -410,7 +460,9 @@ class SystemShellMixin(TraderMixinBase):
     def _apply_startup_theme(self):
         """시작 테마 결정 (auto면 OS 추적, 수동값은 그대로)."""
         mode = _clamp_theme_mode(
-            getattr(self, "ui_theme_mode", getattr(Config, "DEFAULT_UI_THEME_MODE", "auto"))
+            getattr(
+                self, "ui_theme_mode", getattr(Config, "DEFAULT_UI_THEME_MODE", "auto")
+            )
         )
         self.ui_theme_mode = mode
         return apply_theme(self, _resolve_theme_name(mode))
@@ -588,7 +640,11 @@ class SystemShellMixin(TraderMixinBase):
             event.accept()
             return
 
-        if not force_quit and hasattr(self, "chk_minimize_tray") and self.chk_minimize_tray.isChecked():
+        if (
+            not force_quit
+            and hasattr(self, "chk_minimize_tray")
+            and self.chk_minimize_tray.isChecked()
+        ):
             event.ignore()
             self.hide()
             if hasattr(self, "tray_icon"):

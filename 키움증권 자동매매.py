@@ -1,4 +1,4 @@
-﻿"""Kiwoom Pro Algo-Trader entrypoint wrapper."""
+"""Kiwoom Pro Algo-Trader entrypoint wrapper."""
 
 import logging
 import sys

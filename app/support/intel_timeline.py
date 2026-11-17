@@ -45,13 +45,16 @@ def normalize_event_record(record: Dict[str, Any], index: int) -> Dict[str, Any]
     summary = str(record.get("summary", "") or "")
     policy = str(payload.get("action_policy", "") or "")
     exit_policy = str(payload.get("exit_policy", "") or "")
-    headline = " / ".join(part for part in (record.get("event_type", ""), summary) if part)
+    headline = " / ".join(
+        part for part in (record.get("event_type", ""), summary) if part
+    )
     return {
         "kind": "event",
         "ts": parse_ts(record.get("ts", "")),
         "ts_text": str(record.get("ts", "") or ""),
         "target": target,
-        "headline": headline or str(payload.get("sector", "") or payload.get("theme", "") or "-"),
+        "headline": headline
+        or str(payload.get("sector", "") or payload.get("theme", "") or "-"),
         "policy": " / ".join(part for part in (policy, exit_policy) if part),
         "sort_key": (parse_ts(record.get("ts", "")) or datetime.datetime.min, 0, index),
         "source": dict(record),
@@ -63,7 +66,10 @@ def normalize_audit_record(record: Dict[str, Any], index: int) -> Dict[str, Any]
     headline = f"{'허용' if allowed else '차단'}: {record.get('reason', '')}"
     policy = " / ".join(
         part
-        for part in (str(record.get("action_policy", "") or ""), str(record.get("exit_policy", "") or ""))
+        for part in (
+            str(record.get("action_policy", "") or ""),
+            str(record.get("exit_policy", "") or ""),
+        )
         if part
     )
     return {

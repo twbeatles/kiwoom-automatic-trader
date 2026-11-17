@@ -20,8 +20,12 @@ class TestInvestmentCostBasisLedger(unittest.TestCase):
         manager.update_market_investment("005930", 100_000, is_buy=True)
         manager.update_sector_investment("005930", 100_000, is_buy=True)
 
-        manager.update_market_investment("005930", 120_000, is_buy=False, cost_amount=100_000)
-        manager.update_sector_investment("005930", 120_000, is_buy=False, cost_amount=100_000)
+        manager.update_market_investment(
+            "005930", 120_000, is_buy=False, cost_amount=100_000
+        )
+        manager.update_sector_investment(
+            "005930", 120_000, is_buy=False, cost_amount=100_000
+        )
 
         self.assertEqual(manager.market_investments.get("kospi", 0), 0)
         self.assertEqual(manager.sector_investments.get("IT", 0), 0)
@@ -32,8 +36,12 @@ class TestInvestmentCostBasisLedger(unittest.TestCase):
         manager.update_market_investment("005930", 100_000, is_buy=True)
         manager.update_sector_investment("005930", 100_000, is_buy=True)
 
-        manager.update_market_investment("005930", 80_000, is_buy=False, cost_amount=100_000)
-        manager.update_sector_investment("005930", 80_000, is_buy=False, cost_amount=100_000)
+        manager.update_market_investment(
+            "005930", 80_000, is_buy=False, cost_amount=100_000
+        )
+        manager.update_sector_investment(
+            "005930", 80_000, is_buy=False, cost_amount=100_000
+        )
 
         self.assertEqual(manager.market_investments.get("kospi", 0), 0)
         self.assertEqual(manager.sector_investments.get("IT", 0), 0)

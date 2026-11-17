@@ -12,25 +12,40 @@ BackgroundUniversePayload = Tuple[List[str], Dict[str, Dict[str, Any]], List[str
 
 
 class TradingSessionRiskStateMixin(TraderMixinBase):
-    def _set_global_risk_mode(self, mode: str, until: Optional[datetime.datetime], reason: str = ""):
+    def _set_global_risk_mode(
+        self, mode: str, until: Optional[datetime.datetime], reason: str = ""
+    ):
         current_mode = str(getattr(self, "_global_risk_mode", "normal"))
         current_until = getattr(self, "_global_risk_until", None)
         self._global_risk_mode = str(mode)
-        self._global_risk_until = until if isinstance(until, datetime.datetime) else None
-        if current_mode != self._global_risk_mode or current_until != self._global_risk_until:
+        self._global_risk_until = (
+            until if isinstance(until, datetime.datetime) else None
+        )
+        if (
+            current_mode != self._global_risk_mode
+            or current_until != self._global_risk_until
+        ):
             suffix = f" ({reason})" if reason else ""
-            until_text = self._global_risk_until.strftime("%H:%M:%S") if self._global_risk_until else "-"
+            until_text = (
+                self._global_risk_until.strftime("%H:%M:%S")
+                if self._global_risk_until
+                else "-"
+            )
             self._log_once(
                 f"global_risk_mode:{self._global_risk_mode}",
                 f"[리스크모드] {current_mode} -> {self._global_risk_mode} (until={until_text}){suffix}",
             )
+
     def _maybe_release_global_risk_mode(self, now_dt: datetime.datetime):
         if str(getattr(self, "_global_risk_mode", "normal")) != "shock":
             return
         until = getattr(self, "_global_risk_until", None)
         if isinstance(until, datetime.datetime) and now_dt >= until:
             self._set_global_risk_mode("normal", None, reason="shock_cooldown_expired")
-    def _update_shock_mode(self, market_key: str, now_dt: Optional[datetime.datetime] = None):
+
+    def _update_shock_mode(
+        self, market_key: str, now_dt: Optional[datetime.datetime] = None
+    ):
         now = now_dt or datetime.datetime.now()
         cfg = getattr(self, "config", None)
         if cfg is None or not bool(getattr(cfg, "use_shock_guard", True)):
@@ -44,14 +59,32 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
         now_ts = now.timestamp()
         ret_1m = self._series_return_pct(series, 60, now_ts)
         ret_5m = self._series_return_pct(series, 300, now_ts)
-        shock_1m = float(getattr(cfg, "shock_1m_pct", getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5)))
-        shock_5m = float(getattr(cfg, "shock_5m_pct", getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8)))
+        shock_1m = float(
+            getattr(cfg, "shock_1m_pct", getattr(Config, "DEFAULT_SHOCK_1M_PCT", 1.5))
+        )
+        shock_5m = float(
+            getattr(cfg, "shock_5m_pct", getattr(Config, "DEFAULT_SHOCK_5M_PCT", 2.8))
+        )
         if abs(ret_1m) >= shock_1m or abs(ret_5m) >= shock_5m:
-            cooldown_min = max(1, int(getattr(cfg, "shock_cooldown_min", getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10))))
+            cooldown_min = max(
+                1,
+                int(
+                    getattr(
+                        cfg,
+                        "shock_cooldown_min",
+                        getattr(Config, "DEFAULT_SHOCK_COOLDOWN_MIN", 10),
+                    )
+                ),
+            )
             until = now + datetime.timedelta(minutes=cooldown_min)
-            self._set_global_risk_mode("shock", until, reason=f"{market_key} ret1m={ret_1m:.2f}% ret5m={ret_5m:.2f}%")
+            self._set_global_risk_mode(
+                "shock",
+                until,
+                reason=f"{market_key} ret1m={ret_1m:.2f}% ret5m={ret_5m:.2f}%",
+            )
         else:
             self._maybe_release_global_risk_mode(now)
+
     def _probe_market_status_support(self):
         if bool(getattr(self, "_market_status_probe_done", False)):
             return
@@ -60,17 +93,29 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
         getter = getattr(rest_client, "get_market_status", None)
         if not callable(getter):
             self._official_market_status_available = False
-            self._log_once("market_status_probe", "[시장상태] 공식 상태연동 미지원, 가격기반 프록시로 동작합니다.")
+            self._log_once(
+                "market_status_probe",
+                "[시장상태] 공식 상태연동 미지원, 가격기반 프록시로 동작합니다.",
+            )
             return
         try:
             payload = getter() or {}
             self._official_market_status_available = bool(payload)
             if not self._official_market_status_available:
-                self._log_once("market_status_probe", "[시장상태] 공식 상태 응답 없음, 가격기반 프록시로 폴백합니다.")
+                self._log_once(
+                    "market_status_probe",
+                    "[시장상태] 공식 상태 응답 없음, 가격기반 프록시로 폴백합니다.",
+                )
         except Exception as exc:
             self._official_market_status_available = False
-            self._log_once("market_status_probe", f"[시장상태] 공식 상태연동 실패({exc}), 가격기반 프록시로 폴백합니다.")
-    def _apply_market_state(self, info: Dict[str, Any], state: str, now_dt: datetime.datetime):
+            self._log_once(
+                "market_status_probe",
+                f"[시장상태] 공식 상태연동 실패({exc}), 가격기반 프록시로 폴백합니다.",
+            )
+
+    def _apply_market_state(
+        self, info: Dict[str, Any], state: str, now_dt: datetime.datetime
+    ):
         prev_state = str(info.get("market_state", "normal") or "normal")
         next_state = str(state or "normal")
         if next_state == "normal":
@@ -96,13 +141,20 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
                 ),
             )
             info["market_state"] = "reopen_cooldown"
-            info["market_state_until"] = now_dt + datetime.timedelta(minutes=cooldown_min)
+            info["market_state_until"] = now_dt + datetime.timedelta(
+                minutes=cooldown_min
+            )
             return
 
         if prev_state != next_state:
             info["market_state"] = next_state
+
     def _update_market_state_from_execution(
-        self, code: str, info: Dict[str, Any], data: Any, now_dt: Optional[datetime.datetime] = None
+        self,
+        code: str,
+        info: Dict[str, Any],
+        data: Any,
+        now_dt: Optional[datetime.datetime] = None,
     ):
         now = now_dt or datetime.datetime.now()
         cfg = getattr(self, "config", None)
@@ -128,13 +180,23 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
         event_text = str(getattr(data, "market_event", "") or "").upper()
         state = str(info.get("market_state", "normal") or "normal")
         state_until = info.get("market_state_until")
-        if state == "reopen_cooldown" and isinstance(state_until, datetime.datetime) and now >= state_until:
+        if (
+            state == "reopen_cooldown"
+            and isinstance(state_until, datetime.datetime)
+            and now >= state_until
+        ):
             state = "normal"
             info["market_state"] = "normal"
             info["market_state_until"] = None
 
-        official_halt = any(token in status_text for token in ("HALT", "STOP", "SUSPEND")) or "HALT" in event_text
-        official_vi = any(token in status_text for token in ("VI", "VOLATILITY")) or "VI" in event_text
+        official_halt = (
+            any(token in status_text for token in ("HALT", "STOP", "SUSPEND"))
+            or "HALT" in event_text
+        )
+        official_vi = (
+            any(token in status_text for token in ("VI", "VOLATILITY"))
+            or "VI" in event_text
+        )
 
         if official_halt:
             self._apply_market_state(info, "halt", now)
@@ -143,9 +205,17 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
             self._apply_market_state(info, "vi", now)
             return
 
-        vi_proxy_1m = float(getattr(cfg, "vi_proxy_1m_pct", getattr(Config, "DEFAULT_VI_PROXY_1M_PCT", 4.0)))
+        vi_proxy_1m = float(
+            getattr(
+                cfg, "vi_proxy_1m_pct", getattr(Config, "DEFAULT_VI_PROXY_1M_PCT", 4.0)
+            )
+        )
         vi_proxy_spread = float(
-            getattr(cfg, "vi_proxy_spread_pct", getattr(Config, "DEFAULT_VI_PROXY_SPREAD_PCT", 1.2))
+            getattr(
+                cfg,
+                "vi_proxy_spread_pct",
+                getattr(Config, "DEFAULT_VI_PROXY_SPREAD_PCT", 1.2),
+            )
         )
         ret_1m_code = abs(self._code_return_pct(series, 60, now.timestamp()))
         spread_pct = abs(self._calc_spread_pct(info))
@@ -162,6 +232,7 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
         if current_state == "halt":
             self._apply_market_state(info, "reopen_cooldown", now)
             return
+
     def _start_index_feed(self, codes: List[str]):
         self._probe_market_status_support()
         ws_client = getattr(self, "ws_client", None)
@@ -176,9 +247,16 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
             if callable(subscribe_index):
                 subscribe_index(index_codes, self._on_index_tick)
                 self._index_feed_codes = index_codes
-                self._log_once("index_feed", f"[인덱스] 실시간 지수 구독 시작: {', '.join(index_codes)}")
+                self._log_once(
+                    "index_feed",
+                    f"[인덱스] 실시간 지수 구독 시작: {', '.join(index_codes)}",
+                )
         except Exception as exc:
-            self._log_once("index_feed_fail", f"[인덱스] 구독 실패({exc}), 종목 프록시 기반 감지만 유지합니다.")
+            self._log_once(
+                "index_feed_fail",
+                f"[인덱스] 구독 실패({exc}), 종목 프록시 기반 감지만 유지합니다.",
+            )
+
     def _start_vi_feed(self, codes: List[str]):
         ws_client = getattr(self, "ws_client", None)
         if ws_client is None or not codes:
@@ -190,7 +268,11 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
                 self._vi_feed_codes = list(codes)
                 self._log_once("vi_feed", f"[VI] 실시간 VI 구독 시작: {len(codes)}종목")
         except Exception as exc:
-            self._log_once("vi_feed_fail", f"[VI] 구독 실패({exc}), 체결 틱/프록시 기반 감지만 유지합니다.")
+            self._log_once(
+                "vi_feed_fail",
+                f"[VI] 구독 실패({exc}), 체결 틱/프록시 기반 감지만 유지합니다.",
+            )
+
     def _stop_vi_feed(self):
         ws_client = getattr(self, "ws_client", None)
         vi_codes = list(getattr(self, "_vi_feed_codes", []))
@@ -200,6 +282,7 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
             except Exception:
                 pass
         self._vi_feed_codes = []
+
     def _on_vi_event(self, body: dict):
         if not isinstance(body, dict):
             return
@@ -213,13 +296,16 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
         if not isinstance(info, dict):
             return
 
-        status_text = str(body.get("vi_st") or body.get("vi_status") or body.get("status") or "")
+        status_text = str(
+            body.get("vi_st") or body.get("vi_status") or body.get("status") or ""
+        )
         status_upper = status_text.upper()
         released = ("해제" in status_text) or any(
             token in status_upper for token in ("OFF", "END", "RELEASE", "CLEAR")
         )
         triggered = ("발동" in status_text) or any(
-            token in status_upper for token in ("ON", "TRIGGER", "START", "ACTIVE", "VI")
+            token in status_upper
+            for token in ("ON", "TRIGGER", "START", "ACTIVE", "VI")
         )
         now = datetime.datetime.now()
         if released:
@@ -227,6 +313,7 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
             return
         if triggered or not status_text.strip():
             self._apply_market_state(info, "vi", now)
+
     def _stop_index_feed(self):
         ws_client = getattr(self, "ws_client", None)
         index_codes = list(getattr(self, "_index_feed_codes", []))
@@ -242,6 +329,7 @@ class TradingSessionRiskStateMixin(TraderMixinBase):
         fallback_map = getattr(self, "_shock_fallback_rep_by_market", None)
         if isinstance(fallback_map, dict):
             fallback_map.clear()
+
     def _on_index_tick(self, tick):
         try:
             code = str(getattr(tick, "code", "") or "")

@@ -1,4 +1,4 @@
-﻿"""Provider wrappers for Kiwoom REST data."""
+"""Provider wrappers for Kiwoom REST data."""
 
 from typing import Any, Dict, List, Optional
 
@@ -17,7 +17,9 @@ class KiwoomProvider:
             return []
         return self.rest_client.get_daily_chart(code, count)
 
-    def get_minute_bars(self, code: str, interval: int = 1, count: int = 240) -> List[Any]:
+    def get_minute_bars(
+        self, code: str, interval: int = 1, count: int = 240
+    ) -> List[Any]:
         if not self.rest_client:
             return []
         return self.rest_client.get_minute_chart(code, interval, count)

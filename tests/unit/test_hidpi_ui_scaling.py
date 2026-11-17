@@ -148,9 +148,7 @@ class TestThemeHidpiOutput(unittest.TestCase):
         self.assertGreater(
             layout_scale(1.0, "comfortable"), layout_scale(1.0, "compact")
         )
-        self.assertGreater(
-            layout_scale(1.3, "compact"), layout_scale(1.0, "compact")
-        )
+        self.assertGreater(layout_scale(1.3, "compact"), layout_scale(1.0, "compact"))
 
 
 class TestDensityRoundTrip(unittest.TestCase):

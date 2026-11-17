@@ -27,8 +27,12 @@ class _SplitREST:
     def buy_limit(self, _account, code, quantity, price):
         self.calls.append((code, quantity, price))
         if price == 990:
-            return type("Result", (), {"success": False, "order_no": "", "message": "reject"})()
-        return type("Result", (), {"success": True, "order_no": f"O{price}", "message": ""})()
+            return type(
+                "Result", (), {"success": False, "order_no": "", "message": "reject"}
+            )()
+        return type(
+            "Result", (), {"success": True, "order_no": f"O{price}", "message": ""}
+        )()
 
 
 class _Harness(ExecutionEngineMixin, OrderSyncMixin):
@@ -86,7 +90,10 @@ class TestSplitBuyExecution(unittest.TestCase):
 
         trader._execute_buy("005930", quantity=10, price=1000)
 
-        self.assertEqual(trader.rest_client.calls, [("005930", 3, 1000), ("005930", 3, 990), ("005930", 4, 980)])
+        self.assertEqual(
+            trader.rest_client.calls,
+            [("005930", 3, 1000), ("005930", 3, 990), ("005930", 4, 980)],
+        )
         self.assertIn("005930", trader._pending_order_state)
         pending = trader._pending_order_state["005930"]
         self.assertEqual(pending["submitted_qty"], 7)

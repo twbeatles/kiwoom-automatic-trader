@@ -1,4 +1,4 @@
-﻿import json
+import json
 import shutil
 import sys
 import tempfile
@@ -67,7 +67,12 @@ class _Harness(PersistenceSettingsMixin):
     def __init__(self):
         self.logger = _DummyLogger()
         self.current_theme = "dark"
-        self.schedule = {"enabled": False, "start": "09:00", "end": "15:19", "liquidate": True}
+        self.schedule = {
+            "enabled": False,
+            "start": "09:00",
+            "end": "15:19",
+            "liquidate": True,
+        }
         self.config = _DummyConfig()
 
         self.input_app_key = _DummyText()
@@ -110,10 +115,19 @@ class TestSettingsSchemaV3Migration(unittest.TestCase):
         tmpdir = tempfile.mkdtemp(dir=str(Path.cwd()))
         try:
             settings_path = Path(tmpdir) / "kiwoom_settings.json"
-            settings_path.write_text(json.dumps({"settings_version": 2, "betting": 11.0}), encoding="utf-8")
+            settings_path.write_text(
+                json.dumps({"settings_version": 2, "betting": 11.0}), encoding="utf-8"
+            )
 
-            with patch("app.features.persistence.settings_io.Config.SETTINGS_FILE", str(settings_path)), patch(
-                "app.features.persistence.settings_io.keyring.get_password", return_value=""
+            with (
+                patch(
+                    "app.features.persistence.settings_io.Config.SETTINGS_FILE",
+                    str(settings_path),
+                ),
+                patch(
+                    "app.features.persistence.settings_io.keyring.get_password",
+                    return_value="",
+                ),
             ):
                 trader._load_settings()
         finally:

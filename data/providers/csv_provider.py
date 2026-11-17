@@ -1,4 +1,4 @@
-﻿"""CSV provider for offline/multi-asset simulation datasets."""
+"""CSV provider for offline/multi-asset simulation datasets."""
 
 import csv
 from datetime import datetime
@@ -31,7 +31,9 @@ class CsvProvider:
                 try:
                     rows.append(
                         {
-                            "ts": datetime.fromisoformat(str(row.get("ts") or row.get("date"))),
+                            "ts": datetime.fromisoformat(
+                                str(row.get("ts") or row.get("date"))
+                            ),
                             "open": float(row.get("open", 0) or 0),
                             "high": float(row.get("high", 0) or 0),
                             "low": float(row.get("low", 0) or 0),
