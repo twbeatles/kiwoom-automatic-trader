@@ -152,6 +152,81 @@ class TestRestClientExtendedAPIs(unittest.TestCase):
         self.assertEqual(headers.get("api-id"), "ka10079")
 
     @patch("requests.Session.post")
+    def test_get_tick_chart_parses_official_keys(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "return_code": 0,
+            "stk_tic_chart_qry": [
+                {
+                    "cntr_tm": "093000",
+                    "cur_prc": "70,500",
+                    "trde_qty": "150",
+                    "pred_pre": "+500",
+                    "open_pric": "70,000",
+                    "high_pric": "70,600",
+                    "low_pric": "69,900",
+                }
+            ],
+        }
+        mock_post.return_value = mock_resp
+
+        ticks = self.client.get_tick_chart("005930", count=10)
+
+        self.assertEqual(len(ticks), 1)
+        t = ticks[0]
+        self.assertEqual(t.time, "093000")
+        self.assertEqual(t.price, 70500)
+        self.assertEqual(t.volume, 150)
+        self.assertEqual(t.change, 500)
+
+        headers = mock_post.call_args[1]["headers"]
+        self.assertEqual(headers.get("api-id"), "ka10079")
+
+    @patch("requests.Session.post")
+    def test_get_weekly_chart_uses_official_list_key(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "return_code": 0,
+            "stk_stk_pole_chart_qry": [
+                {
+                    "dt": "20260924",
+                    "open_pric": "70,000",
+                    "high_pric": "71,000",
+                    "low_pric": "69,000",
+                    "cur_prc": "70,500",
+                    "trde_qty": "1000",
+                }
+            ],
+        }
+        mock_post.return_value = mock_resp
+
+        candles = self.client.get_weekly_chart("005930", count=52)
+
+        self.assertEqual(len(candles), 1)
+        self.assertEqual(candles[0].date, "20260924")
+        self.assertEqual(candles[0].close_price, 70500)
+
+        headers = mock_post.call_args[1]["headers"]
+        self.assertEqual(headers.get("api-id"), "ka10082")
+
+    @patch("requests.Session.post")
+    def test_get_minute_chart_normalizes_tic_scope(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"return_code": 0, "stk_min_pole_chart_qry": []}
+        mock_post.return_value = mock_resp
+
+        self.client.get_minute_chart("005930", 2, 60)
+        body = mock_post.call_args[1]["json"]
+        self.assertEqual(body["tic_scope"], "1")
+
+        self.client.get_minute_chart("005930", 15, 60)
+        body = mock_post.call_args[1]["json"]
+        self.assertEqual(body["tic_scope"], "15")
+
+    @patch("requests.Session.post")
     def test_get_vi_status_parses_events(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200

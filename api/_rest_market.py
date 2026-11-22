@@ -212,9 +212,12 @@ class RestMarketMixin(RestTransport):
             DailyOHLC 리스트 (최신순)
         """
         tr_code = self.TR_CODES["STOCK_MINUTE"]
+        tic_scope = str(interval).strip()
+        if tic_scope not in {"1", "3", "5", "10", "15", "30", "45", "60"}:
+            tic_scope = "1"
         data = {
             "stk_cd": code,
-            "tic_scope": str(interval),
+            "tic_scope": tic_scope,
             "upd_stkpc_tp": "1",
             "base_dt": datetime.now().strftime("%Y%m%d"),
         }
@@ -257,7 +260,9 @@ class RestMarketMixin(RestTransport):
 
         candles = []
         if result and result.get("return_code") == 0:
-            output_list = _payload_records(result, "stk_wk_pole_chart_qry", "output")
+            output_list = _payload_records(
+                result, "stk_stk_pole_chart_qry", "stk_wk_pole_chart_qry", "output"
+            )
             for item in output_list[: max(1, min(count, 100))]:
                 candles.append(
                     DailyOHLC(
@@ -307,11 +312,18 @@ class RestMarketMixin(RestTransport):
             for item in output_list:
                 candles.append(
                     TickCandle(
-                        time=str(item.get("time") or item.get("stk_tm") or "").strip(),
+                        time=str(
+                            _pick(item, "cntr_tm", "time", "stk_tm", default="")
+                            or ""
+                        ).strip(),
                         price=_safe_int(item.get("cur_prc", 0), absolute=True),
-                        volume=_safe_int(item.get("vol", item.get("cntr_qty", 0))),
-                        change=_safe_int(item.get("chg_amt", 0)),
-                        change_rate=_safe_float(item.get("chg_rt", 0.0)),
+                        volume=_safe_int(
+                            _pick(item, "trde_qty", "vol", "cntr_qty", default=0)
+                        ),
+                        change=_safe_int(_pick(item, "pred_pre", "chg_amt", default=0)),
+                        change_rate=_safe_float(
+                            _pick(item, "chg_rt", "flu_rt", default=0.0)
+                        ),
                         side=str(item.get("cntr_tp") or "").strip(),
                         cum_volume=_safe_int(item.get("acc_vol", 0)),
                     )
@@ -414,7 +426,7 @@ class RestMarketMixin(RestTransport):
         return [row for row in sectors if row.get("code") or row.get("name")]
 
     def get_member_list(self) -> List[Dict[str, Any]]:
-        """회원사 리스트 조회 (ka10102 /api/dostk/stkinfo, ka10078 mbrm_cd 참조용)."""
+        """회원사 리스트 조회 (ka10102 /api/dostk/stkinfo, ka10078 mmcm_cd 참조용)."""
         try:
             result = self._request(
                 "POST",
@@ -434,7 +446,7 @@ class RestMarketMixin(RestTransport):
                 continue
             members.append(
                 {
-                    "code": str(_pick(item, "code", "mbrm_cd", default="") or ""),
+                    "code": str(_pick(item, "code", default="") or ""),
                     "name": str(_pick(item, "name", "mbrm_nm", default="") or ""),
                     "gb": str(_pick(item, "gb", default="") or ""),
                 }

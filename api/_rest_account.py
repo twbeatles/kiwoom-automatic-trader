@@ -114,6 +114,7 @@ class RestAccountMixin(RestTransport):
         data = {
             "all_stk_tp": "0",
             "trde_tp": "0",
+            "stk_cd": "",
             "stex_tp": "0",
         }
 
@@ -267,8 +268,10 @@ class RestAccountMixin(RestTransport):
         """
         tr_code = self.TR_CODES["ORDER_EXECUTED"]
         data = {
+            "stk_cd": "",
             "qry_tp": "0",
             "sell_tp": "0",
+            "ord_no": "",
             "stex_tp": "0",
         }
 
@@ -388,7 +391,7 @@ class RestAccountMixin(RestTransport):
         if not result or result.get("return_code") != 0:
             return []
 
-        rows = _payload_records(result, "dt_stk_dly_rlzt_pl", "output")
+        rows = _payload_records(result, "dt_stk_div_rlzt_pl", "output")
         return [
             self._parse_stock_pnl_row(item) for item in rows if isinstance(item, dict)
         ]
@@ -419,9 +422,7 @@ class RestAccountMixin(RestTransport):
         if not result or result.get("return_code") != 0:
             return []
 
-        rows = _payload_records(
-            result, "dt_stk_dly_rlzt_pl", "stk_dly_rlzt_pl", "output"
-        )
+        rows = _payload_records(result, "dt_stk_rlzt_pl", "output")
         return [
             self._parse_stock_pnl_row(item) for item in rows if isinstance(item, dict)
         ]

@@ -177,7 +177,7 @@ class TestRealizedPnlAdapters(unittest.TestCase):
         mock_post.return_value = _json_ok(
             {
                 "return_code": 0,
-                "dt_stk_dly_rlzt_pl": [
+                "dt_stk_div_rlzt_pl": [
                     {
                         "stk_cd": "005930",
                         "stk_nm": "삼성전자",
@@ -271,7 +271,7 @@ class TestBrokerStockTrend(unittest.TestCase):
         self.assertTrue(url.endswith("/api/dostk/mrkcond"))
         self.assertEqual(headers.get("api-id"), "ka10078")
         self.assertEqual(body["stk_cd"], "005930")
-        self.assertEqual(body["mbrm_cd"], "039")
+        self.assertEqual(body["mmcm_cd"], "039")
 
     @patch("requests.Session.post")
     def test_get_broker_stock_trend_empty_code(self, mock_post):

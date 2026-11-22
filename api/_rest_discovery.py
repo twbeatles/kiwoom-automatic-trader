@@ -271,7 +271,7 @@ class RestDiscoveryMixin(RestTransport):
             return []
         today = datetime.now().strftime("%Y%m%d")
         data = {
-            "mbrm_cd": str(member_code or ""),
+            "mmcm_cd": str(member_code or ""),
             "stk_cd": str(code),
             "strt_dt": str(start_date or today),
             "end_dt": str(end_date or start_date or today),
